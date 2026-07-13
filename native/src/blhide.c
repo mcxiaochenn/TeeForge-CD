@@ -92,7 +92,7 @@ static const prop_entry_t bl_props[] = {
 static void detect_prop_tool(void) {
     log_msg(LOG_INFO, "检测 resetprop 工具 [Detecting resetprop tool]...");
 
-    /* 优先从环境变量获取 resetprop-rs 路径 */
+    /* 1. 环境变量 Environment variable */
     const char *env_path = getenv("RESETPROP_RS");
     if (env_path && file_exists(env_path)) {
         g_prop_tool = PROP_TOOL_RS;
@@ -101,7 +101,25 @@ static void detect_prop_tool(void) {
         return;
     }
 
-    /* 检测系统中的 resetprop-rs */
+    /* 2. 模块目录 Module directory */
+    const char *mod_paths[] = {
+        "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
+        "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
+        "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
+        "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
+        NULL
+    };
+
+    for (int i = 0; mod_paths[i] != NULL; i++) {
+        if (file_exists(mod_paths[i])) {
+            g_prop_tool = PROP_TOOL_RS;
+            log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", mod_paths[i]);
+            log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
+            return;
+        }
+    }
+
+    /* 3. 系统 PATH */
     int ret = system("which resetprop-rs > /dev/null 2>&1");
     if (ret == 0) {
         g_prop_tool = PROP_TOOL_RS;
@@ -118,10 +136,22 @@ static void detect_prop_tool(void) {
 /* 获取 resetprop 命令路径 Get resetprop command path */
 static const char *get_resetprop_cmd(void) {
     if (g_prop_tool == PROP_TOOL_RS) {
+        /* 1. 环境变量 */
         const char *env_path = getenv("RESETPROP_RS");
-        if (env_path && file_exists(env_path)) {
-            return env_path;
+        if (env_path && file_exists(env_path)) return env_path;
+
+        /* 2. 模块目录 */
+        const char *mod_paths[] = {
+            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
+            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
+            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
+            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
+            NULL
+        };
+        for (int i = 0; mod_paths[i] != NULL; i++) {
+            if (file_exists(mod_paths[i])) return mod_paths[i];
         }
+
         return "resetprop-rs";
     }
     return "resetprop";

@@ -36,27 +36,25 @@ int config_load(const char *path) {
     strncpy(g_config.target_txt, DEFAULT_TARGET_TXT, MAX_PATH_LEN - 1);
     strncpy(g_config.keybox_dir, DEFAULT_KEYBOX_DIR, MAX_PATH_LEN - 1);
     strncpy(g_config.sources_conf, DEFAULT_SOURCES, MAX_PATH_LEN - 1);
-    strncpy(g_config.log_file, DEFAULT_LOG_FILE, MAX_PATH_LEN - 1);
+    strncpy(g_config.log_dir, "/data/adb/teeforge/logs/", MAX_PATH_LEN - 1);
     g_config.region = REGION_AUTO;
     g_config.retry_count = 3;
     g_config.speed_test_size = 4096;
+    g_config.debug = 0;
     g_config.cn_mirror_count = 0;
 
     /* 尝试加载配置文件 Try to load config file */
     FILE *f = fopen(path, "r");
     if (!f) {
-        log_msg(LOG_WARN, "配置文件未找到: %s, 使用默认值 [Config file not found: %s, using defaults]", path, path);
-        return 0;  /* 非致命错误，使用默认值 Not fatal, use defaults */
+        log_msg(LOG_WARN, "配置文件未找到: %s, 使用默认值 [Config not found: %s, using defaults]", path, path);
+        return 0;
     }
 
     char line[MAX_LINE];
     while (fgets(line, sizeof(line), f)) {
         char *trimmed = str_trim(line);
-
-        /* 跳过注释和空行 Skip comments and empty lines */
         if (!trimmed || trimmed[0] == '#' || trimmed[0] == '\0') continue;
 
-        /* 解析 key=value Parse key=value */
         char *eq = strchr(trimmed, '=');
         if (!eq) continue;
 
@@ -72,38 +70,64 @@ int config_load(const char *path) {
             strncpy(g_config.keybox_dir, val, MAX_PATH_LEN - 1);
         } else if (strcmp(key, "sources_conf") == 0) {
             strncpy(g_config.sources_conf, val, MAX_PATH_LEN - 1);
-        } else if (strcmp(key, "log_file") == 0) {
-            strncpy(g_config.log_file, val, MAX_PATH_LEN - 1);
+        } else if (strcmp(key, "log_dir") == 0) {
+            strncpy(g_config.log_dir, val, MAX_PATH_LEN - 1);
+        } else if (strcmp(key, "debug") == 0) {
+            g_config.debug = atoi(val);
         } else if (strcmp(key, "region") == 0) {
-            if (strcmp(val, "cn") == 0) {
-                g_config.region = REGION_CN;
-            } else if (strcmp(val, "global") == 0) {
-                g_config.region = REGION_GLOBAL;
-            } else {
-                g_config.region = REGION_AUTO;
-            }
+            if (strcmp(val, "cn") == 0) g_config.region = REGION_CN;
+            else if (strcmp(val, "global") == 0) g_config.region = REGION_GLOBAL;
+            else g_config.region = REGION_AUTO;
         } else if (strcmp(key, "retry_count") == 0) {
             g_config.retry_count = atoi(val);
         } else if (strcmp(key, "speed_test_size") == 0) {
             g_config.speed_test_size = atoi(val);
         } else if (strcmp(key, "cn_mirrors") == 0) {
             parse_mirrors(val);
-        } else {
-            log_msg(LOG_WARN, "未知配置项: %s [Unknown config key: %s]", key, key);
         }
     }
 
     fclose(f);
-    log_msg(LOG_INFO, "已加载配置: %s [Loaded config from %s]", path, path);
+
+    /* 确保日志目录存在 Ensure log directory exists */
+    if (g_config.debug) {
+        ensure_dir(g_config.log_dir);
+    }
+
+    log_msg(LOG_INFO, "已加载配置 [Loaded config]: %s (debug=%d)", path, g_config.debug);
     return 0;
 }
 
 /* ===== 日志系统 Logging System ===== */
 
 static log_level_t current_level = LOG_INFO;
+static FILE *log_fp = NULL;
 
 void log_set_level(log_level_t level) {
     current_level = level;
+}
+
+/* 打开日志文件 Open log file */
+static void log_open_file(void) {
+    if (log_fp) return;
+    if (!g_config.debug) return;
+
+    ensure_dir(g_config.log_dir);
+
+    char path[MAX_PATH_LEN];
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+
+    snprintf(path, sizeof(path), "%s/teeforge_%04d%02d%02d_%02d%02d%02d.log",
+             g_config.log_dir,
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+             tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    log_fp = fopen(path, "a");
+    if (log_fp) {
+        fprintf(log_fp, "=== TeeForge-CD Log Start ===\n");
+        fflush(log_fp);
+    }
 }
 
 void log_msg(log_level_t level, const char *fmt, ...) {
@@ -117,6 +141,7 @@ void log_msg(log_level_t level, const char *fmt, ...) {
     char timebuf[32];
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
 
+    /* 输出到 stderr Output to stderr */
     fprintf(stderr, "[%s] [%s] ", timebuf, level_str[level]);
 
     va_list ap;
@@ -125,6 +150,22 @@ void log_msg(log_level_t level, const char *fmt, ...) {
     va_end(ap);
 
     fprintf(stderr, "\n");
+
+    /* debug 模式写入文件 Write to file in debug mode */
+    if (g_config.debug) {
+        log_open_file();
+        if (log_fp) {
+            fprintf(log_fp, "[%s] [%s] ", timebuf, level_str[level]);
+
+            va_list ap2;
+            va_start(ap2, fmt);
+            vfprintf(log_fp, fmt, ap2);
+            va_end(ap2);
+
+            fprintf(log_fp, "\n");
+            fflush(log_fp);
+        }
+    }
 }
 
 /* ===== 文件操作 File I/O ===== */

@@ -1,6 +1,6 @@
 id=teeforge_cd
 name=TeeForge-CD
-version=v0.1.0
-versionCode=1
-author=TeeForge
-description=Auto-populate Tricky Store target.txt and manage keybox files
+version=0.1.0
+versionCode=4
+author=Git@mcxiaochenn（酷安@辰渊尘Dusk）
+description=Android TEE 隐藏环境一体化工具：自动填充 target.txt、弱隐 BL、Keybox 管理

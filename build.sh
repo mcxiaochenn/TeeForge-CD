@@ -64,6 +64,17 @@ fi
 # Create output dirs 创建输出目录
 mkdir -p "$OBJ_DIR"
 
+# 从 teeforge.h 提取版本号 Extract version from teeforge.h
+VERSION=$(grep 'TEEFORGE_VERSION' native/include/teeforge.h | sed 's/.*"\(.*\)".*/\1/')
+# 从 git 获取 commit 次数作为 versionCode Get commit count as versionCode
+VERSION_CODE=$(git rev-list --count HEAD 2>/dev/null || echo "1")
+
+echo -e "${GREEN}版本 [Version]: $VERSION (code: $VERSION_CODE)${NC}"
+
+# 动态写入 module.prop Dynamically write module.prop
+sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+
 # Source files 源文件
 SOURCES="$SRC_DIR/main.c $SRC_DIR/target.c $SRC_DIR/utils.c $SRC_DIR/blhide.c $SRC_DIR/keybox.c $SRC_DIR/download.c"
 

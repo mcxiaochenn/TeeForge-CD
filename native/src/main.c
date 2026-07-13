@@ -80,9 +80,6 @@ int main(int argc, char *argv[]) {
     /* 加载配置 Load config */
     config_load(config_file);
 
-    /* 检测地区 Detect region */
-    dl_detect_region();
-
     /* 检查 root 权限 Check if running as root */
     if (getuid() != 0) {
         log_msg(LOG_WARN, "未以 root 运行，可能无法读取系统文件 [Not running as root, may fail to read system files]");
@@ -103,10 +100,12 @@ int main(int argc, char *argv[]) {
 
     if (do_keybox) {
         log_msg(LOG_INFO, "");
+        dl_detect_region();
         ret = keybox_fetch();
     }
 
     if (do_download && dl_url && dl_output) {
+        dl_detect_region();
         size_t len = 0;
         char *data = dl_download_with_retry(dl_url, &len);
         if (data && len > 0) {

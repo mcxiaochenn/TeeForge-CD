@@ -1,5 +1,6 @@
 #include "teeforge.h"
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,78 +41,130 @@ int dl_detect_region(void) {
     return g_config.region;
 }
 
-/* 测速 Speed test */
-static long speed_test_url(const char *url) {
+/* 并行测速结果 Parallel speed test result */
+typedef struct {
+    char name[128];
+    long time_ms;
+    int index; /* -1 = direct, 0+ = mirror index */
+} speed_result_t;
+
+/* 测速子进程 Speed test child process */
+static void speed_test_child(const char *url, int write_fd) {
     char cmd[1024];
-    char result[64];
-    FILE *fp;
+    char result[64] = {0};
 
     snprintf(cmd, sizeof(cmd),
-        "curl -sL --connect-timeout 3 --max-time 10 "
+        "curl -sL --connect-timeout 3 --max-time 8 "
         "-o /dev/null -w '%%{time_total}' '%s' 2>/dev/null",
         url);
 
-    fp = popen(cmd, "r");
-    if (!fp) return -1;
-
-    if (fgets(result, sizeof(result), fp)) {
+    FILE *fp = popen(cmd, "r");
+    if (fp) {
+        fgets(result, sizeof(result), fp);
         pclose(fp);
-        double seconds = atof(result);
-        return (long)(seconds * 1000);
     }
 
-    pclose(fp);
-    return -1;
+    /* 写入结果 Write result */
+    long ms = (long)(atof(result) * 1000);
+    write(write_fd, &ms, sizeof(ms));
+    close(write_fd);
+    _exit(0);
 }
 
-/* 测速并选择最快镜像 Speed test and select fastest mirror */
+/* 测速并选择最快镜像（并行） Speed test and select fastest mirror (parallel) */
 int dl_speed_test(const char *test_url) {
     log_msg(LOG_INFO, "");
-    log_msg(LOG_INFO, "测速中 [Testing speed]...");
+    log_msg(LOG_INFO, "测速中 [Testing speed] (parallel)...");
 
     if (g_config.region != REGION_CN) {
         log_msg(LOG_INFO, "海外用户，跳过镜像测速 [Global user, skip mirror test]");
         return -1;
     }
 
-    /* 测试直连 Test direct */
-    log_msg(LOG_INFO, "  测试 GitHub 直连 [Testing GitHub direct]...");
-    long best_time = speed_test_url(test_url);
-    int best_mirror = -1;
+    /* 准备所有测试 URL Prepare all test URLs */
+    char urls[MAX_MIRRORS + 1][MAX_URL_LEN + 128];
+    char names[MAX_MIRRORS + 1][128];
+    int indices[MAX_MIRRORS + 1]; /* -1=direct, 0+=mirror */
+    int total = 0;
 
-    if (best_time > 0) {
-        log_msg(LOG_INFO, "  GitHub 直连 [Direct]: %ld ms", best_time);
-    } else {
-        log_msg(LOG_INFO, "  GitHub 直连 [Direct]: 超时 [timeout]");
-    }
+    /* 直连 Direct */
+    strncpy(urls[total], test_url, sizeof(urls[0]) - 1);
+    strncpy(names[total], "GitHub 直连 [Direct]", sizeof(names[0]) - 1);
+    indices[total] = -1;
+    total++;
 
-    /* 测试每个镜像 Test each mirror */
+    /* 镜像 Mirrors */
     for (int i = 0; i < g_config.cn_mirror_count && i < MAX_MIRRORS; i++) {
         if (g_config.cn_mirrors[i][0] == '\0') continue;
-
-        char mirror_url[MAX_URL_LEN + 128];
-        snprintf(mirror_url, sizeof(mirror_url), "%s/%s",
+        snprintf(urls[total], sizeof(urls[0]), "%s/%s",
                  g_config.cn_mirrors[i], test_url);
+        strncpy(names[total], g_config.cn_mirrors[i], sizeof(names[0]) - 1);
+        indices[total] = i;
+        total++;
+    }
 
-        log_msg(LOG_INFO, "  测试镜像 [Testing mirror]: %s", g_config.cn_mirrors[i]);
-        long time = speed_test_url(mirror_url);
+    /* 创建管道和子进程 Create pipes and child processes */
+    int pipes[MAX_MIRRORS + 1][2];
+    pid_t pids[MAX_MIRRORS + 1];
 
-        if (time > 0) {
-            log_msg(LOG_INFO, "    结果 [Result]: %ld ms", time);
-            if (best_time <= 0 || time < best_time) {
-                best_time = time;
-                best_mirror = i;
-            }
+    for (int i = 0; i < total; i++) {
+        if (pipe(pipes[i]) != 0) {
+            pids[i] = -1;
+            continue;
+        }
+        pid_t pid = fork();
+        if (pid == 0) {
+            /* 子进程 Child */
+            close(pipes[i][0]);
+            speed_test_child(urls[i], pipes[i][1]);
         } else {
-            log_msg(LOG_INFO, "    结果 [Result]: 超时 [timeout]");
+            /* 父进程 Parent */
+            close(pipes[i][1]);
+            pids[i] = pid;
+        }
+    }
+
+    /* 收集结果 Collect results */
+    speed_result_t results[MAX_MIRRORS + 1];
+    int result_count = 0;
+
+    for (int i = 0; i < total; i++) {
+        long ms = -1;
+        if (pids[i] > 0) {
+            read(pipes[i][0], &ms, sizeof(ms));
+            close(pipes[i][0]);
+            waitpid(pids[i], NULL, 0);
+        }
+
+        if (ms > 0) {
+            strncpy(results[result_count].name, names[i], sizeof(results[0].name) - 1);
+            results[result_count].time_ms = ms;
+            results[result_count].index = indices[i];
+            result_count++;
+            log_msg(LOG_INFO, "  %s: %ld ms", names[i], ms);
+        } else {
+            log_msg(LOG_INFO, "  %s: 超时 [timeout]", names[i]);
+        }
+    }
+
+    /* 找最快 Find fastest */
+    int best_mirror = -1;
+    long best_time = -1;
+
+    for (int i = 0; i < result_count; i++) {
+        if (best_time < 0 || results[i].time_ms < best_time) {
+            best_time = results[i].time_ms;
+            best_mirror = results[i].index;
         }
     }
 
     if (best_mirror >= 0) {
         log_msg(LOG_INFO, "最快 [Fastest]: %s (%ld ms)",
                 g_config.cn_mirrors[best_mirror], best_time);
-    } else {
+    } else if (best_time > 0) {
         log_msg(LOG_INFO, "最快 [Fastest]: GitHub 直连 (%ld ms)", best_time);
+    } else {
+        log_msg(LOG_INFO, "最快 [Fastest]: 全部超时 [All timeout]");
     }
     log_msg(LOG_INFO, "");
 

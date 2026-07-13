@@ -92,14 +92,17 @@ int main(int argc, char *argv[]) {
     int ret = 0;
 
     if (do_generate) {
+        log_msg(LOG_INFO, "");
         ret = target_generate();
     }
 
     if (do_hide_bl) {
+        log_msg(LOG_INFO, "");
         ret = bl_hide();
     }
 
     if (do_keybox) {
+        log_msg(LOG_INFO, "");
         ret = keybox_fetch();
     }
 
@@ -117,6 +120,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    log_msg(LOG_INFO, "");
     if (ret == 0) {
         log_msg(LOG_INFO, "完成 [Done]");
     } else {

@@ -15,6 +15,7 @@ int dl_detect_region(void) {
         return g_config.region;
     }
 
+    log_msg(LOG_INFO, "");
     log_msg(LOG_INFO, "请选择地区 [Please select region]:");
     log_msg(LOG_INFO, "  音量+ = 中国大陆 [Volume+ = China]");
     log_msg(LOG_INFO, "  音量- = 海外直连 [Volume- = Global]");
@@ -34,6 +35,7 @@ int dl_detect_region(void) {
     } else {
         log_msg(LOG_INFO, "已选择 [Selected]: 海外 [Global]");
     }
+    log_msg(LOG_INFO, "");
 
     return g_config.region;
 }
@@ -64,6 +66,7 @@ static long speed_test_url(const char *url) {
 
 /* 测速并选择最快镜像 Speed test and select fastest mirror */
 int dl_speed_test(const char *test_url) {
+    log_msg(LOG_INFO, "");
     log_msg(LOG_INFO, "测速中 [Testing speed]...");
 
     if (g_config.region != REGION_CN) {
@@ -110,6 +113,7 @@ int dl_speed_test(const char *test_url) {
     } else {
         log_msg(LOG_INFO, "最快 [Fastest]: GitHub 直连 (%ld ms)", best_time);
     }
+    log_msg(LOG_INFO, "");
 
     return best_mirror;
 }
@@ -187,6 +191,9 @@ int dl_get_mirror_url(const char *original_url, char *mirror_url, size_t size) {
 
 /* 带重试的下载 Download with retry */
 char *dl_download_with_retry(const char *url, size_t *out_len) {
+    log_msg(LOG_INFO, "");
+    log_msg(LOG_INFO, "开始下载 [Starting download]...");
+
     int retry_count = g_config.retry_count > 0 ? g_config.retry_count : 3;
     char mirror_url[MAX_URL_LEN];
 
@@ -201,6 +208,7 @@ char *dl_download_with_retry(const char *url, size_t *out_len) {
 
         if (data && len > 0) {
             log_msg(LOG_INFO, "下载成功 [Download success]: %zu bytes", len);
+            log_msg(LOG_INFO, "");
             if (out_len) *out_len = len;
             return data;
         }

@@ -5,6 +5,7 @@
 ui_print "- Installing TeeForge-CD"
 
 # Create directories 创建目录
+ui_print "- Creating directories..."
 mkdir -p /data/adb/teeforge/keybox
 mkdir -p /data/adb/teeforge/logs
 
@@ -20,7 +21,7 @@ fi
 chmod 755 $MODPATH/teeforge
 
 # Download resetprop-rs 下载 resetprop-rs
-ui_print "- Downloading resetprop-rs..."
+ui_print "- Preparing to download resetprop-rs..."
 RESETPROP_DIR="$MODPATH/resetprop-rs"
 mkdir -p "$RESETPROP_DIR"
 
@@ -33,22 +34,30 @@ case "$ARCH" in
     x86)         BINARY="resetprop-x86" ;;
     *)           BINARY="resetprop-arm64-v8a" ;;
 esac
+ui_print "- Architecture: $ARCH -> $BINARY"
 
 # 使用 teeforge 下载（支持地区检测和镜像回退）
 # Use teeforge download (supports region detection and mirror fallback)
 DOWNLOAD_URL="https://github.com/Enginex0/resetprop-rs/releases/download/v0.6.0/$BINARY"
-$MODPATH/teeforge --download "$DOWNLOAD_URL" "$RESETPROP_DIR/$BINARY" 2>/dev/null
+ui_print "- Downloading from GitHub..."
+ui_print "- If stuck, China users will auto-switch to mirror"
+
+$MODPATH/teeforge --download "$DOWNLOAD_URL" "$RESETPROP_DIR/$BINARY"
 
 # 设置权限 Set permissions
 if [ -f "$RESETPROP_DIR/$BINARY" ]; then
+    SIZE=$(wc -c < "$RESETPROP_DIR/$BINARY")
     chmod 755 "$RESETPROP_DIR/$BINARY"
-    ui_print "- resetprop-rs installed ($BINARY)"
+    ui_print "- resetprop-rs installed: $BINARY ($SIZE bytes)"
 else
-    ui_print "- Warning: resetprop-rs download failed, will use standard resetprop"
+    ui_print "! resetprop-rs download failed"
+    ui_print "! Falling back to standard resetprop"
 fi
 
 # Set permissions 设置权限
+ui_print "- Setting permissions..."
 set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm $MODPATH/teeforge 0 0 0755
 
-ui_print "- Installation complete"
+ui_print "- Installation complete!"
+ui_print "  Reboot to activate"

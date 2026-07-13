@@ -23,22 +23,38 @@ jobs:
           unzip -q /tmp/ndk.zip -d /tmp/
           echo "NDK=/tmp/android-ndk-r27d" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Get version info
+        id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 获取版本信息
-          VERSION=$(grep 'TEEFORGE_VERSION' native/include/teeforge.h | sed 's/.*"\(.*\)".*/\1/')
           COMMIT_COUNT=$(git rev-list --count HEAD)
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          RELEASE_VERSION=$(gh release list -R ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "v0.0.0")
 
-          FULL_VERSION="${RELEASE_VERSION}-${COMMIT_HASH}"
-          echo "version=$FULL_VERSION" >> $GITHUB_ENV
-          echo "versionCode=$COMMIT_COUNT" >> $GITHUB_ENV
-          echo "VERSION=$FULL_VERSION" >> $GITHUB_ENV
+          # 获取最新 release tag
+          LATEST_TAG=$(gh release list -R ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null)
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+
+          # dev 版本: v0.1.1-abc1234
+          DEV_VERSION="${LATEST_TAG}-${COMMIT_HASH}"
+
+          echo "version=$DEV_VERSION" >> $GITHUB_OUTPUT
+          echo "versionCode=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "commitHash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+          echo "latestTag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION_CODE: ${{ steps.ver.outputs.versionCode }}
+        run: |
+          echo "Building version=$VERSION code=$VERSION_CODE"
 
           # 写入 module.prop
-          sed -i "s/^version=.*/version=$FULL_VERSION/" module/module.prop
-          sed -i "s/^versionCode=.*/versionCode=$COMMIT_COUNT/" module/module.prop
+          sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
           sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
 
           # 构建
@@ -52,7 +68,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: teeforge_cd-${{ env.VERSION }}
+          name: teeforge_cd-${{ steps.ver.outputs.version }}
           path: |
             out/teeforge
             out/teeforge_cd-*.zip

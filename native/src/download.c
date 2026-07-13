@@ -26,13 +26,38 @@ int dl_detect_region(void) {
 
     log_msg(LOG_INFO, "正在检测地区 [Detecting region]...");
 
-    /* 尝试访问 GitHub 测试文件 Try accessing GitHub test file */
-    /* 如果超时或失败，判定为中国大陆 If timeout or fail,判定为 CN */
-    int ret = system("curl -sL --connect-timeout 3 --max-time 5 "
-                     "https://avatars.githubusercontent.com/u/130777336 "
-                     "-o /dev/null 2>/dev/null");
+    /* 测试多个 GitHub 端点 Test multiple GitHub endpoints */
+    /* raw.githubusercontent.com 在中国几乎必被墙 */
+    const char *test_urls[] = {
+        "https://raw.githubusercontent.com/robots.txt",
+        "https://gist.github.com/robots.txt",
+        NULL
+    };
 
-    if (ret == 0) {
+    int accessible = 0;
+    for (int i = 0; test_urls[i] != NULL; i++) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd),
+            "curl -sL --connect-timeout 2 --max-time 3 "
+            "-o /dev/null -w '%%{http_code}' '%s' 2>/dev/null",
+            test_urls[i]);
+
+        FILE *fp = popen(cmd, "r");
+        if (fp) {
+            char code[8] = {0};
+            if (fgets(code, sizeof(code), fp)) {
+                /* 200/301/302 都算可达 */
+                if (atoi(code) > 0 && atoi(code) < 400) {
+                    accessible = 1;
+                }
+            }
+            pclose(fp);
+        }
+
+        if (accessible) break;
+    }
+
+    if (accessible) {
         log_msg(LOG_INFO, "检测结果 [Region detected]: 海外 [Global]");
         g_config.region = REGION_GLOBAL;
     } else {

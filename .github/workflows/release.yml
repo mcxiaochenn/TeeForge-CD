@@ -1,0 +1,109 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v0.2.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /tmp/
+          echo "NDK=/tmp/android-ndk-r27d" >> $GITHUB_ENV
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "versionCode=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          VERSION_CODE="${{ steps.version.outputs.versionCode }}"
+
+          # 写入 module.prop
+          sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+
+          # 构建
+          chmod +x build.sh
+          ./build.sh
+
+          # 打包
+          chmod +x package.sh
+          ./package.sh
+
+          # 重命名 zip
+          mv out/teeforge_cd-*.zip out/teeforge_cd-${VERSION}.zip
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个 tag
+          PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
+
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ steps.version.outputs.version }}" ]; then
+            LOG=$(git log --oneline --no-decorate | head -20)
+          else
+            LOG=$(git log ${PREV_TAG}..HEAD --oneline --no-decorate)
+          fi
+
+          # 写入 changelog 文件
+          cat > /tmp/CHANGELOG.md << CHANGELOG
+          ## TeeForge-CD ${{ steps.version.outputs.version }}
+
+          ### 构建信息 Build Info
+          - Version: \`${{ steps.version.outputs.version }}\`
+          - Version Code: \`${{ steps.version.outputs.versionCode }}\`
+          - Commit: \`${{ github.sha }}\`
+
+          ### 更新内容 Changes
+          ${LOG}
+
+          ### 安装 Installation
+          1. 下载 \`teeforge_cd-${{ steps.version.outputs.version }}.zip\`
+          2. 在 Magisk/KernelSU 中安装
+
+          ### 下载 Download
+          | 文件 File | 说明 Description |
+          |----------|-----------------|
+          | teeforge_cd-${{ steps.version.outputs.version }}.zip | Magisk 模块安装包 |
+          | teeforge | 独立二进制（调试用）|
+          CHANGELOG
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: TeeForge-CD ${{ steps.version.outputs.version }}
+          body_path: /tmp/CHANGELOG.md
+          files: |
+            out/teeforge_cd-${{ steps.version.outputs.version }}.zip
+            out/teeforge
+          draft: false
+          prerelease: false

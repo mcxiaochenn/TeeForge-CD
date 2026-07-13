@@ -1,0 +1,58 @@
+name: Dev Build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /tmp/
+          echo "NDK=/tmp/android-ndk-r27d" >> $GITHUB_ENV
+
+      - name: Build
+        run: |
+          # 获取版本信息
+          VERSION=$(grep 'TEEFORGE_VERSION' native/include/teeforge.h | sed 's/.*"\(.*\)".*/\1/')
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          RELEASE_VERSION=$(gh release list -R ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "v0.0.0")
+
+          FULL_VERSION="${RELEASE_VERSION}-${COMMIT_HASH}"
+          echo "version=$FULL_VERSION" >> $GITHUB_ENV
+          echo "versionCode=$COMMIT_COUNT" >> $GITHUB_ENV
+          echo "VERSION=$FULL_VERSION" >> $GITHUB_ENV
+
+          # 写入 module.prop
+          sed -i "s/^version=.*/version=$FULL_VERSION/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=$COMMIT_COUNT/" module/module.prop
+
+          # 构建
+          chmod +x build.sh
+          ./build.sh
+
+          # 打包
+          chmod +x package.sh
+          ./package.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: teeforge_cd-${{ env.VERSION }}
+          path: |
+            out/teeforge
+            out/teeforge_cd-*.zip
+          retention-days: 30

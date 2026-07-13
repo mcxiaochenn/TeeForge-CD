@@ -64,10 +64,14 @@ fi
 # Create output dirs 创建输出目录
 mkdir -p "$OBJ_DIR"
 
-# 从 teeforge.h 提取版本号 Extract version from teeforge.h
-VERSION=$(grep 'TEEFORGE_VERSION' native/include/teeforge.h | sed 's/.*"\(.*\)".*/\1/')
-# 从 git 获取 commit 次数作为 versionCode Get commit count as versionCode
-VERSION_CODE=$(git rev-list --count HEAD 2>/dev/null || echo "1")
+# 优先使用环境变量（CI 传入），否则从本地提取
+# Priority: env vars (CI), fallback to local extraction
+if [ -z "$VERSION" ]; then
+    VERSION=$(grep 'TEEFORGE_VERSION' native/include/teeforge.h | sed 's/.*"\(.*\)".*/\1/')
+fi
+if [ -z "$VERSION_CODE" ]; then
+    VERSION_CODE=$(git rev-list --count HEAD 2>/dev/null || echo "1")
+fi
 
 echo -e "${GREEN}版本 [Version]: $VERSION (code: $VERSION_CODE)${NC}"
 

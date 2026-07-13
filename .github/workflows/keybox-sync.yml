@@ -15,7 +15,7 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
 
       - name: Fetch upstream keybox
         id: fetch
@@ -124,11 +124,11 @@ jobs:
       - name: Update main branch keybox folder
         if: steps.fetch.outputs.need_update == 'true'
         run: |
-          git checkout main
+          git checkout master
           mkdir -p keybox
           cp /tmp/key-status keybox/
           cp /tmp/key-control keybox/
           cp /tmp/key-hash keybox/
           git add keybox/
           git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]" || true
-          git push origin main
+          git push origin master

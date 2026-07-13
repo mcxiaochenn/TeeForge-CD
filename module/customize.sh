@@ -9,6 +9,10 @@ ui_print " "
 TEEFORGE_DIR="/data/adb/teeforge"
 CONFIG_FILE="$TEEFORGE_DIR/config.conf"
 
+# 先设置权限（音量键检测需要执行二进制）
+# Set permissions first (volume key detection needs binary to be executable)
+chmod 755 $MODPATH/teeforge
+
 # 检查已有安装 Check existing installation
 if [ -d "$TEEFORGE_DIR" ]; then
     if [ -f "$CONFIG_FILE" ]; then
@@ -47,9 +51,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
 else
     ui_print "  配置已保留 [Config preserved]"
 fi
-
-# 设置 teeforge 权限 Set teeforge permissions
-chmod 755 $MODPATH/teeforge
 
 # Download resetprop-rs
 ui_print "  Preparing resetprop-rs..."

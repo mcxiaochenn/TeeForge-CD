@@ -52,7 +52,12 @@ jobs:
           fi
 
           NEED_UPDATE=false
-          if [ "$CURRENT_HASH" != "$OLD_HASH" ]; then
+          TRIGGER="${{ github.event_name }}"
+
+          if [ "$TRIGGER" = "workflow_dispatch" ]; then
+            echo "reason=manual_trigger" >> $GITHUB_OUTPUT
+            NEED_UPDATE=true
+          elif [ "$CURRENT_HASH" != "$OLD_HASH" ]; then
             echo "reason=hash_changed" >> $GITHUB_OUTPUT
             NEED_UPDATE=true
           elif [ "$CURRENT_MONTH" != "$OLD_MONTH" ]; then

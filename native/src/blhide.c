@@ -1,0 +1,223 @@
+#include "teeforge.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ===== 弱隐 BL Weak Bootloader Hiding ===== */
+/*
+ * 部分属性列表参考 Integrity-Box 项目
+ * Some property list entries参考 Integrity-Box project
+ * Source: https://github.com/MeowDump/Integrity-Box
+ * License: GPL-3.0
+ *
+ * 新增属性（相比初始版本） [Added properties (vs initial version)]:
+ * - Recovery 模式隐藏 [Recovery mode hiding]
+ * - Developer 选项 [Developer options]
+ * - SELinux 伪装 [SELinux spoofing]
+ * - 虚拟设备检测 [Virtual device detection]
+ * - compact 内存整理 [Compact memory]
+ * - 属性删除 [Property deletion]
+ */
+
+/* resetprop 工具类型 Resetprop tool type */
+typedef enum {
+    PROP_TOOL_STANDARD = 0,  /* 标准 Magisk resetprop */
+    PROP_TOOL_RS       = 1   /* resetprop-rs (KernelSU) */
+} prop_tool_t;
+
+static prop_tool_t g_prop_tool = PROP_TOOL_STANDARD;
+
+/* resetprop 属性列表 Property list for resetprop */
+typedef struct {
+    const char *key;
+    const char *value;
+} prop_entry_t;
+
+static const prop_entry_t bl_props[] = {
+    /* Boot 状态 Boot state */
+    {"ro.boot.vbmeta.device_state",     "locked"},
+    {"ro.boot.verifiedbootstate",       "green"},
+    {"ro.boot.flash.locked",            "1"},
+    {"ro.boot.veritymode",              "enforcing"},
+    {"ro.boot.warranty_bit",            "0"},
+    {"ro.warranty_bit",                 "0"},
+
+    /* 安全属性 Security properties */
+    {"ro.debuggable",                   "0"},
+    {"ro.force.debuggable",             "0"},
+    {"ro.secure",                       "1"},
+    {"ro.adb.secure",                   "1"},
+    {"ro.build.type",                   "user"},
+    {"ro.build.tags",                   "release-keys"},
+
+    /* Vendor 属性 Vendor properties */
+    {"ro.vendor.boot.warranty_bit",     "0"},
+    {"ro.vendor.warranty_bit",          "0"},
+    {"vendor.boot.vbmeta.device_state", "locked"},
+    {"vendor.boot.verifiedbootstate",   "green"},
+
+    /* OEM 解锁 OEM unlock */
+    {"sys.oem_unlock_allowed",          "0"},
+    {"ro.oem_unlock_supported",         "0"},
+
+    /* 安全启动 Secure boot */
+    {"ro.secureboot.lockstate",         "locked"},
+
+    /* Realme 设备 Realme devices */
+    {"ro.boot.realmebootstate",         "green"},
+    {"ro.boot.realme.lockstate",        "1"},
+
+    /* Recovery 模式隐藏 Recovery mode hiding (from Integrity-Box) */
+    {"ro.bootmode",                     "unknown"},
+    {"ro.boot.bootmode",                "unknown"},
+    {"vendor.boot.bootmode",            "unknown"},
+
+    /* Developer 选项 Developer options (from Integrity-Box) */
+    {"persist.sys.developer_options",   "0"},
+    {"persist.sys.dev_mode",            "0"},
+    {"persist.sys.debuggable",          "0"},
+
+    /* SELinux (from Integrity-Box) */
+    {"ro.boot.selinux",                 "enforcing"},
+
+    /* 虚拟设备 Virtual device (from Integrity-Box) */
+    {"ro.hardware.virtual_device",      "0"},
+
+    /* 结束标记 End marker */
+    {NULL, NULL}
+};
+
+/* 检测 resetprop 工具类型 Detect resetprop tool type */
+static void detect_prop_tool(void) {
+    /* 优先从环境变量获取 resetprop-rs 路径 */
+    /* Priority: get resetprop-rs path from environment */
+    const char *env_path = getenv("RESETPROP_RS");
+    if (env_path && file_exists(env_path)) {
+        g_prop_tool = PROP_TOOL_RS;
+        log_msg(LOG_DEBUG, "从环境变量获取 resetprop-rs [Got resetprop-rs from env]: %s", env_path);
+        return;
+    }
+
+    /* 检测系统中的 resetprop-rs Detect system resetprop-rs */
+    int ret = system("which resetprop-rs > /dev/null 2>&1");
+    if (ret == 0) {
+        g_prop_tool = PROP_TOOL_RS;
+        log_msg(LOG_DEBUG, "检测到系统 resetprop-rs [Detected system resetprop-rs]");
+        return;
+    }
+
+    g_prop_tool = PROP_TOOL_STANDARD;
+    log_msg(LOG_DEBUG, "使用标准 resetprop [Using standard resetprop]");
+}
+
+/* 获取 resetprop 命令路径 Get resetprop command path */
+static const char *get_resetprop_cmd(void) {
+    if (g_prop_tool == PROP_TOOL_RS) {
+        const char *env_path = getenv("RESETPROP_RS");
+        if (env_path && file_exists(env_path)) {
+            return env_path;
+        }
+        return "resetprop-rs";
+    }
+    return "resetprop";
+}
+
+/* 执行 resetprop 命令 Execute resetprop command */
+static int run_resetprop(const char *key, const char *value) {
+    char cmd[512];
+    const char *cmd_path = get_resetprop_cmd();
+
+    if (g_prop_tool == PROP_TOOL_RS) {
+        /* resetprop-rs 支持 --stealth 模式 */
+        snprintf(cmd, sizeof(cmd), "%s --stealth %s %s", cmd_path, key, value);
+    } else {
+        snprintf(cmd, sizeof(cmd), "%s %s %s", cmd_path, key, value);
+    }
+
+    log_msg(LOG_DEBUG, "  %s", cmd);
+
+    int ret = system(cmd);
+    if (ret != 0) {
+        log_msg(LOG_WARN, "resetprop 失败 [failed]: %s %s (code %d)", key, value, ret);
+    }
+    return ret;
+}
+
+/* 删除属性 Delete property */
+static int run_prop_delete(const char *key) {
+    char cmd[512];
+    const char *cmd_path = get_resetprop_cmd();
+
+    if (g_prop_tool == PROP_TOOL_RS) {
+        snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
+    } else {
+        snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
+    }
+
+    log_msg(LOG_DEBUG, "  %s", cmd);
+
+    int ret = system(cmd);
+    return ret;
+}
+
+/* 压缩属性内存 Compact property memory */
+static int run_prop_compact(void) {
+    if (g_prop_tool != PROP_TOOL_RS) {
+        log_msg(LOG_DEBUG, "跳过 compact（仅支持 resetprop-rs）[Skip compact (resetprop-rs only)]");
+        return 0;
+    }
+
+    const char *cmd_path = get_resetprop_cmd();
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s --compact", cmd_path);
+
+    log_msg(LOG_DEBUG, "压缩属性内存 [Compacting property memory]...");
+    int ret = system(cmd);
+    if (ret != 0) {
+        log_msg(LOG_WARN, "compact 失败 [compact failed] (code %d)", ret);
+    }
+    return ret;
+}
+
+/* 需要删除的属性 Properties to delete (from Integrity-Box) */
+static const char *del_props[] = {
+    "ro.build.selinux",  /* Integrity-Box: 删除而非覆盖 Delete instead of override */
+    NULL
+};
+
+int bl_hide(void) {
+    log_msg(LOG_INFO, "开始弱隐 BL [Starting weak bootloader hiding]...");
+
+    /* 检测 resetprop 工具 Detect resetprop tool */
+    detect_prop_tool();
+
+    /* 等待 boot 完成 Wait for boot completed */
+    log_msg(LOG_DEBUG, "等待 boot 完成 [Waiting for boot completed]...");
+    system("resetprop -w sys.boot_completed 0");
+
+    int success = 0;
+    int fail = 0;
+
+    /* 遍历属性列表 Iterate property list */
+    for (int i = 0; bl_props[i].key != NULL; i++) {
+        if (run_resetprop(bl_props[i].key, bl_props[i].value) == 0) {
+            success++;
+        } else {
+            fail++;
+        }
+    }
+
+    /* 删除敏感属性 Delete sensitive properties */
+    for (int i = 0; del_props[i] != NULL; i++) {
+        log_msg(LOG_DEBUG, "删除属性 [Delete property]: %s", del_props[i]);
+        run_prop_delete(del_props[i]);
+    }
+
+    /* 压缩属性内存 Compact property memory */
+    run_prop_compact();
+
+    log_msg(LOG_INFO, "弱隐 BL 完成 [Weak bootloader hiding done]: %d 成功 [success], %d 失败 [fail]", success, fail);
+
+    return (fail > 0) ? -1 : 0;
+}

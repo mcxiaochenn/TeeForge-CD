@@ -11,6 +11,25 @@
 /* ===== 全局配置 Global Config ===== */
 config_t g_config;
 
+/* 解析镜像列表 Parse mirror list */
+static void parse_mirrors(const char *val) {
+    char buf[1024];
+    strncpy(buf, val, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+
+    int count = 0;
+    char *token = strtok(buf, ",");
+    while (token && count < MAX_MIRRORS) {
+        char *trimmed = str_trim(token);
+        if (trimmed && trimmed[0] != '\0') {
+            strncpy(g_config.cn_mirrors[count], trimmed, MAX_URL_LEN - 1);
+            count++;
+        }
+        token = strtok(NULL, ",");
+    }
+    g_config.cn_mirror_count = count;
+}
+
 int config_load(const char *path) {
     /* 设置默认值 Set defaults */
     strncpy(g_config.packages_xml, DEFAULT_PACKAGES, MAX_PATH_LEN - 1);
@@ -18,6 +37,10 @@ int config_load(const char *path) {
     strncpy(g_config.keybox_dir, DEFAULT_KEYBOX_DIR, MAX_PATH_LEN - 1);
     strncpy(g_config.sources_conf, DEFAULT_SOURCES, MAX_PATH_LEN - 1);
     strncpy(g_config.log_file, DEFAULT_LOG_FILE, MAX_PATH_LEN - 1);
+    g_config.region = REGION_AUTO;
+    g_config.retry_count = 3;
+    g_config.speed_test_size = 4096;
+    g_config.cn_mirror_count = 0;
 
     /* 尝试加载配置文件 Try to load config file */
     FILE *f = fopen(path, "r");
@@ -51,6 +74,20 @@ int config_load(const char *path) {
             strncpy(g_config.sources_conf, val, MAX_PATH_LEN - 1);
         } else if (strcmp(key, "log_file") == 0) {
             strncpy(g_config.log_file, val, MAX_PATH_LEN - 1);
+        } else if (strcmp(key, "region") == 0) {
+            if (strcmp(val, "cn") == 0) {
+                g_config.region = REGION_CN;
+            } else if (strcmp(val, "global") == 0) {
+                g_config.region = REGION_GLOBAL;
+            } else {
+                g_config.region = REGION_AUTO;
+            }
+        } else if (strcmp(key, "retry_count") == 0) {
+            g_config.retry_count = atoi(val);
+        } else if (strcmp(key, "speed_test_size") == 0) {
+            g_config.speed_test_size = atoi(val);
+        } else if (strcmp(key, "cn_mirrors") == 0) {
+            parse_mirrors(val);
         } else {
             log_msg(LOG_WARN, "未知配置项: %s [Unknown config key: %s]", key, key);
         }

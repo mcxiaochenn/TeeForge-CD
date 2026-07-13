@@ -21,6 +21,15 @@
 #define MAX_PACKAGES     2048
 #define MAX_PATH_LEN     256
 #define MAX_PKG_NAME     256
+#define MAX_MIRRORS      8
+#define MAX_URL_LEN      512
+
+/* ===== 地区 Region ===== */
+typedef enum {
+    REGION_AUTO   = 0,  /* 自动检测 Auto-detect */
+    REGION_CN     = 1,  /* 中国大陆 China mainland */
+    REGION_GLOBAL = 2   /* 海外 Overseas */
+} region_t;
 
 /* ===== 配置结构 Configuration ===== */
 typedef struct {
@@ -29,6 +38,11 @@ typedef struct {
     char keybox_dir[MAX_PATH_LEN];    /* Keybox 目录 Keybox directory */
     char sources_conf[MAX_PATH_LEN];  /* 源配置文件 Source config file */
     char log_file[MAX_PATH_LEN];      /* 日志文件 Log file */
+    region_t region;                  /* 地区 Region */
+    int retry_count;                  /* 重试次数 Retry count */
+    int speed_test_size;              /* 测速文件大小 Speed test size */
+    char cn_mirrors[MAX_MIRRORS][MAX_URL_LEN];  /* 中国镜像站 China mirrors */
+    int cn_mirror_count;              /* 镜像站数量 Mirror count */
 } config_t;
 
 /* 全局配置实例 Global config instance */
@@ -65,5 +79,23 @@ char *str_dup_range(const char *start, const char *end); /* 复制范围 Duplica
 
 /* ===== 目标管理 Target Management (target.c) ===== */
 int target_generate(void);  /* 生成 target.txt Generate target.txt */
+
+/* ===== 弱隐 BL Weak Bootloader Hiding (blhide.c) ===== */
+int bl_hide(void);  /* 执行弱隐 BL Execute weak bootloader hiding */
+
+/* ===== Keybox 管理 Keybox Management (keybox.c) ===== */
+int keybox_fetch(void);  /* 获取并更新 keybox Fetch and update keybox */
+
+/* ===== 下载模块 Download Module (download.c) ===== */
+/* 检测地区 Detect region */
+int dl_detect_region(void);
+/* 测速并获取最快镜像 Speed test and get fastest mirror */
+int dl_speed_test(const char *test_url);
+/* 下载文件 Download file */
+char *dl_download(const char *url, size_t *out_len);
+/* 带重试的下载 Download with retry */
+char *dl_download_with_retry(const char *url, size_t *out_len);
+/* 获取镜像 URL（根据地区）Get mirror URL based on region */
+int dl_get_mirror_url(const char *original_url, char *mirror_url, size_t size);
 
 #endif /* TEEFORGE_H */

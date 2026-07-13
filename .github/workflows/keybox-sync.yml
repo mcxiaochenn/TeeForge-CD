@@ -1,0 +1,134 @@
+name: Keybox Sync
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Fetch upstream keybox
+        id: fetch
+        run: |
+          UPSTREAM_URL="https://raw.githubusercontent.com/MeowDump/MeowDump/refs/heads/main/Megatron"
+          STATUS_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-status"
+          CONTROL_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-control"
+          HASH_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-hash"
+
+          curl -sL "$UPSTREAM_URL" -o /tmp/megatron_raw
+          curl -sL "$STATUS_URL" -o /tmp/key-status
+          curl -sL "$CONTROL_URL" -o /tmp/key-control
+          curl -sL "$HASH_URL" -o /tmp/key-hash
+
+          if [ ! -s /tmp/megatron_raw ]; then
+            echo "error=Failed to fetch Megatron" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          CURRENT_HASH=$(sha256sum /tmp/megatron_raw | awk '{print $1}')
+          echo "hash=$CURRENT_HASH" >> $GITHUB_OUTPUT
+
+          if [ -f keybox/upstream_hash ]; then
+            OLD_HASH=$(cat keybox/upstream_hash)
+          else
+            OLD_HASH=""
+          fi
+
+          CURRENT_MONTH=$(date +%Y-%m)
+          if [ -f keybox/month ]; then
+            OLD_MONTH=$(cat keybox/month)
+          else
+            OLD_MONTH=""
+          fi
+
+          NEED_UPDATE=false
+          if [ "$CURRENT_HASH" != "$OLD_HASH" ]; then
+            echo "reason=hash_changed" >> $GITHUB_OUTPUT
+            NEED_UPDATE=true
+          elif [ "$CURRENT_MONTH" != "$OLD_MONTH" ]; then
+            echo "reason=new_month" >> $GITHUB_OUTPUT
+            NEED_UPDATE=true
+          else
+            echo "reason=no_change" >> $GITHUB_OUTPUT
+          fi
+
+          echo "need_update=$NEED_UPDATE" >> $GITHUB_OUTPUT
+
+      - name: Update keybox files
+        if: steps.fetch.outputs.need_update == 'true'
+        run: |
+          mkdir -p keybox
+
+          cp /tmp/key-status keybox/
+          cp /tmp/key-control keybox/
+          cp /tmp/key-hash keybox/
+          echo "${{ steps.fetch.outputs.hash }}" > keybox/upstream_hash
+          echo "$(date +%Y-%m)" > keybox/month
+
+          MONTH=$(date +%Y-%m)
+          SEED=$(echo -n "$MONTH" | sha256sum | head -c 12)
+          REAL_FILE="keybox/${SEED}"
+
+          PUBKEY=$(curl -s "https://github.com/mcxiaochenn.keys" | head -1)
+
+          python3 << PYEOF
+          import base64, hashlib, os
+
+          pubkey = """$PUBKEY""".strip().encode()
+          noise_key = hashlib.sha256(pubkey).digest()
+
+          with open('/tmp/megatron_raw', 'rb') as f:
+              data = f.read()
+
+          encrypted = bytearray()
+          for i, byte in enumerate(data):
+              encrypted.append(byte ^ noise_key[i % len(noise_key)])
+
+          with open('$REAL_FILE', 'wb') as f:
+              f.write(base64.b64encode(encrypted))
+
+          data_len = len(data)
+          for i in range(1, 15):
+              fake_seed = hashlib.sha256(f"${MONTH}_fake_{i}".encode()).hexdigest()[:12]
+              fake_file = f"keybox/{fake_seed}"
+              fake_data = os.urandom(data_len)
+              fake_encrypted = bytearray()
+              for j, byte in enumerate(fake_data):
+                  fake_encrypted.append(byte ^ noise_key[j % len(noise_key)])
+              with open(fake_file, 'wb') as f:
+                  f.write(base64.b64encode(fake_encrypted))
+          PYEOF
+
+          echo "real_file=$SEED" >> $GITHUB_OUTPUT
+
+      - name: Push to omg branch
+        if: steps.fetch.outputs.need_update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B omg
+          git add keybox/
+          git commit -m "keybox: update $(date +%Y-%m-%d) [auto]"
+          git push -f origin omg
+
+      - name: Update main branch keybox folder
+        if: steps.fetch.outputs.need_update == 'true'
+        run: |
+          git checkout main
+          mkdir -p keybox
+          cp /tmp/key-status keybox/
+          cp /tmp/key-control keybox/
+          cp /tmp/key-hash keybox/
+          git add keybox/
+          git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]" || true
+          git push origin main

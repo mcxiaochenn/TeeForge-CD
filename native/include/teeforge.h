@@ -33,16 +33,17 @@ typedef enum {
 
 /* ===== 配置结构 Configuration ===== */
 typedef struct {
-    char packages_xml[MAX_PATH_LEN];  /* 包数据库路径 Package database path */
-    char target_txt[MAX_PATH_LEN];    /* 目标文件路径 Target file path */
-    char keybox_dir[MAX_PATH_LEN];    /* Keybox 目录 Keybox directory */
-    char sources_conf[MAX_PATH_LEN];  /* 源配置文件 Source config file */
-    char log_file[MAX_PATH_LEN];      /* 日志文件 Log file */
-    region_t region;                  /* 地区 Region */
-    int retry_count;                  /* 重试次数 Retry count */
-    int speed_test_size;              /* 测速文件大小 Speed test size */
-    char cn_mirrors[MAX_MIRRORS][MAX_URL_LEN];  /* 中国镜像站 China mirrors */
-    int cn_mirror_count;              /* 镜像站数量 Mirror count */
+    char packages_xml[MAX_PATH_LEN];
+    char target_txt[MAX_PATH_LEN];
+    char keybox_dir[MAX_PATH_LEN];
+    char sources_conf[MAX_PATH_LEN];
+    char log_dir[MAX_PATH_LEN];       /* 日志目录 Log directory */
+    region_t region;
+    int retry_count;
+    int speed_test_size;
+    int debug;                         /* 调试开关 Debug switch */
+    char cn_mirrors[MAX_MIRRORS][MAX_URL_LEN];
+    int cn_mirror_count;
 } config_t;
 
 /* 全局配置实例 Global config instance */

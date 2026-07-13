@@ -6,13 +6,12 @@
 /* ===== 版本 Version ===== */
 #define TEEFORGE_VERSION "0.1.0"
 
-/* ===== 默认路径（可通过 config.conf 覆盖）===== */
-/* ===== Default Paths (overridable via config.conf) ===== */
+/* ===== 默认路径 Default Paths ===== */
 #define DEFAULT_PACKAGES    "/data/system/packages.xml"
 #define DEFAULT_TARGET_TXT  "/data/adb/tricky_store/target.txt"
 #define DEFAULT_KEYBOX_DIR  "/data/adb/teeforge/keybox/"
 #define DEFAULT_SOURCES     "/data/adb/teeforge/sources.conf"
-#define DEFAULT_LOG_FILE    "/data/adb/teeforge/teeforge.log"
+#define DEFAULT_LOG_DIR     "/data/adb/teeforge/logs/"
 
 #define CONFIG_FILE         "./config.conf"
 

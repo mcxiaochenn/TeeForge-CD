@@ -102,17 +102,36 @@ int keybox_fetch(void) {
     unlink(tmp_b64);
     if (!raw || raw_len == 0) { log_msg(LOG_ERROR, "解码数据为空 [Decoded data empty]"); free(raw); return -1; }
 
-    /* 计算噪声密钥（纯 C，不依赖 python） */
+    /* 计算噪声密钥（openssl SHA256） */
     unsigned char key[32] = {0};
-    /* SHA256 of pubkey - 简化版，取前32字节异或 */
-    for (size_t i = 0; i < strlen(pubkey); i++) {
-        key[i % 32] ^= (unsigned char)pubkey[i];
+    char tmp_pk[256], tmp_hash[256];
+    snprintf(tmp_pk, sizeof(tmp_pk), "/data/local/tmp/.pk_%d", getpid());
+    snprintf(tmp_hash, sizeof(tmp_hash), "/data/local/tmp/.hash_%d", getpid());
+
+    /* 写入公钥 */
+    FILE *fpk = fopen(tmp_pk, "w");
+    if (fpk) { fprintf(fpk, "%s", pubkey); fclose(fpk); }
+
+    /* openssl dgst -sha256 */
+    char sha_cmd[512];
+    snprintf(sha_cmd, sizeof(sha_cmd),
+        "openssl dgst -sha256 -r '%s' | awk '{print $1}' > '%s' 2>/dev/null",
+        tmp_pk, tmp_hash);
+    system(sha_cmd);
+    unlink(tmp_pk);
+
+    /* 读取 hash hex */
+    FILE *fh = fopen(tmp_hash, "r");
+    if (fh) {
+        char hex[65] = {0};
+        if (fgets(hex, sizeof(hex), fh)) {
+            for (int i = 0; i < 32 && hex[i*2]; i++) {
+                sscanf(hex + i*2, "%2hhx", &key[i]);
+            }
+        }
+        fclose(fh);
     }
-    /* 简单扩散 Simple diffusion */
-    for (int i = 0; i < 32; i++) {
-        key[i] = (key[i] << 3) | (key[i] >> 5);
-        key[i] ^= (unsigned char)(i * 0x37 + 0x5a);
-    }
+    unlink(tmp_hash);
 
     /* XOR 解密 */
     char *data = malloc(raw_len + 1);

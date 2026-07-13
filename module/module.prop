@@ -1,6 +1,6 @@
 id=teeforge_cd
 name=TeeForge-CD
 version=0.1.0
-versionCode=30
+versionCode=32
 author=Git@mcxiaochenn（酷安@辰渊尘Dusk）
 description=Android TEE 隐藏环境一体化工具：自动填充 target.txt、弱隐 BL、Keybox 管理

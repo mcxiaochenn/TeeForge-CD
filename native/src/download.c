@@ -21,20 +21,18 @@ int dl_detect_region(void) {
     log_msg(LOG_INFO, "  音量+ = 中国大陆 [Volume+ = China]");
     log_msg(LOG_INFO, "  音量- = 海外直连 [Volume- = Global]");
 
-    /* 音量键选择 Volume key selection */
-    int selected = volume_listen(10);
+    /* 音量键选择，输出 1/0 Volume key selection, output 1/0 */
+    int result = volume_listen(10);
 
-    if (selected >= 0) {
-        g_config.region = selected;
-    } else {
-        log_msg(LOG_INFO, "超时，默认海外 [Timeout, defaulting to Global]");
-        g_config.region = REGION_GLOBAL;
-    }
-
-    if (g_config.region == REGION_CN) {
+    if (result == 1) {
+        g_config.region = REGION_CN;
         log_msg(LOG_INFO, "已选择 [Selected]: 中国大陆 [China]");
-    } else {
+    } else if (result == 0) {
+        g_config.region = REGION_GLOBAL;
         log_msg(LOG_INFO, "已选择 [Selected]: 海外 [Global]");
+    } else {
+        g_config.region = REGION_GLOBAL;
+        log_msg(LOG_INFO, "超时，默认海外 [Timeout, defaulting to Global]");
     }
     log_msg(LOG_INFO, "");
 

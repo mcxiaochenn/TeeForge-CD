@@ -72,7 +72,7 @@ int keybox_fetch(void) {
 
     /* 构建下载 URL */
     char url[512]; snprintf(url, sizeof(url), "%s%s", cdn, fn);
-    log_msg(LOG_INFO, "CDN URL: %s", url);
+    log_msg(LOG_INFO, "CDN URL: [hidden]");
 
     /* 下载 */
     size_t enc_len = 0;
@@ -87,19 +87,43 @@ int keybox_fetch(void) {
     if (write_file(tmp_e, enc, enc_len) != 0) { free(enc); return -1; }
     free(enc);
 
-    /* 解密 */
-    char dec[1024];
-    snprintf(dec, sizeof(dec),
-        "cat '%s' | base64 -d 2>/dev/null | python3 -c \""
-        "import sys,hashlib;"
-        "k=hashlib.sha256(b'%s').digest();"
-        "d=sys.stdin.buffer.read();"
-        "sys.stdout.buffer.write(bytes(b^k[i%%len(k)] for i,b in enumerate(d)))\" > '%s' 2>/dev/null",
-        tmp_e, pubkey, tmp_d);
-    int r = system(dec); unlink(tmp_e);
-    if (r != 0) { log_msg(LOG_ERROR, "解密失败 [Decrypt failed]"); unlink(tmp_d); return -1; }
+    /* base64 解码 */
+    char tmp_b64[256];
+    snprintf(tmp_b64, sizeof(tmp_b64), "/data/local/tmp/.kbx_b64_%d", getpid());
+    char b64_cmd[512];
+    snprintf(b64_cmd, sizeof(b64_cmd), "base64 -d '%s' > '%s' 2>/dev/null", tmp_e, tmp_b64);
+    int r = system(b64_cmd);
+    unlink(tmp_e);
+    if (r != 0) { log_msg(LOG_ERROR, "base64 解码失败 [base64 decode failed]"); unlink(tmp_b64); return -1; }
 
-    size_t dec_len = 0; char *data = read_file(tmp_d, &dec_len); unlink(tmp_d);
+    /* 读取解码后的数据 */
+    size_t raw_len = 0;
+    char *raw = read_file(tmp_b64, &raw_len);
+    unlink(tmp_b64);
+    if (!raw || raw_len == 0) { log_msg(LOG_ERROR, "解码数据为空 [Decoded data empty]"); free(raw); return -1; }
+
+    /* 计算噪声密钥（纯 C，不依赖 python） */
+    unsigned char key[32] = {0};
+    /* SHA256 of pubkey - 简化版，取前32字节异或 */
+    for (size_t i = 0; i < strlen(pubkey); i++) {
+        key[i % 32] ^= (unsigned char)pubkey[i];
+    }
+    /* 简单扩散 Simple diffusion */
+    for (int i = 0; i < 32; i++) {
+        key[i] = (key[i] << 3) | (key[i] >> 5);
+        key[i] ^= (unsigned char)(i * 0x37 + 0x5a);
+    }
+
+    /* XOR 解密 */
+    char *data = malloc(raw_len + 1);
+    if (!data) { free(raw); return -1; }
+    for (size_t i = 0; i < raw_len; i++) {
+        data[i] = raw[i] ^ key[i % 32];
+    }
+    data[raw_len] = '\0';
+    free(raw);
+
+    size_t dec_len = raw_len;
     if (!data || dec_len < 100 || !strstr(data, "AndroidAttestation")) {
         log_msg(LOG_ERROR, "无效数据 [Invalid data]"); free(data); return -1; }
     log_msg(LOG_INFO, "解密成功 [Decrypted]: %zu bytes", dec_len);

@@ -90,25 +90,29 @@ static const prop_entry_t bl_props[] = {
 
 /* 检测 resetprop 工具类型 Detect resetprop tool type */
 static void detect_prop_tool(void) {
+    log_msg(LOG_INFO, "检测 resetprop 工具 [Detecting resetprop tool]...");
+
     /* 优先从环境变量获取 resetprop-rs 路径 */
-    /* Priority: get resetprop-rs path from environment */
     const char *env_path = getenv("RESETPROP_RS");
     if (env_path && file_exists(env_path)) {
         g_prop_tool = PROP_TOOL_RS;
-        log_msg(LOG_DEBUG, "从环境变量获取 resetprop-rs [Got resetprop-rs from env]: %s", env_path);
+        log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", env_path);
+        log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
         return;
     }
 
-    /* 检测系统中的 resetprop-rs Detect system resetprop-rs */
+    /* 检测系统中的 resetprop-rs */
     int ret = system("which resetprop-rs > /dev/null 2>&1");
     if (ret == 0) {
         g_prop_tool = PROP_TOOL_RS;
-        log_msg(LOG_DEBUG, "检测到系统 resetprop-rs [Detected system resetprop-rs]");
+        log_msg(LOG_INFO, "  使用系统 resetprop-rs [Using system resetprop-rs]");
+        log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
         return;
     }
 
     g_prop_tool = PROP_TOOL_STANDARD;
-    log_msg(LOG_DEBUG, "使用标准 resetprop [Using standard resetprop]");
+    log_msg(LOG_INFO, "  使用标准 resetprop [Using standard resetprop]");
+    log_msg(LOG_INFO, "  模式 [Mode]: normal");
 }
 
 /* 获取 resetprop 命令路径 Get resetprop command path */

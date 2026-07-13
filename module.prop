@@ -1,0 +1,6 @@
+id=teeforge_cd
+name=TeeForge-CD
+version=v0.1.0
+versionCode=1
+author=TeeForge
+description=Auto-populate Tricky Store target.txt and manage keybox files

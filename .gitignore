@@ -1,0 +1,12 @@
+# Build output
+out/
+*.o
+*.so
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

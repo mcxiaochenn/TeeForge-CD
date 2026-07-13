@@ -100,33 +100,53 @@ int config_load(const char *path) {
 
 /* ===== 日志系统 Logging System ===== */
 
+#define MAX_LOG_FILES 15
+
 static log_level_t current_level = LOG_INFO;
 static FILE *log_fp = NULL;
+static char log_file_path[MAX_PATH_LEN] = {0};
 
 void log_set_level(log_level_t level) {
     current_level = level;
 }
 
-/* 打开日志文件 Open log file */
+/* 清理旧日志，保留最新15份 Clean old logs, keep latest 15 */
+static void log_cleanup_old(void) {
+    char cmd[512];
+    /* 按时间排序，删除第15个以后的 */
+    snprintf(cmd, sizeof(cmd),
+        "ls -t %s/teeforge_*.log 2>/dev/null | tail -n +%d | xargs rm -f 2>/dev/null",
+        g_config.log_dir, MAX_LOG_FILES + 1);
+    system(cmd);
+}
+
+/* 打开日志文件（每次开机一个文件）Open log file (one file per boot) */
 static void log_open_file(void) {
     if (log_fp) return;
     if (!g_config.debug) return;
 
     ensure_dir(g_config.log_dir);
 
-    char path[MAX_PATH_LEN];
+    /* 文件名按日期，不按时间（同一开机会话复用） */
+    /* Filename by date, not time (reuse same file per boot session) */
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
 
-    snprintf(path, sizeof(path), "%s/teeforge_%04d%02d%02d_%02d%02d%02d.log",
+    snprintf(log_file_path, sizeof(log_file_path),
+             "%s/teeforge_%04d%02d%02d.log",
              g_config.log_dir,
-             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-             tm->tm_hour, tm->tm_min, tm->tm_sec);
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
 
-    log_fp = fopen(path, "a");
+    log_fp = fopen(log_file_path, "a");
     if (log_fp) {
-        fprintf(log_fp, "=== TeeForge-CD Log Start ===\n");
+        /* 每次运行用空行隔开 Separate each run with blank line */
+        fprintf(log_fp, "\n=== TeeForge-CD %04d-%02d-%02d %02d:%02d:%02d ===\n",
+                tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+                tm->tm_hour, tm->tm_min, tm->tm_sec);
         fflush(log_fp);
+
+        /* 清理旧日志 Clean old logs */
+        log_cleanup_old();
     }
 }
 

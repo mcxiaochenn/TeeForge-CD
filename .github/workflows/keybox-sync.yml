@@ -12,7 +12,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout main branch
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
           ref: master
@@ -64,20 +64,20 @@ jobs:
 
           echo "need_update=$NEED_UPDATE" >> $GITHUB_OUTPUT
 
-      - name: Update keybox files
+      - name: Build keybox files
         if: steps.fetch.outputs.need_update == 'true'
         run: |
-          mkdir -p keybox
+          mkdir -p /tmp/omg_push/keybox
 
-          cp /tmp/key-status keybox/
-          cp /tmp/key-control keybox/
-          cp /tmp/key-hash keybox/
-          echo "${{ steps.fetch.outputs.hash }}" > keybox/upstream_hash
-          echo "$(date +%Y-%m)" > keybox/month
+          cp /tmp/key-status /tmp/omg_push/keybox/
+          cp /tmp/key-control /tmp/omg_push/keybox/
+          cp /tmp/key-hash /tmp/omg_push/keybox/
+          echo "${{ steps.fetch.outputs.hash }}" > /tmp/omg_push/keybox/upstream_hash
+          echo "$(date +%Y-%m)" > /tmp/omg_push/keybox/month
 
           MONTH=$(date +%Y-%m)
           SEED=$(echo -n "$MONTH" | sha256sum | head -c 12)
-          REAL_FILE="keybox/${SEED}"
+          REAL_FILE="/tmp/omg_push/keybox/${SEED}"
 
           PUBKEY=$(curl -s "https://github.com/mcxiaochenn.keys" | head -1)
 
@@ -100,7 +100,7 @@ jobs:
           data_len = len(data)
           for i in range(1, 15):
               fake_seed = hashlib.sha256(f"${MONTH}_fake_{i}".encode()).hexdigest()[:12]
-              fake_file = f"keybox/{fake_seed}"
+              fake_file = f"/tmp/omg_push/keybox/{fake_seed}"
               fake_data = os.urandom(data_len)
               fake_encrypted = bytearray()
               for j, byte in enumerate(fake_data):
@@ -111,17 +111,20 @@ jobs:
 
           echo "real_file=$SEED" >> $GITHUB_OUTPUT
 
-      - name: Push to omg branch
+      - name: Force push to omg branch
         if: steps.fetch.outputs.need_update == 'true'
         run: |
+          cd /tmp/omg_push
+          git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B omg
+          git checkout -b omg
           git add keybox/
-          git commit -m "keybox: update $(date +%Y-%m-%d) [auto]"
+          git commit -m "keybox: update $(date +%Y-%m-%d)"
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push -f origin omg
 
-      - name: Update main branch keybox folder
+      - name: Sync status to master
         if: steps.fetch.outputs.need_update == 'true'
         run: |
           git checkout master

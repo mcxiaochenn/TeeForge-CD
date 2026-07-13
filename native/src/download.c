@@ -1,5 +1,7 @@
 #include "teeforge.h"
 #include <unistd.h>
+#include <fcntl.h>
+#include <linux/input.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,15 +10,65 @@
 #include <errno.h>
 
 /* ===== 下载模块 Download Module ===== */
-/*
- * 功能 Features:
- * - 自动检测地区（中国大陆/海外）Auto-detect region (CN/Global)
- * - 小文件测速（避免 ping 被禁）Small file speed test (avoid ping block)
- * - 镜像站回退 Mirror fallback
- * - 失败重试 Retry on failure
- */
 
-/* 镜像站列表 Mirror list */
+/* 音量键监听 Volume key listener */
+/* 音量+ = 中国大陆 (CN), 音量- = 海外 (Global) */
+static int listen_volume_key(int timeout_sec) {
+    const char *devices[] = {
+        "/dev/input/event0", "/dev/input/event1",
+        "/dev/input/event2", "/dev/input/event3",
+        "/dev/input/event4", "/dev/input/event5",
+        NULL
+    };
+
+    int fds[16];
+    int nfds = 0;
+
+    /* 打开所有输入设备 Open all input devices */
+    for (int i = 0; devices[i] != NULL && nfds < 16; i++) {
+        int fd = open(devices[i], O_RDONLY | O_NONBLOCK);
+        if (fd >= 0) {
+            fds[nfds++] = fd;
+        }
+    }
+
+    if (nfds == 0) {
+        log_msg(LOG_WARN, "无法打开输入设备 [Cannot open input devices]");
+        return -1;
+    }
+
+    log_msg(LOG_INFO, "等待音量键选择 [Waiting for volume key]...");
+    log_msg(LOG_INFO, "  音量+ = 中国大陆 [Volume+ = China]");
+    log_msg(LOG_INFO, "  音量- = 海外直连 [Volume- = Global]");
+
+    time_t start = time(NULL);
+    struct input_event ev;
+
+    while (time(NULL) - start < timeout_sec) {
+        for (int i = 0; i < nfds; i++) {
+            ssize_t n = read(fds[i], &ev, sizeof(ev));
+            if (n == sizeof(ev)) {
+                /* KEY_VOLUMEUP=115, KEY_VOLUMEDOWN=114 */
+                if (ev.type == EV_KEY && ev.value == 1) {
+                    if (ev.code == KEY_VOLUMEUP) {
+                        log_msg(LOG_INFO, "音量+ 已按下 [Volume+ pressed]: 中国大陆 [China]");
+                        for (int j = 0; j < nfds; j++) close(fds[j]);
+                        return REGION_CN;
+                    } else if (ev.code == KEY_VOLUMEDOWN) {
+                        log_msg(LOG_INFO, "音量- 已按下 [Volume- pressed]: 海外 [Global]");
+                        for (int j = 0; j < nfds; j++) close(fds[j]);
+                        return REGION_GLOBAL;
+                    }
+                }
+            }
+        }
+        usleep(50000); /* 50ms */
+    }
+
+    log_msg(LOG_WARN, "超时，使用默认 [Timeout, using default]");
+    for (int j = 0; j < nfds; j++) close(fds[j]);
+    return -1;
+}
 
 /* 检测地区 Detect region */
 int dl_detect_region(void) {
@@ -24,45 +76,17 @@ int dl_detect_region(void) {
         return g_config.region;
     }
 
-    log_msg(LOG_INFO, "正在检测地区 [Detecting region]...");
+    log_msg(LOG_INFO, "请选择地区 [Please select region]:");
 
-    /* 测试多个 GitHub 端点 Test multiple GitHub endpoints */
-    /* raw.githubusercontent.com 在中国几乎必被墙 */
-    const char *test_urls[] = {
-        "https://raw.githubusercontent.com/robots.txt",
-        "https://gist.github.com/robots.txt",
-        NULL
-    };
+    /* 尝试音量键选择 Try volume key selection */
+    int selected = listen_volume_key(30);
 
-    int accessible = 0;
-    for (int i = 0; test_urls[i] != NULL; i++) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd),
-            "curl -sL --connect-timeout 2 --max-time 3 "
-            "-o /dev/null -w '%%{http_code}' '%s' 2>/dev/null",
-            test_urls[i]);
-
-        FILE *fp = popen(cmd, "r");
-        if (fp) {
-            char code[8] = {0};
-            if (fgets(code, sizeof(code), fp)) {
-                /* 200/301/302 都算可达 */
-                if (atoi(code) > 0 && atoi(code) < 400) {
-                    accessible = 1;
-                }
-            }
-            pclose(fp);
-        }
-
-        if (accessible) break;
-    }
-
-    if (accessible) {
-        log_msg(LOG_INFO, "检测结果 [Region detected]: 海外 [Global]");
-        g_config.region = REGION_GLOBAL;
+    if (selected >= 0) {
+        g_config.region = selected;
     } else {
-        log_msg(LOG_INFO, "检测结果 [Region detected]: 中国大陆 [China]");
-        g_config.region = REGION_CN;
+        /* 超时则默认海外 Default to Global on timeout */
+        log_msg(LOG_INFO, "超时，默认海外 [Timeout, defaulting to Global]");
+        g_config.region = REGION_GLOBAL;
     }
 
     return g_config.region;

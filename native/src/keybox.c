@@ -134,15 +134,43 @@ int keybox_fetch(void) {
     unlink(tmp_hash);
 
     /* XOR 解密 */
-    char *data = malloc(raw_len + 1);
-    if (!data) { free(raw); return -1; }
+    char *xor_result = malloc(raw_len + 1);
+    if (!xor_result) { free(raw); return -1; }
     for (size_t i = 0; i < raw_len; i++) {
-        data[i] = raw[i] ^ key[i % 32];
+        xor_result[i] = raw[i] ^ key[i % 32];
     }
-    data[raw_len] = '\0';
+    xor_result[raw_len] = '\0';
     free(raw);
 
-    size_t dec_len = raw_len;
+    /* XOR 结果还是 base64，需要再解码一次 */
+    /* XOR result is still base64, need another decode */
+    char tmp_xor[256], tmp_final[256];
+    snprintf(tmp_xor, sizeof(tmp_xor), "/data/local/tmp/.kbx_xor_%d", getpid());
+    snprintf(tmp_final, sizeof(tmp_final), "/data/local/tmp/.kbx_final_%d", getpid());
+
+    write_file(tmp_xor, xor_result, raw_len);
+    free(xor_result);
+
+    char final_cmd[512];
+    snprintf(final_cmd, sizeof(final_cmd), "base64 -d '%s' > '%s' 2>/dev/null", tmp_xor, tmp_final);
+    int r2 = system(final_cmd);
+    unlink(tmp_xor);
+
+    if (r2 != 0) {
+        log_msg(LOG_ERROR, "二次 base64 解码失败 [Second base64 decode failed]");
+        unlink(tmp_final);
+        return -1;
+    }
+
+    size_t dec_len = 0;
+    char *data = read_file(tmp_final, &dec_len);
+    unlink(tmp_final);
+
+    if (!data || dec_len == 0) {
+        log_msg(LOG_ERROR, "最终数据为空 [Final data empty]");
+        free(data);
+        return -1;
+    }
     if (!data || dec_len < 100 || !strstr(data, "AndroidAttestation")) {
         log_msg(LOG_ERROR, "无效数据 [Invalid data]"); free(data); return -1; }
     log_msg(LOG_INFO, "解密成功 [Decrypted]: %zu bytes", dec_len);

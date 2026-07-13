@@ -100,7 +100,6 @@ int main(int argc, char *argv[]) {
 
     if (do_keybox) {
         log_msg(LOG_INFO, "");
-        dl_detect_region();
         ret = keybox_fetch();
     }
 

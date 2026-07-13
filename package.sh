@@ -76,15 +76,15 @@ ZIP_PATH="$OUT_DIR/$ZIP_NAME"
 # Remove old zip if exists
 rm -f "$ZIP_PATH"
 
-# Create zip from build directory
-cd "$BUILD_DIR"
+# Create zip from module directory (files at root, no nested folder)
+cd "$BUILD_DIR/teeforge_cd"
 if command -v zip &> /dev/null; then
-    zip -r "$ZIP_PATH" "teeforge_cd/"
+    zip -r "$ZIP_PATH" .
 elif command -v powershell &> /dev/null; then
     # 转换为 Windows 路径格式
     WIN_OUT_DIR=$(cd "$OUT_DIR" && pwd -W 2>/dev/null || pwd)
     WIN_ZIP_PATH="$WIN_OUT_DIR\\$ZIP_NAME"
-    powershell -Command "Compress-Archive -Path 'teeforge_cd' -DestinationPath '$WIN_ZIP_PATH' -Force"
+    powershell -Command "Compress-Archive -Path '.\\*' -DestinationPath '$WIN_ZIP_PATH' -Force"
 else
     echo -e "${RED}错误: 需要 zip 或 PowerShell [Error: zip or PowerShell required]${NC}"
     exit 1

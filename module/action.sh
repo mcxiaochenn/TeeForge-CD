@@ -1,39 +1,32 @@
 #!/system/bin/sh
 # TeeForge-CD Action Script
-# 用户手动执行脚本 [User manual action script]
-# 显示日志，不卡顿 Show logs, no stall
+# 热更新脚本 [Hot update script]
+# 无需重启 No reboot required
 
 MODDIR=${0%/*}
+CONFIG="/data/adb/teeforge/config.conf"
 
 echo "========================================"
 echo " TeeForge-CD Action"
 echo "========================================"
 echo ""
 
-# 检测 resetprop-rs Detect resetprop-rs
-echo "[1/2] 检测 resetprop-rs [Detecting resetprop-rs]..."
-RESETPROP_RS=""
-for f in "$MODDIR/resetprop-rs"/resetprop-*; do
-    [ -x "$f" ] && RESETPROP_RS="$f" && break
+# 获取 keybox
+echo "[1/2] 获取 keybox [Fetching keybox]..."
+echo ""
+$MODDIR/teeforge --config "$CONFIG" --keybox 2>&1 | while IFS= read -r line; do
+    echo "  $line"
 done
-
-if [ -n "$RESETPROP_RS" ]; then
-    export RESETPROP_RS
-    echo "  ✓ 使用 [Using]: $RESETPROP_RS"
-else
-    echo "  ✗ 未找到 resetprop-rs，使用标准 resetprop"
-    echo "    [Not found, using standard resetprop]"
-fi
 echo ""
 
-# 生成 target.txt
-echo "[2/2] 生成 target.txt [Generating target.txt]..."
-echo "  扫描已安装应用 [Scanning installed apps]..."
-$MODDIR/teeforge --generate 2>&1 | while IFS= read -r line; do
+# 更新 target.txt
+echo "[2/2] 更新 target.txt [Updating target.txt]..."
+echo ""
+$MODDIR/teeforge --config "$CONFIG" --generate 2>&1 | while IFS= read -r line; do
     echo "  $line"
 done
 echo ""
 
 echo "========================================"
-echo " 完成 [Done] - 重启生效 [Reboot to apply]"
+echo " 完成 [Done] - 无需重启 [No reboot needed]"
 echo "========================================"

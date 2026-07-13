@@ -39,6 +39,7 @@ jobs:
           # 写入 module.prop
           sed -i "s/^version=.*/version=$FULL_VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$COMMIT_COUNT/" module/module.prop
+          sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
 
           # 构建
           chmod +x build.sh

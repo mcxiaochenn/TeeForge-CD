@@ -87,15 +87,14 @@ int bl_hide(void);  /* 执行弱隐 BL Execute weak bootloader hiding */
 int keybox_fetch(void);  /* 获取并更新 keybox Fetch and update keybox */
 
 /* ===== 下载模块 Download Module (download.c) ===== */
-/* 检测地区 Detect region */
 int dl_detect_region(void);
-/* 测速并获取最快镜像 Speed test and get fastest mirror */
 int dl_speed_test(const char *test_url);
-/* 下载文件 Download file */
 char *dl_download(const char *url, size_t *out_len);
-/* 带重试的下载 Download with retry */
 char *dl_download_with_retry(const char *url, size_t *out_len);
-/* 获取镜像 URL（根据地区）Get mirror URL based on region */
 int dl_get_mirror_url(const char *original_url, char *mirror_url, size_t size);
+
+/* ===== 音量键监听 Volume Key Listener (volume.c) ===== */
+/* 返回: REGION_CN / REGION_GLOBAL / -1(超时) */
+int volume_listen(int timeout_sec);
 
 #endif /* TEEFORGE_H */

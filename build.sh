@@ -80,7 +80,7 @@ sed -i "s/^version=.*/version=$VERSION/" module/module.prop
 sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
 
 # Source files 源文件
-SOURCES="$SRC_DIR/main.c $SRC_DIR/target.c $SRC_DIR/utils.c $SRC_DIR/blhide.c $SRC_DIR/keybox.c $SRC_DIR/download.c"
+SOURCES="$SRC_DIR/main.c $SRC_DIR/target.c $SRC_DIR/utils.c $SRC_DIR/blhide.c $SRC_DIR/keybox.c $SRC_DIR/download.c $SRC_DIR/volume.c"
 
 # Compile objects 编译目标文件
 echo -e "${GREEN}编译中 [Compiling]...${NC}"

@@ -64,18 +64,25 @@ static long speed_test_url(const char *url) {
 
 /* 测速并选择最快镜像 Speed test and select fastest mirror */
 int dl_speed_test(const char *test_url) {
-    log_msg(LOG_INFO, "开始测速 [Starting speed test]...");
+    log_msg(LOG_INFO, "测速中 [Testing speed]...");
 
     if (g_config.region != REGION_CN) {
-        log_msg(LOG_DEBUG, "非中国大陆，跳过镜像测速 [Not CN, skip mirror test]");
-        return 0;
+        log_msg(LOG_INFO, "海外用户，跳过镜像测速 [Global user, skip mirror test]");
+        return -1;
     }
 
+    /* 测试直连 Test direct */
+    log_msg(LOG_INFO, "  测试 GitHub 直连 [Testing GitHub direct]...");
     long best_time = speed_test_url(test_url);
     int best_mirror = -1;
 
-    log_msg(LOG_DEBUG, "GitHub 直连 [Direct]: %ld ms", best_time);
+    if (best_time > 0) {
+        log_msg(LOG_INFO, "  GitHub 直连 [Direct]: %ld ms", best_time);
+    } else {
+        log_msg(LOG_INFO, "  GitHub 直连 [Direct]: 超时 [timeout]");
+    }
 
+    /* 测试每个镜像 Test each mirror */
     for (int i = 0; i < g_config.cn_mirror_count && i < MAX_MIRRORS; i++) {
         if (g_config.cn_mirrors[i][0] == '\0') continue;
 
@@ -83,21 +90,25 @@ int dl_speed_test(const char *test_url) {
         snprintf(mirror_url, sizeof(mirror_url), "%s/%s",
                  g_config.cn_mirrors[i], test_url);
 
+        log_msg(LOG_INFO, "  测试镜像 [Testing mirror]: %s", g_config.cn_mirrors[i]);
         long time = speed_test_url(mirror_url);
-        log_msg(LOG_DEBUG, "镜像 [Mirror] %s: %ld ms",
-                g_config.cn_mirrors[i], time);
 
-        if (time > 0 && (best_time <= 0 || time < best_time)) {
-            best_time = time;
-            best_mirror = i;
+        if (time > 0) {
+            log_msg(LOG_INFO, "    结果 [Result]: %ld ms", time);
+            if (best_time <= 0 || time < best_time) {
+                best_time = time;
+                best_mirror = i;
+            }
+        } else {
+            log_msg(LOG_INFO, "    结果 [Result]: 超时 [timeout]");
         }
     }
 
     if (best_mirror >= 0) {
-        log_msg(LOG_INFO, "最快镜像 [Fastest mirror]: %s (%ld ms)",
+        log_msg(LOG_INFO, "最快 [Fastest]: %s (%ld ms)",
                 g_config.cn_mirrors[best_mirror], best_time);
     } else {
-        log_msg(LOG_INFO, "直连最快 [Direct fastest]: %ld ms", best_time);
+        log_msg(LOG_INFO, "最快 [Fastest]: GitHub 直连 (%ld ms)", best_time);
     }
 
     return best_mirror;

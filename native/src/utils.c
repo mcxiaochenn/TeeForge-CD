@@ -22,6 +22,11 @@ static void parse_mirrors(const char *val) {
     while (token && count < MAX_MIRRORS) {
         char *trimmed = str_trim(token);
         if (trimmed && trimmed[0] != '\0') {
+            /* 去除末尾斜杠 Remove trailing slash */
+            size_t len = strlen(trimmed);
+            while (len > 0 && trimmed[len - 1] == '/') {
+                trimmed[--len] = '\0';
+            }
             strncpy(g_config.cn_mirrors[count], trimmed, MAX_URL_LEN - 1);
             count++;
         }

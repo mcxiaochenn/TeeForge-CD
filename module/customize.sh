@@ -74,8 +74,14 @@ done
 
 if [ -f "$RESETPROP_DIR/$BINARY" ]; then
     SIZE=$(wc -c < "$RESETPROP_DIR/$BINARY")
-    chmod 755 "$RESETPROP_DIR/$BINARY"
-    ui_print "  Installed: $BINARY ($SIZE bytes)"
+    # 验证大小（应 > 100KB）Validate size (should be > 100KB)
+    if [ "$SIZE" -gt 100000 ]; then
+        chmod 755 "$RESETPROP_DIR/$BINARY"
+        ui_print "  Installed: $BINARY ($SIZE bytes)"
+    else
+        ui_print "  ! Download corrupted ($SIZE bytes), removing"
+        rm -f "$RESETPROP_DIR/$BINARY"
+    fi
 else
     ui_print "  ! Download failed / 下载失败"
     ui_print "  ! Using standard resetprop"

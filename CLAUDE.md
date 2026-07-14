@@ -53,6 +53,7 @@ target_txt=/data/adb/tricky_store/target.txt
 keybox_dir=/data/adb/teeforge/keybox/
 debug=0                         # 0=关闭, 1=开启（日志写入文件）
 log_dir=/data/adb/teeforge/logs/
+root_method=Unknown             # 自动检测 auto-detected: Magisk/KernelSU/APatch
 ```
 
 ### 关键实现细节 Key Implementation Details
@@ -95,6 +96,7 @@ log_dir=/data/adb/teeforge/logs/
 | `native/src/blhide.c` | 弱隐 BL（resetprop 属性伪装） |
 | `native/src/keybox.c` | Keybox 获取与解密（混淆） |
 | `native/src/volume.c` | 音量键监听 |
+| `native/src/rootdetect.c` | Root 方式检测（env + path fallback） |
 | `native/include/teeforge.h` | 公共头文件 |
 | `module/config.conf` | 默认配置 |
 | `module/service.sh` | 开机服务 |

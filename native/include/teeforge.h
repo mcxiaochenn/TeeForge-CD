@@ -74,4 +74,8 @@ int keybox_fetch(void);
 /* ===== 音量键监听 Volume Key Listener (volume.c) ===== */
 int volume_listen(int timeout_sec);
 
+/* ===== Root 检测 Root Detection (rootdetect.c) ===== */
+int root_detect(char *method, size_t mlen, char *version, size_t vlen);
+int root_detect_save(const char *config_path, const char *method);
+
 #endif /* TEEFORGE_H */

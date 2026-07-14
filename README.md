@@ -8,6 +8,11 @@
 Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 
 > ⚠️ **本模块不能单独使用**，需搭配以下模块三选一：
+
+> ⚠️ **Dev 版本不稳定**，仅用于测试，正式使用请安装 Release 版：
+> [Latest Release](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest)
+
+
 > - [TrickyStore](https://github.com/5ec1cff/TrickyStore)
 > - [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
 > - [TEESimulator](https://github.com/JingMatrix/TEESimulator)
@@ -24,7 +29,7 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 
 | 你以前 | 现在 |
 |--------|------|
-| 手动编辑 target.txt | 开机自动填充 237+ 应用 |
+| 手动编辑 target.txt | 开机自动填充所有用户应用 |
 | 手动跑 resetprop | 29 个属性 0.3 秒伪装到位 |
 | 到处找 keybox | CDN 加密同步，一条命令搞定 |
 | 担心逆向 | 三层加密 + 变量拆分，祝你好运 |
@@ -95,8 +100,6 @@ TeeForge-CD/
 │   ├── customize.sh       # 安装脚本（音量键交互）
 │   ├── action.sh          # 手动执行
 │   └── resetprop-rs/      # 预置二进制
-├── update/                # KernelSU 自动更新
-│   └── release.json       # release 版本信息（CDN，dev 版在 dev 分支）
 ├── CHANGELOG.md           # 自动生成（release workflow）
 ├── .github/workflows/     # CI/CD 全自动
 └── docs/                  # 架构、反思、待办

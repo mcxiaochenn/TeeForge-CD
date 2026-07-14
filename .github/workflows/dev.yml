@@ -73,9 +73,9 @@ jobs:
 
       - name: Generate changelog
         run: |
-          LOG=$(git log --oneline --no-decorate -20)
           COMMIT_HASH="${{ steps.ver.outputs.commitHash }}"
-          cat > /tmp/CHANGELOG.md << CHANGELOG
+          # 写入头部 Write header
+          cat > /tmp/CHANGELOG.md << EOF
           ## TeeForge-CD Dev ${{ steps.ver.outputs.version }}
 
           ### 构建信息 Build Info
@@ -84,8 +84,9 @@ jobs:
           - Commit: \`${COMMIT_HASH}\`
 
           ### 最近提交 Recent Commits
-          ${LOG}
-          CHANGELOG
+          EOF
+          # 逐行追加 commits（每行加 - 前缀）Append commits with list prefix
+          git log --oneline --no-decorate -20 | sed 's/^/- /' >> /tmp/CHANGELOG.md
 
       - name: Push to page branch
         env:

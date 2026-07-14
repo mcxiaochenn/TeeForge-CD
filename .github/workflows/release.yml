@@ -62,17 +62,17 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # 获取上一个 tag
+          # 获取上一个 tag Get previous tag
           PREV_TAG=$(git tag --sort=-creatordate | head -2 | tail -1)
 
           if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ steps.version.outputs.version }}" ]; then
-            LOG=$(git log --oneline --no-decorate | head -20)
+            LOG_CMD="git log --oneline --no-decorate | head -20"
           else
-            LOG=$(git log ${PREV_TAG}..HEAD --oneline --no-decorate)
+            LOG_CMD="git log ${PREV_TAG}..HEAD --oneline --no-decorate"
           fi
 
-          # 写入 Release body 用的 changelog
-          cat > /tmp/CHANGELOG.md << CHANGELOG
+          # 写入 Release body 用的 changelog Write release changelog
+          cat > /tmp/CHANGELOG.md << EOF
           ## TeeForge-CD ${{ steps.version.outputs.version }}
 
           ### 构建信息 Build Info
@@ -81,7 +81,9 @@ jobs:
           - Commit: \`${{ github.sha }}\`
 
           ### 更新内容 Changes
-          ${LOG}
+          EOF
+          eval "$LOG_CMD" | sed 's/^/- /' >> /tmp/CHANGELOG.md
+          cat >> /tmp/CHANGELOG.md << EOF
 
           ### 安装 Installation
           1. 下载 \`teeforge_cd-${{ steps.version.outputs.version }}.zip\`
@@ -92,11 +94,11 @@ jobs:
           |----------|-----------------|
           | teeforge_cd-${{ steps.version.outputs.version }}.zip | Magisk 模块安装包 |
           | teeforge | 独立二进制（调试用）|
-          CHANGELOG
+          EOF
 
           # 同时更新仓库中的 CHANGELOG.md（供 CDN 访问）
           # Also update repo CHANGELOG.md (for CDN access)
-          cat > CHANGELOG.md << CHANGELOG
+          cat > CHANGELOG.md << EOF
           ## TeeForge-CD ${{ steps.version.outputs.version }}
 
           ### 构建信息 Build Info
@@ -105,8 +107,8 @@ jobs:
           - Commit: \`${{ github.sha }}\`
 
           ### 更新内容 Changes
-          ${LOG}
-          CHANGELOG
+          EOF
+          eval "$LOG_CMD" | sed 's/^/- /' >> CHANGELOG.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

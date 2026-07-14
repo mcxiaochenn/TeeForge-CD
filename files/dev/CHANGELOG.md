@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-2394ec4
+## TeeForge-CD Dev v0.2.1-5d399b8
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-2394ec4`
-- Version Code: `76`
-- Commit: `2394ec4`
+- Version: `v0.2.1-5d399b8`
+- Version Code: `77`
+- Commit: `5d399b8`
 
 ### 最近提交 Recent Commits
+- 5d399b8 fix: simplify rootdetect call — --rootdetect already skips auto detection
 - 2394ec4 refactor: move root detection before config selection in install flow
 - 1375599 fix: volume key prompt polluted by root detection output during install
 - 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically
@@ -25,4 +26,3 @@
 - 589f014 docs: 更新 CLAUDE.md（自动更新 + CI 工作流说明）[Update CLAUDE.md]
 - 1b92304 docs: 更新 README 项目结构（dev.json 已移至 dev 分支）[Update README]
 - f707deb release: v0.2.1 — update release.json and CHANGELOG.md [auto]
-- 63ef470 fix: 修正 author 字段 [Fix author field]

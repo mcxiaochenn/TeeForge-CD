@@ -88,21 +88,6 @@ else
     ui_print "  config.conf 已保留 [config.conf preserved]"
 fi
 
-# 更新模块描述 Update module description
-ARCH_ABI=$(getprop ro.product.cpu.abi)
-case "$ARCH_ABI" in
-    arm64-v8a)    ARCH="arm64-v8a" ;;
-    armeabi-v7a)  ARCH="armeabi-v7a" ;;
-    x86_64)       ARCH="x86_64" ;;
-    x86)          ARCH="x86" ;;
-    *)            ARCH="$ARCH_ABI" ;;
-esac
-TEE_VER=$(grep '^version=' "$MODPATH/module.prop" | cut -d'=' -f2)
-DESC="✅ [${ROOT_METHOD:-Unknown}] v${TEE_VER:-?} | arch: ${ARCH} | keybox: N/A"
-sed -i "s|^description=.*|description=$DESC|" "$MODPATH/module.prop"
-ui_print "  Arch: $ARCH"
-ui_print "  描述已更新 [Description updated]"
-
 # Set permissions
 set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm $MODPATH/teeforge 0 0 0755

@@ -19,7 +19,7 @@ for f in "$MODPATH/resetprop-rs"/resetprop-*; do
 done
 
 # 检测 root 方式 Detect root method (安装时安装前，环境变量可用)
-ROOT_RESULT=$($MODPATH/teeforge --rootdetect --no-rootdetect 2>/dev/null)
+ROOT_RESULT=$($MODPATH/teeforge --rootdetect 2>/dev/null)
 ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
 ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
 [ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"

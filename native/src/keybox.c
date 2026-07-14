@@ -25,7 +25,7 @@ static char *dl_url(const char *url, size_t *out) {
     char *d = NULL; size_t l = 0, c = 65536; char b[4096];
     log_msg(LOG_DEBUG, "下载 [Download]: %s", url);
     d = malloc(c); if (!d) return NULL;
-    snprintf(cmd, sizeof(cmd), "curl -sL '%s'", url);
+    snprintf(cmd, sizeof(cmd), "wget -qO- '%s'", url);
     FILE *fp = popen(cmd, "r"); if (!fp) { free(d); return NULL; }
     while (1) { size_t n = fread(b, 1, sizeof(b), fp); if (n == 0) break;
         if (l+n > c) { c *= 2; char *nd = realloc(d, c); if (!nd) { free(d); pclose(fp); return NULL; } d = nd; }

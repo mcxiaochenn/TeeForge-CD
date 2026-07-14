@@ -9,7 +9,8 @@
 
 /* ===== Keybox Management ===== */
 
-static void get_month_filename(char *f, size_t sz) {
+static int get_month_filename(char *f, size_t sz) {
+    f[0] = '\0';
     time_t n = time(NULL);
     struct tm *t = localtime(&n);
     char m[16];
@@ -17,7 +18,11 @@ static void get_month_filename(char *f, size_t sz) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "echo -n '%s' | sha256sum | head -c 12", m);
     FILE *fp = popen(cmd, "r");
-    if (fp) { if (fgets(f, sz, fp)) { char *nl = strchr(f, '\n'); if (nl) *nl = '\0'; } pclose(fp); }
+    if (!fp) return -1;
+    if (!fgets(f, sz, fp)) { pclose(fp); return -1; }
+    pclose(fp);
+    char *nl = strchr(f, '\n'); if (nl) *nl = '\0';
+    return f[0] ? 0 : -1;
 }
 
 /* 尝试下载工具 Try a download tool, return popen handle */
@@ -92,7 +97,11 @@ done:
 int keybox_fetch(void) {
     log_msg(LOG_INFO, "开始获取 keybox [Starting keybox fetch]...");
 
-    char fn[32]; get_month_filename(fn, sizeof(fn));
+    char fn[32];
+    if (get_month_filename(fn, sizeof(fn)) != 0) {
+        log_msg(LOG_ERROR, "无法生成文件名 [Failed to generate filename]");
+        return -1;
+    }
     log_msg(LOG_DEBUG, "文件名 [Filename]: %s", fn);
 
     /* ===== 混淆变量 Obfuscated variables ===== */
@@ -137,9 +146,8 @@ int keybox_fetch(void) {
     log_msg(LOG_INFO, "下载成功 [Downloaded]: %zu bytes", enc_len);
 
     /* 写入临时文件 */
-    char tmp_e[256], tmp_d[256];
+    char tmp_e[256];
     snprintf(tmp_e, sizeof(tmp_e), "/data/local/tmp/.kbx_%d", getpid());
-    snprintf(tmp_d, sizeof(tmp_d), "/data/local/tmp/.kb_%d", getpid());
     if (write_file(tmp_e, enc, enc_len) != 0) { free(enc); return -1; }
     free(enc);
 
@@ -251,7 +259,7 @@ int keybox_fetch(void) {
 
         log_msg(LOG_DEBUG, "  base64 第 %d 次 [base64 #%d]: %zu → %zu bytes", i + 1, i + 1, cur_len, out_len);
 
-        if (i > 0) free(cur_data);
+        free(cur_data);
         cur_data = out_data;
         cur_len = out_len;
     }

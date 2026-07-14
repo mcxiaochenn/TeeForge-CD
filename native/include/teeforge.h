@@ -80,5 +80,12 @@ int volume_listen(int timeout_sec);
 /* ===== Root 检测 Root Detection (rootdetect.c) ===== */
 int root_detect(char *method, size_t mlen, char *version, size_t vlen);
 int root_detect_save(const char *config_path, const char *method, const char *version);
+int config_update_key(const char *config_path, const char *key, const char *value);
+
+/* 文件时间戳 File timestamp (utils.c) */
+char *file_mtime_str(const char *path, char *buf, size_t len);
+
+/* 模块描述更新 Module description update (utils.c) */
+int update_description(void);
 
 #endif /* TEEFORGE_H */

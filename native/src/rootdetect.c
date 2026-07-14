@@ -86,7 +86,7 @@ int root_detect(char *method, size_t mlen, char *version, size_t vlen) {
 }
 
 /* 更新配置文件中的 key=value 行 Update key=value line in config file */
-static int config_update_key(const char *config_path, const char *key, const char *value) {
+int config_update_key(const char *config_path, const char *key, const char *value) {
     if (!config_path || !key || !value) return -1;
 
     char *data = read_file(config_path, NULL);

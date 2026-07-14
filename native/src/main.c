@@ -27,6 +27,7 @@ static void print_usage(const char *prog) {
     printf("  --hide-bl     弱隐 bootloader [Weak bootloader hiding]\n");
     printf("  --keybox      获取并更新 keybox [Fetch and update keybox]\n");
     printf("  --rootdetect    检测 root 方式并输出 [Detect root method, output to stdout]\n");
+    printf("  --update-desc   更新模块描述 [Update module description]\n");
     printf("  --no-rootdetect 跳过 root 检测 [Skip root detection]\n");
     printf("  --volume SEC    音量键监听 [Volume key listen] (输出 1/0)\n");
     printf("  --verbose       启用调试日志 [Enable debug logging]\n");
@@ -39,6 +40,7 @@ int main(int argc, char *argv[]) {
     int do_hide_bl = 0;
     int do_keybox = 0;
     int do_rootdetect = 0;
+    int do_update_desc = 0;
     int skip_rootdetect = 0;
     int do_volume = 0;
     int volume_timeout = 10;
@@ -55,6 +57,8 @@ int main(int argc, char *argv[]) {
             do_keybox = 1;
         } else if (strcmp(argv[i], "--rootdetect") == 0) {
             do_rootdetect = 1;
+        } else if (strcmp(argv[i], "--update-desc") == 0) {
+            do_update_desc = 1;
         } else if (strcmp(argv[i], "--no-rootdetect") == 0) {
             skip_rootdetect = 1;
         } else if (strcmp(argv[i], "--volume") == 0) {
@@ -136,6 +140,7 @@ int main(int argc, char *argv[]) {
     if (do_keybox) {
         log_msg(LOG_INFO, "");
         ret = keybox_fetch();
+        if (ret == 0) update_description();
     }
 
     if (do_rootdetect) {
@@ -152,6 +157,11 @@ int main(int argc, char *argv[]) {
         int result = volume_listen(volume_timeout);
         printf("%d\n", result);
         return (result >= 0) ? 0 : 1;
+    }
+
+    if (do_update_desc) {
+        update_description();
+        return 0;
     }
 
     log_msg(LOG_INFO, "");

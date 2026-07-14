@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.3.0-c07fe4a
+## TeeForge-CD Dev v0.3.1-6a82185
 
 ### 构建信息 Build Info
-- Version: `v0.3.0-c07fe4a`
-- Version Code: `85`
-- Commit: `c07fe4a`
+- Version: `v0.3.1-6a82185`
+- Version Code: `86`
+- Commit: `6a82185`
 
 ### 最近提交 Recent Commits
+- 6a82185 feat: release zip pushed to page branch, zipUrl uses self-hosted CDN
 - c07fe4a fix: remove stale release.json write to master (update/ dir deleted)
 - 83ee3af Refactor README to eliminate redundant warnings
 - d117c56 fix: debug mode not enabled in dev builds; download fallback strategy
@@ -25,4 +26,3 @@
 - 4034c05 fix: changelog commit list formatting — each commit on its own line
 - f6f9b8d feat: show ASCII banner + version + root info when run without args
 - 62e5389 chore: remove update/ from master (now on page branch)
-- 99fa1ac refactor: push all CDN files to page branch/files/

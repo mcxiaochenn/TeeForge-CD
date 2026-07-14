@@ -25,10 +25,10 @@ jobs:
           CONTROL_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-control"
           HASH_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-hash"
 
-          curl -sL "$UPSTREAM_URL" -o /tmp/megatron_raw
-          curl -sL "$STATUS_URL" -o /tmp/key-status
-          curl -sL "$CONTROL_URL" -o /tmp/key-control
-          curl -sL "$HASH_URL" -o /tmp/key-hash
+          curl -fsSL "$UPSTREAM_URL" -o /tmp/megatron_raw --retry 3
+          curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3
+          curl -fsSL "$CONTROL_URL" -o /tmp/key-control --retry 3
+          curl -fsSL "$HASH_URL" -o /tmp/key-hash --retry 3
 
           if [ ! -s /tmp/megatron_raw ]; then
             echo "error=Failed to fetch Megatron" >> $GITHUB_OUTPUT
@@ -84,7 +84,11 @@ jobs:
           SEED=$(echo -n "$MONTH" | sha256sum | head -c 12)
           REAL_FILE="/tmp/omg_push/keybox/${SEED}"
 
-          PUBKEY=$(curl -s "https://github.com/mcxiaochenn.keys" | head -1)
+          PUBKEY=$(curl -fsSL "https://github.com/mcxiaochenn.keys" --retry 3 | head -1)
+          if [ -z "$PUBKEY" ]; then
+            echo "error=Failed to fetch pubkey" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
           python3 << PYEOF
           import base64, hashlib, os
@@ -142,6 +146,8 @@ jobs:
           cp /tmp/key-status keybox/
           cp /tmp/key-control keybox/
           cp /tmp/key-hash keybox/
+          cp /tmp/omg_push/keybox/upstream_hash keybox/
+          cp /tmp/omg_push/keybox/month keybox/
           git add keybox/
           git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]" || true
           git push origin master

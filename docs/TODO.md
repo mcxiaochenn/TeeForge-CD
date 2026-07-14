@@ -29,7 +29,7 @@
 - [x] `module/META-INF/` — Magisk 安装脚本
 - [x] `module/customize.sh` — 安装脚本（保留用户配置）
 - [x] `module/service.sh` — 开机执行
-- [x] `module/config.conf` — 外置配置文件 [External config file]
+- [x] 配置文件动态生成（sys.conf + config.conf）[Dynamic config generation]
 
 ### 1.4 验证 Verification
 - [x] 本地 NDK 编译通过 [Local NDK compile]
@@ -43,7 +43,7 @@
 
 - [x] `native/src/keybox.c` — C 实现 keybox 获取与解密
 - [x] `--keybox` 命令行选项
-- [x] 从自建 CDN 获取（镜像 GitHub omg 分支）
+- [x] 从自建 CDN 获取（镜像 GitHub page 分支）
 - [x] 自动备份已有 keybox
 - [x] 同步到 Tricky Store
 - [x] `module/service.sh` 开机自动执行
@@ -107,3 +107,5 @@
 | 2026-07-14 | 日志注释中英双语 | 便于国际化，保留中文可读性 |
 | 2026-07-14 | Keybox 来源参考 Integrity-Box | 使用 MeowDump/MeowDump/Megatron |
 | 2026-07-14 | 切换自建 CDN | jsdelivr 更新慢，改用 teeforge.mcxiaochen.top |
+| 2026-07-14 | 配置文件分离 | sys.conf（系统）+ config.conf（用户），动态生成 |
+| 2026-07-14 | curl → wget | 部分设备精简 curl，busybox 自带 wget |

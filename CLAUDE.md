@@ -32,6 +32,7 @@ export NDK="/path/to/android-ndk"
 ### 开机流程 Boot Flow
 ```
 service.sh
+    ↓ teeforge --update-desc (更新模块描述 Update module description)
     ↓ teeforge --hide-bl (弱隐 BL)
     ↓ teeforge --generate (生成 target.txt)
 ```
@@ -42,6 +43,7 @@ teeforge                      # 展示 banner + 版本 + root 信息 + help
 teeforge --generate           # 生成 target.txt
 teeforge --hide-bl            # 弱隐 bootloader
 teeforge --keybox             # 获取并更新 keybox
+teeforge --update-desc        # 更新模块描述（root、arch、keybox 时间）
 teeforge --rootdetect         # 检测 root 方式并输出到 stdout（供 shell 捕获）
 teeforge --no-rootdetect      # 跳过 root 检测
 teeforge --volume SEC         # 音量键监听（输出 1/0/-1）
@@ -73,7 +75,7 @@ root_version=1234               # 自动检测 auto-detected
   - 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
   - 下载降级策略：`curl -sL` → `wget -qO-` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
   - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
-- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），支持 `--stealth`、`--compact`、`--delete`。检测到无执行权限时自动 `chmod 755`
+- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），内部调用 resetprop-rs 时使用 `--stealth`、`--compact`、`--delete` 参数。检测到无执行权限时自动 `chmod 755`
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
 - **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志

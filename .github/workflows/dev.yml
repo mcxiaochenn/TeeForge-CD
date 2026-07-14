@@ -77,3 +77,17 @@ jobs:
             out/teeforge
             out/teeforge_cd-*.zip
           retention-days: 30
+
+      - name: Update dev.json
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION_CODE: ${{ steps.ver.outputs.versionCode }}
+        run: |
+          cat > update/dev.json << EOF
+          {
+            "versionCode": $VERSION_CODE,
+            "version": "$VERSION",
+            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/teeforge_cd-dev.zip",
+            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/CHANGELOG.md"
+          }
+          EOF

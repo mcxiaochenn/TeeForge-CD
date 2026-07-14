@@ -105,3 +105,22 @@ jobs:
             out/teeforge
           draft: false
           prerelease: false
+
+      - name: Update release.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          cat > update/release.json << EOF
+          {
+            "versionCode": $VERSION_CODE,
+            "version": "$VERSION",
+            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@$VERSION/teeforge_cd-$VERSION.zip",
+            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/CHANGELOG.md"
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add update/release.json
+          git commit -m "release: update release.json to $VERSION [auto]" || true
+          git push origin master

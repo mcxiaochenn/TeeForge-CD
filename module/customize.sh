@@ -27,7 +27,7 @@ if [ -d "$TEEFORGE_DIR" ]; then
         ui_print "  10秒超时自动保留 [10s timeout, keep by default]"
         ui_print ""
 
-        RESULT=$($MODPATH/teeforge --volume 10)
+        RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
         if [ "$RESULT" = "0" ]; then
             ui_print "  清除所有数据 [Cleaning all data]"
             rm -rf "$TEEFORGE_DIR"
@@ -60,9 +60,16 @@ log_dir=/data/adb/teeforge/logs/
 EOF
 ui_print "  sys.conf 已生成 [sys.conf generated]"
 
-# 复制用户配置（仅 debug 设置）Copy user config (debug setting only)
+# 生成用户配置（仅 debug 设置）Generate user config (debug setting only)
 if [ ! -f "$CONFIG_FILE" ]; then
-    cp $MODPATH/config.conf "$CONFIG_FILE"
+    cat > "$CONFIG_FILE" << EOF
+# TeeForge-CD User Configuration
+# 用户配置 [User configuration]
+
+# 0: 关闭 Off (默认 default)
+# 1: 开启 On（日志写入文件 Logs written to file）
+debug=0
+EOF
     ui_print "  config.conf 已创建 [config.conf created]"
 else
     ui_print "  config.conf 已保留 [config.conf preserved]"

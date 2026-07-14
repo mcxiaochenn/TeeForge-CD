@@ -38,13 +38,18 @@ service.sh
 
 ### 命令行 CLI
 ```
+teeforge                      # 展示 banner + 版本 + root 信息 + help
 teeforge --generate           # 生成 target.txt
 teeforge --hide-bl            # 弱隐 bootloader
 teeforge --keybox             # 获取并更新 keybox
+teeforge --rootdetect         # 检测 root 方式并输出到 stdout（供 shell 捕获）
+teeforge --no-rootdetect      # 跳过 root 检测
 teeforge --volume SEC         # 音量键监听（输出 1/0/-1）
 teeforge --verbose            # 启用调试日志
 teeforge --config FILE        # 使用自定义配置
 ```
+- 无参数时展示 banner + 版本 + root 信息 + help，不执行任何任务
+- 每次运行自动检测 root 方式并写入 sys.conf（`--rootdetect` 或 `--no-rootdetect` 可覆盖）
 
 ### 配置文件 Configuration
 ```ini
@@ -73,14 +78,15 @@ root_version=1234               # 自动检测 auto-detected
 - **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志
 
 ### GitHub Action
-- `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `omg` 分支（混淆文件名，15个文件）
-- `dev.yml` — push 触发 dev 构建，产物推送到 `dev` 分支（不污染 master），自动更新 `update/dev.json`。版本号同步更新 `teeforge.h` 和 `module.prop`，`updateJson` 改为指向 dev 分支
-- `release.yml` — 推送版本标签触发 Release 构建，自动更新 `update/release.json` 和 `CHANGELOG.md` 并推送到 master
+- `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `page` 分支 `files/keybox/`（混淆文件名，15个文件）
+- `dev.yml` — push 触发 dev 构建，产物推送到 `page` 分支 `files/dev/`。版本号同步更新 `teeforge.h` 和 `module.prop`，`updateJson` 改为指向自建 CDN
+- `release.yml` — 推送版本标签触发 Release 构建，更新 `page` 分支 `files/` 下的 release.json 和 CHANGELOG.md
+- 所有 CDN 文件统一推送到 `page` 分支的 `files/` 目录，通过自建域名 `teeforge.mcxiaochen.top/files/` 访问
 
 ### 自动更新 Auto Update
-- `module.prop` 中 `updateJson` 指向 `update/release.json`（自建 CDN: teeforge.mcxiaochen.top/files/）
+- `module.prop` 中 `updateJson` 指向 `teeforge.mcxiaochen.top/files/update/release.json`
 - dev 构建会将 `updateJson` 改为指向 `teeforge.mcxiaochen.top/files/dev/update/dev.json`
-- release zip 用 GitHub Release 直链，dev zip 用自建 CDN（`page` 分支 `/files/dev/`）
+- release zip 用 GitHub Release 直链，dev zip 用自建 CDN（`page` 分支 `files/dev/`）
 
 ## Code Style
 
@@ -103,7 +109,6 @@ root_version=1234               # 自动检测 auto-detected
 | `native/src/volume.c` | 音量键监听 |
 | `native/src/rootdetect.c` | Root 方式检测（env + path fallback） |
 | `native/include/teeforge.h` | 公共头文件 |
-| `module/config.conf` | 默认配置 |
 | `module/service.sh` | 开机服务 |
 | `module/customize.sh` | 安装脚本（配置保留逻辑） |
 | `module/uninstall.sh` | 卸载脚本 |

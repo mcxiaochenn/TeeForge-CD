@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-cefb4d9
+## TeeForge-CD Dev v0.2.1-ae41301
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-cefb4d9`
-- Version Code: `71`
-- Commit: `cefb4d9`
+- Version: `v0.2.1-ae41301`
+- Version Code: `72`
+- Commit: `ae41301`
 
 ### 最近提交 Recent Commits
+- ae41301 refactor: split config into sys.conf (auto-generated) and config.conf (user)
 - cefb4d9 fix: skip double root detection when --rootdetect flag is used
 - c8402c2 feat: root detection runs every execution, saves to config; --no-rootdetect to skip
 - 4034c05 fix: changelog commit list formatting — each commit on its own line
@@ -25,4 +26,3 @@
 - ee57c34 chore: 移除 master 上的 dev.json（由 dev 分支自动维护）[Remove dev.json from master]
 - 7ff2c50 release: v0.2.0 — update release.json and CHANGELOG.md [auto]
 - b0a6429 fix: release 推送使用 HEAD:master 兼容 detached HEAD [Fix push for detached HEAD]
-- 6477f0a fix: 修正自动更新 URL 路径 + dev 分支推送 + CHANGELOG 自动生成

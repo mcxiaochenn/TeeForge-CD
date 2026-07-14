@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
             char root_method[64], root_version[32];
             root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
             printf("  Root: %s (v%s)\n\n", root_method, root_version);
-            root_detect_save(config_file, root_method);
+            root_detect_save(SYS_CONFIG_FILE, root_method, root_version);
         }
 
         print_usage(argv[0]);
@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
     if (!skip_rootdetect && !do_rootdetect) {
         root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
         log_msg(LOG_INFO, "Root: %s (v%s)", root_method, root_version);
-        root_detect_save(config_file, root_method);
+        root_detect_save(SYS_CONFIG_FILE, root_method, root_version);
     }
 
     /* 执行任务 Execute */
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
         /* 输出到 stdout（供 shell 脚本捕获）Output to stdout (for shell script) */
         printf("%s\n%s\n", method, version);
         /* 保存到配置文件 Save to config file */
-        root_detect_save(config_file, method);
+        root_detect_save(SYS_CONFIG_FILE, method, version);
         return 0;
     }
 

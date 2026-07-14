@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-c8402c2
+## TeeForge-CD Dev v0.2.1-cefb4d9
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-c8402c2`
-- Version Code: `70`
-- Commit: `c8402c2`
+- Version: `v0.2.1-cefb4d9`
+- Version Code: `71`
+- Commit: `cefb4d9`
 
 ### 最近提交 Recent Commits
+- cefb4d9 fix: skip double root detection when --rootdetect flag is used
 - c8402c2 feat: root detection runs every execution, saves to config; --no-rootdetect to skip
 - 4034c05 fix: changelog commit list formatting — each commit on its own line
 - f6f9b8d feat: show ASCII banner + version + root info when run without args
@@ -25,4 +26,3 @@
 - 7ff2c50 release: v0.2.0 — update release.json and CHANGELOG.md [auto]
 - b0a6429 fix: release 推送使用 HEAD:master 兼容 detached HEAD [Fix push for detached HEAD]
 - 6477f0a fix: 修正自动更新 URL 路径 + dev 分支推送 + CHANGELOG 自动生成
-- 1185658 docs: 更新 README 和 TODO，标记自动更新完成 [Update README and TODO]

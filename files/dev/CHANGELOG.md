@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-db4e160
+## TeeForge-CD Dev v0.2.1-653a665
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-db4e160`
-- Version Code: `80`
-- Commit: `db4e160`
+- Version: `v0.2.1-653a665`
+- Version Code: `81`
+- Commit: `653a665`
 
 ### 最近提交 Recent Commits
+- 653a665 docs: update CLAUDE.md with latest CLI, config, and CI changes
 - db4e160 fix: replace curl with wget for keybox download
 - 5024e0c fix: banner indentation
 - bf637a5 fix: remove duplicate 'v' in banner version display
@@ -25,4 +26,3 @@
 - 24566cd refactor: move root detection before existing installation check
 - d570f48 feat: add root method detection via --rootdetect flag
 - dbda9f0 fix: remove duplicate 'v' prefix in version log output
-- ee590d3 docs: README 声明依赖模块（TrickyStore/TEESimulator 三选一）[Add dependency disclaimer]

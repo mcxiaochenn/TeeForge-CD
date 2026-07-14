@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* ===== 弱隐 BL Weak Bootloader Hiding ===== */
 /*
@@ -88,6 +89,11 @@ static const prop_entry_t bl_props[] = {
     {NULL, NULL}
 };
 
+/* 检查文件可执行 Check if file is executable */
+static int is_executable(const char *path) {
+    return access(path, X_OK) == 0;
+}
+
 /* 检测 resetprop 工具类型 Detect resetprop tool type */
 static void detect_prop_tool(void) {
     log_msg(LOG_INFO, "检测 resetprop 工具 [Detecting resetprop tool]...");
@@ -95,10 +101,19 @@ static void detect_prop_tool(void) {
     /* 1. 环境变量 Environment variable */
     const char *env_path = getenv("RESETPROP_RS");
     if (env_path && file_exists(env_path)) {
-        g_prop_tool = PROP_TOOL_RS;
-        log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", env_path);
-        log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
-        return;
+        if (!is_executable(env_path)) {
+            log_msg(LOG_WARN, "  resetprop-rs 无执行权限，尝试修复 [No execute permission, attempting fix]: %s", env_path);
+            char cmd[512];
+            snprintf(cmd, sizeof(cmd), "chmod 755 '%s'", env_path);
+            system(cmd);
+        }
+        if (is_executable(env_path)) {
+            g_prop_tool = PROP_TOOL_RS;
+            log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", env_path);
+            log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
+            return;
+        }
+        log_msg(LOG_WARN, "  resetprop-rs 无法执行，回退标准 resetprop [Cannot execute, falling back]");
     }
 
     /* 2. 模块目录 Module directory */
@@ -112,10 +127,18 @@ static void detect_prop_tool(void) {
 
     for (int i = 0; mod_paths[i] != NULL; i++) {
         if (file_exists(mod_paths[i])) {
-            g_prop_tool = PROP_TOOL_RS;
-            log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", mod_paths[i]);
-            log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
-            return;
+            if (!is_executable(mod_paths[i])) {
+                log_msg(LOG_WARN, "  无执行权限，尝试修复 [No execute permission, attempting fix]: %s", mod_paths[i]);
+                char cmd[512];
+                snprintf(cmd, sizeof(cmd), "chmod 755 '%s'", mod_paths[i]);
+                system(cmd);
+            }
+            if (is_executable(mod_paths[i])) {
+                g_prop_tool = PROP_TOOL_RS;
+                log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", mod_paths[i]);
+                log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
+                return;
+            }
         }
     }
 
@@ -226,9 +249,17 @@ int bl_hide(void) {
     /* 检测 resetprop 工具 Detect resetprop tool */
     detect_prop_tool();
 
-    /* 等待 boot 完成 Wait for boot completed */
-    log_msg(LOG_DEBUG, "等待 boot 完成 [Waiting for boot completed]...");
-    system("resetprop -w sys.boot_completed 0");
+    /* 确认 boot 已完成（service.sh 已等待，此处仅做二次确认） */
+    /* Confirm boot completed (service.sh already waited, double-check here) */
+    log_msg(LOG_DEBUG, "确认 boot 完成 [Confirming boot completed]...");
+    int boot_wait = 0;
+    while (system("getprop sys.boot_completed | grep -q 1") != 0) {
+        if (++boot_wait > 30) {
+            log_msg(LOG_WARN, "等待 boot 超时 [Boot wait timeout]");
+            break;
+        }
+        sleep(1);
+    }
 
     int success = 0;
     int fail = 0;

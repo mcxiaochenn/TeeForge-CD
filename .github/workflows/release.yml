@@ -46,9 +46,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
         run: |
-          # 写入 module.prop
+          # 写入版本号 Write version
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+          sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
 
           # 构建
           chmod +x build.sh

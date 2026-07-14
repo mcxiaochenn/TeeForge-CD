@@ -73,6 +73,7 @@ int keybox_fetch(void) {
     /* 构建下载 URL */
     char url[512]; snprintf(url, sizeof(url), "%s%s", cdn, fn);
     log_msg(LOG_INFO, "CDN URL: [hidden]");
+    log_msg(LOG_DEBUG, "Pubkey 长度 [Pubkey length]: %zu", strlen(pubkey));
 
     /* 下载 */
     size_t enc_len = 0;
@@ -101,26 +102,28 @@ int keybox_fetch(void) {
     char *raw = read_file(tmp_b64, &raw_len);
     unlink(tmp_b64);
     if (!raw || raw_len == 0) { log_msg(LOG_ERROR, "解码数据为空 [Decoded data empty]"); free(raw); return -1; }
+    log_msg(LOG_DEBUG, "首次 base64 解码 [First base64 decode]: %zu bytes", raw_len);
 
-    /* 计算噪声密钥（openssl SHA256） */
+    /* 计算噪声密钥（sha256sum，兼容无 openssl 的设备） */
+    /* Compute noise key via sha256sum (works without openssl) */
     unsigned char key[32] = {0};
     char tmp_pk[256], tmp_hash[256];
     snprintf(tmp_pk, sizeof(tmp_pk), "/data/local/tmp/.pk_%d", getpid());
     snprintf(tmp_hash, sizeof(tmp_hash), "/data/local/tmp/.hash_%d", getpid());
 
-    /* 写入公钥 */
+    /* 写入公钥 Write pubkey to temp file */
     FILE *fpk = fopen(tmp_pk, "w");
     if (fpk) { fprintf(fpk, "%s", pubkey); fclose(fpk); }
 
-    /* openssl dgst -sha256 */
+    /* sha256sum（toybox 自带，无需 openssl） */
     char sha_cmd[512];
     snprintf(sha_cmd, sizeof(sha_cmd),
-        "openssl dgst -sha256 -r '%s' | awk '{print $1}' > '%s' 2>/dev/null",
+        "sha256sum '%s' | awk '{print $1}' > '%s' 2>/dev/null",
         tmp_pk, tmp_hash);
     system(sha_cmd);
     unlink(tmp_pk);
 
-    /* 读取 hash hex */
+    /* 读取 hash hex Read hash hex */
     FILE *fh = fopen(tmp_hash, "r");
     if (fh) {
         char hex[65] = {0};
@@ -133,6 +136,11 @@ int keybox_fetch(void) {
     }
     unlink(tmp_hash);
 
+    /* 输出密钥 hash 用于调试 Output key hash for debugging */
+    char key_hex[65] = {0};
+    for (int i = 0; i < 32; i++) snprintf(key_hex + i*2, 3, "%02x", key[i]);
+    log_msg(LOG_DEBUG, "SHA256 key: %s", key_hex);
+
     /* XOR 解密 */
     char *xor_result = malloc(raw_len + 1);
     if (!xor_result) { free(raw); return -1; }
@@ -142,37 +150,111 @@ int keybox_fetch(void) {
     xor_result[raw_len] = '\0';
     free(raw);
 
-    /* XOR 结果还是 base64，需要再解码一次 */
-    /* XOR result is still base64, need another decode */
-    char tmp_xor[256], tmp_final[256];
-    snprintf(tmp_xor, sizeof(tmp_xor), "/data/local/tmp/.kbx_xor_%d", getpid());
-    snprintf(tmp_final, sizeof(tmp_final), "/data/local/tmp/.kbx_final_%d", getpid());
+    /*
+     * 上游 Megatron 解密流程（参考 Integrity-Box key.sh）：
+     * Upstream Megatron decryption (reference: Integrity-Box key.sh):
+     * 1. base64 解码 10 次 [10x base64 decode]
+     * 2. hex 解码 [hex decode (xxd -r -p)]
+     * 3. ROT13 解码 [ROT13 decode]
+     */
+    log_msg(LOG_DEBUG, "XOR 结果前 40 字节 [XOR result first 40 bytes]: %.*s",
+            (int)(raw_len > 40 ? 40 : raw_len), xor_result);
 
-    write_file(tmp_xor, xor_result, raw_len);
-    free(xor_result);
+    char *cur_data = xor_result;
+    size_t cur_len = raw_len;
+    char tmp_in[256], tmp_out[256];
 
-    char final_cmd[512];
-    snprintf(final_cmd, sizeof(final_cmd), "base64 -d '%s' > '%s' 2>/dev/null", tmp_xor, tmp_final);
-    int r2 = system(final_cmd);
-    unlink(tmp_xor);
+    /* 步骤1：base64 解码 10 次 Step 1: 10x base64 decode */
+    for (int i = 0; i < 10; i++) {
+        snprintf(tmp_in, sizeof(tmp_in), "/data/local/tmp/.kbx_b%d_%d", i, getpid());
+        snprintf(tmp_out, sizeof(tmp_out), "/data/local/tmp/.kbx_b%d_%d", i + 1, getpid());
 
-    if (r2 != 0) {
-        log_msg(LOG_ERROR, "二次 base64 解码失败 [Second base64 decode failed]");
-        unlink(tmp_final);
+        if (write_file(tmp_in, cur_data, cur_len) != 0) break;
+
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "base64 -d '%s' > '%s' 2>/dev/null", tmp_in, tmp_out);
+        int ret = system(cmd);
+        unlink(tmp_in);
+
+        if (ret != 0) {
+            log_msg(LOG_ERROR, "base64 解码失败于第 %d 次 [base64 decode failed at iteration %d]", i + 1, i + 1);
+            unlink(tmp_out);
+            free(cur_data);
+            return -1;
+        }
+
+        size_t out_len = 0;
+        char *out_data = read_file(tmp_out, &out_len);
+        unlink(tmp_out);
+
+        if (!out_data || out_len == 0) {
+            log_msg(LOG_ERROR, "base64 解码结果为空 [base64 decode empty at iteration %d]", i + 1);
+            free(out_data);
+            free(cur_data);
+            return -1;
+        }
+
+        log_msg(LOG_DEBUG, "  base64 第 %d 次 [base64 #%d]: %zu → %zu bytes", i + 1, i + 1, cur_len, out_len);
+
+        if (i > 0) free(cur_data);
+        cur_data = out_data;
+        cur_len = out_len;
+    }
+
+    /* 步骤2：hex 解码 Step 2: hex decode (xxd -r -p) */
+    snprintf(tmp_in, sizeof(tmp_in), "/data/local/tmp/.kbx_hex_%d", getpid());
+    snprintf(tmp_out, sizeof(tmp_out), "/data/local/tmp/.kbx_hexout_%d", getpid());
+
+    if (write_file(tmp_in, cur_data, cur_len) != 0) {
+        free(cur_data);
+        return -1;
+    }
+    free(cur_data);
+
+    char hex_cmd[512];
+    snprintf(hex_cmd, sizeof(hex_cmd), "xxd -r -p '%s' > '%s' 2>/dev/null", tmp_in, tmp_out);
+    int hex_ret = system(hex_cmd);
+    unlink(tmp_in);
+
+    if (hex_ret != 0) {
+        log_msg(LOG_ERROR, "hex 解码失败 [Hex decode failed]");
+        unlink(tmp_out);
         return -1;
     }
 
-    size_t dec_len = 0;
-    char *data = read_file(tmp_final, &dec_len);
-    unlink(tmp_final);
+    size_t hex_len = 0;
+    char *hex_data = read_file(tmp_out, &hex_len);
+    unlink(tmp_out);
 
-    if (!data || dec_len == 0) {
-        log_msg(LOG_ERROR, "最终数据为空 [Final data empty]");
+    if (!hex_data || hex_len == 0) {
+        log_msg(LOG_ERROR, "hex 解码结果为空 [Hex decode empty]");
+        free(hex_data);
+        return -1;
+    }
+    log_msg(LOG_DEBUG, "hex 解码 [Hex decode]: %zu bytes", hex_len);
+
+    /* 步骤3：ROT13 解码 Step 3: ROT13 decode */
+    char *data = malloc(hex_len + 1);
+    if (!data) { free(hex_data); return -1; }
+
+    for (size_t i = 0; i < hex_len; i++) {
+        char c = hex_data[i];
+        if (c >= 'A' && c <= 'Z')      data[i] = 'A' + (c - 'A' + 13) % 26;
+        else if (c >= 'a' && c <= 'z') data[i] = 'a' + (c - 'a' + 13) % 26;
+        else                           data[i] = c;
+    }
+    data[hex_len] = '\0';
+    free(hex_data);
+
+    size_t dec_len = hex_len;
+    log_msg(LOG_DEBUG, "ROT13 解码 [ROT13 decode]: %zu bytes", dec_len);
+
+    /* 验证结果 Verify result */
+    if (dec_len < 100 || !strstr(data, "AndroidAttestation")) {
+        log_msg(LOG_ERROR, "无效数据 [Invalid data]: 缺少 AndroidAttestation 标记");
         free(data);
         return -1;
     }
-    if (!data || dec_len < 100 || !strstr(data, "AndroidAttestation")) {
-        log_msg(LOG_ERROR, "无效数据 [Invalid data]"); free(data); return -1; }
     log_msg(LOG_INFO, "解密成功 [Decrypted]: %zu bytes", dec_len);
 
     /* 写入 */

@@ -79,7 +79,7 @@
 ## Phase 4：扩展 Extensions
 
 - [x] 日志系统（分级、轮转）— debug 模式按日期分文件，自动清理保留 15 份
-- [ ] 自动更新模块
+- [x] 自动更新模块 — KernelSU updateJson + jsdelivr CDN，release/dev 双通道
 - [ ] 用户配置文件（排除列表等）
 - [ ] WebUI / CLI（可选）
 

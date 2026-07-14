@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-5d399b8
+## TeeForge-CD Dev v0.2.1-bf637a5
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-5d399b8`
-- Version Code: `77`
-- Commit: `5d399b8`
+- Version: `v0.2.1-bf637a5`
+- Version Code: `78`
+- Commit: `bf637a5`
 
 ### 最近提交 Recent Commits
+- bf637a5 fix: remove duplicate 'v' in banner version display
 - 5d399b8 fix: simplify rootdetect call — --rootdetect already skips auto detection
 - 2394ec4 refactor: move root detection before config selection in install flow
 - 1375599 fix: volume key prompt polluted by root detection output during install
@@ -25,4 +26,3 @@
 - ee590d3 docs: README 声明依赖模块（TrickyStore/TEESimulator 三选一）[Add dependency disclaimer]
 - 589f014 docs: 更新 CLAUDE.md（自动更新 + CI 工作流说明）[Update CLAUDE.md]
 - 1b92304 docs: 更新 README 项目结构（dev.json 已移至 dev 分支）[Update README]
-- f707deb release: v0.2.1 — update release.json and CHANGELOG.md [auto]

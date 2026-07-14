@@ -131,7 +131,7 @@ jobs:
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
             "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VERSION/teeforge_cd-$VERSION.zip",
-            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/CHANGELOG.md"
+            "changelog": "https://teeforge.mcxiaochen.top/files/CHANGELOG.md"
           }
           EOF
           git config user.name "github-actions[bot]"

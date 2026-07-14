@@ -37,7 +37,7 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 - **自动填充 target.txt** — 兼容 Android 16 ABX 二进制格式，开机自动刷新
 - **Keybox 管理** — CDN 加密同步，解密链路 `base64 → XOR(SHA256) → 10×base64 → hex → ROT13`
 - **音量键交互** — 安装时音量键选择配置保留/清除
-- **KernelSU 自动更新** — updateJson + jsdelivr CDN 加速，有新版自动提示
+- **KernelSU 自动更新** — updateJson + 自建 CDN 加速，有新版自动提示
 - **零依赖** — 不需要 openssl、不需要 busybox、不需要联网解密
 
 ## 命令行

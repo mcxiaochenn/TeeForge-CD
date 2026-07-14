@@ -73,9 +73,9 @@ root_method=Unknown             # 自动检测 auto-detected: Magisk/KernelSU/AP
 - `release.yml` — 推送版本标签触发 Release 构建，自动更新 `update/release.json` 和 `CHANGELOG.md` 并推送到 master
 
 ### 自动更新 Auto Update
-- `module.prop` 中 `updateJson` 指向 `update/release.json`（CDN）
-- dev 构建会将 `updateJson` 改为指向 `dev` 分支的 `update/dev.json`
-- release zip 用 GitHub Release 直链，dev zip 用 jsdelivr CDN（`@dev` 分支）
+- `module.prop` 中 `updateJson` 指向 `update/release.json`（自建 CDN: teeforge.mcxiaochen.top/files/）
+- dev 构建会将 `updateJson` 改为指向 `teeforge.mcxiaochen.top/files/dev/update/dev.json`
+- release zip 用 GitHub Release 直链，dev zip 用自建 CDN（`page` 分支 `/files/dev/`）
 
 ## Code Style
 

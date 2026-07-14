@@ -43,7 +43,7 @@
 
 - [x] `native/src/keybox.c` — C 实现 keybox 获取与解密
 - [x] `--keybox` 命令行选项
-- [x] 从 jsdelivr CDN 获取（镜像 GitHub omg 分支）
+- [x] 从自建 CDN 获取（镜像 GitHub omg 分支）
 - [x] 自动备份已有 keybox
 - [x] 同步到 Tricky Store
 - [x] `module/service.sh` 开机自动执行
@@ -79,7 +79,7 @@
 ## Phase 4：扩展 Extensions
 
 - [x] 日志系统（分级、轮转）— debug 模式按日期分文件，自动清理保留 15 份
-- [x] 自动更新模块 — KernelSU updateJson + jsdelivr CDN，release/dev 双通道
+- [x] 自动更新模块 — KernelSU updateJson + 自建 CDN，release/dev 双通道
 - [ ] 用户配置文件（排除列表等）
 - [ ] WebUI / CLI（可选）
 
@@ -106,4 +106,4 @@
 | 2026-07-14 | 配置外置到 config.conf | 避免硬编码，用户可自定义路径 |
 | 2026-07-14 | 日志注释中英双语 | 便于国际化，保留中文可读性 |
 | 2026-07-14 | Keybox 来源参考 Integrity-Box | 使用 MeowDump/MeowDump/Megatron |
-| 2026-07-14 | 使用 jsdelivr CDN | 中国大陆用户体验优化 |
+| 2026-07-14 | 切换自建 CDN | jsdelivr 更新慢，改用 teeforge.mcxiaochen.top |

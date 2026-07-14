@@ -7,6 +7,11 @@
 
 Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 
+> ⚠️ **本模块不能单独使用**，需搭配以下模块三选一：
+> - [TrickyStore](https://github.com/5ec1cff/TrickyStore)
+> - [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
+> - [TEESimulator](https://github.com/JingMatrix/TEESimulator)
+
 ---
 
 ## 为什么选择 TeeForge-CD

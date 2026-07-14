@@ -112,8 +112,9 @@ int main(int argc, char *argv[]) {
     }
 
     /* 检测 root 方式并保存 Detect root method and save (每次运行 every run) */
+    /* --rootdetect flag 时由下方单独处理，跳过此处 Skip if --rootdetect flag handles it */
     char root_method[64], root_version[32];
-    if (!skip_rootdetect) {
+    if (!skip_rootdetect && !do_rootdetect) {
         root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
         log_msg(LOG_INFO, "Root: %s (v%s)", root_method, root_version);
         root_detect_save(config_file, root_method);

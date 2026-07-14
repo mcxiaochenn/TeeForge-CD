@@ -27,6 +27,9 @@ done
 
 sleep 5
 
+# 更新模块描述 Update module description
+$MODDIR/teeforge --update-desc
+
 # 执行弱隐 BL Execute weak bootloader hiding
 $MODDIR/teeforge --hide-bl
 

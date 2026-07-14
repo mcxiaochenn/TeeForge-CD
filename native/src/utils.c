@@ -276,3 +276,70 @@ char *str_dup_range(const char *start, const char *end) {
     s[len] = '\0';
     return s;
 }
+
+/* ===== 文件时间戳 File Timestamp ===== */
+
+char *file_mtime_str(const char *path, char *buf, size_t len) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        snprintf(buf, len, "N/A");
+        return buf;
+    }
+    struct tm *tm = localtime(&st.st_mtime);
+    strftime(buf, len, "%Y-%m-%d %H:%M", tm);
+    return buf;
+}
+
+/* ===== 模块描述更新 Module Description Update ===== */
+
+int update_description(void) {
+    /* 模块描述文件路径 Module prop file path */
+    const char *prop_path = "/data/adb/modules/teeforge_cd/module.prop";
+
+    if (!file_exists(prop_path)) {
+        log_msg(LOG_WARN, "模块未安装，跳过描述更新 [Module not installed, skip description update]");
+        return -1;
+    }
+
+    /* 架构 Architecture */
+    const char *arch =
+#if defined(__aarch64__)
+        "arm64";
+#elif defined(__arm__)
+        "arm";
+#elif defined(__x86_64__)
+        "x86_64";
+#elif defined(__i386__)
+        "x86";
+#else
+        "unknown";
+#endif
+
+    /* keybox 更新时间 Keybox update time */
+    char timebuf[32];
+    const char *kb_time = "N/A";
+    char keybox_path[MAX_PATH_LEN];
+    snprintf(keybox_path, sizeof(keybox_path), "%s/current.keybox", g_config.keybox_dir);
+    if (file_exists(keybox_path)) {
+        kb_time = file_mtime_str(keybox_path, timebuf, sizeof(timebuf));
+    }
+
+    /* 状态指示 Status indicator */
+    const char *status = "✅";
+
+    /* 拼接描述 Build description */
+    char desc[512];
+    snprintf(desc, sizeof(desc),
+        "%s [%s] %s | arch: %s | keybox: %s",
+        status,
+        g_config.root_method,
+        TEEFORGE_VERSION,
+        arch,
+        kb_time);
+
+    /* 更新 module.prop 的 description 行 Update description line in module.prop */
+    config_update_key(prop_path, "description", desc);
+
+    log_msg(LOG_INFO, "模块描述已更新 [Description updated]: %s", desc);
+    return 0;
+}

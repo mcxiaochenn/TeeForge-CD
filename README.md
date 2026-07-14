@@ -28,7 +28,7 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 |--------|------|
 | 手动编辑 target.txt | 开机自动填充所有用户应用 |
 | 手动跑 resetprop | 29 个属性 0.3 秒伪装到位 |
-| 到处找 keybox | CDN 加密同步，一条命令搞定 |
+| 到处找 keybox | CDN 加密同步 + 自动降级下载，一条命令搞定 |
 | 担心逆向 | 三层加密 + 变量拆分，祝你好运 |
 
 ---
@@ -40,6 +40,7 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 - **Keybox 管理** — CDN 加密同步，解密链路 `base64 → XOR(SHA256) → 10×base64 → hex → ROT13`
 - **音量键交互** — 安装时音量键选择配置保留/清除
 - **KernelSU 自动更新** — updateJson + 自建 CDN 加速，有新版自动提示
+- **Root 检测** — 安装时 + 运行时自动识别 Magisk/KernelSU/APatch
 - **零依赖** — 不需要 openssl、不需要 busybox、不需要联网解密
 
 ## 命令行

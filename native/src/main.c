@@ -5,8 +5,22 @@
 #include <string.h>
 #include <unistd.h>
 
+static void print_banner(void) {
+    printf("  _____                 _____                                       \n");
+    printf(" |_   _|   ___    ___  |  ___|   ___    _ __    __ _    ___        \n");
+    printf("   | |    / _ \\  / _ \\ | |_     / _ \\  | '__|  / _` |  / _ \\       \n");
+    printf("   | |   |  __/ |  __/ |  _|   | (_) | | |    | (_| | |  __/       \n");
+    printf(" |_|    \\___|  \\___| |_|      \\___/  |_|     \\__, |  \\___|       \n");
+    printf("                                              |___/                 \n");
+    printf("          _                ____   _                      ____                  _    \n");
+    printf("         | |__    _   _   / ___| | |__     ___   _ __   |  _ \\   _   _   ___  | | __\n");
+    printf("  _____  | '_ \\  | | | | | |     | '_ \\   / _ \\ | '_ \\  | | | | | | | | / __| | |/ /\n");
+    printf(" |_____| | |_) | | |_| | | |___  | | | | |  __/ | | | | | |_| | | |_| | \\__ \\ |   < \n");
+    printf("         |_.__/   \\__, |  \\____| |_| |_|  \\___| |_| |_| |____/   \\__,_| |___/ |_|\\_\\\n");
+    printf("                  |___/                                                              \n");
+}
+
 static void print_usage(const char *prog) {
-    printf("TeeForge-CD v%s\n", TEEFORGE_VERSION);
     printf("用法 Usage: %s [options]\n", prog);
     printf("\n选项 Options:\n");
     printf("  --generate    生成 target.txt [Generate target.txt]\n");
@@ -63,9 +77,19 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* 默认：无参数时执行生成 Default: generate if no args */
+    /* 默认：无参数时展示信息 Default: show info if no args */
     if (!do_generate && !do_hide_bl && !do_keybox && !do_rootdetect && !do_volume && argc == 1) {
-        do_generate = 1;
+        print_banner();
+        printf("\n  v%s\n\n", TEEFORGE_VERSION);
+
+        /* 加载配置并检测 root Load config and detect root */
+        config_load(config_file);
+        char root_method[64], root_version[32];
+        root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
+        printf("  Root: %s (v%s)\n\n", root_method, root_version);
+
+        print_usage(argv[0]);
+        return 0;
     }
 
     /* 设置日志级别 Setup logging */
@@ -79,6 +103,11 @@ int main(int argc, char *argv[]) {
     if (getuid() != 0) {
         log_msg(LOG_WARN, "未以 root 运行 [Not running as root]");
     }
+
+    /* 检测 root 方式 Detect root method (每次运行 every run) */
+    char root_method[64], root_version[32];
+    root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
+    log_msg(LOG_INFO, "Root: %s (v%s)", root_method, root_version);
 
     /* 执行任务 Execute */
     int ret = 0;

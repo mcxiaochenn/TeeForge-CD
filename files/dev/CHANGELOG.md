@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-bf637a5
+## TeeForge-CD Dev v0.2.1-5024e0c
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-bf637a5`
-- Version Code: `78`
-- Commit: `bf637a5`
+- Version: `v0.2.1-5024e0c`
+- Version Code: `79`
+- Commit: `5024e0c`
 
 ### 最近提交 Recent Commits
+- 5024e0c fix: banner indentation
 - bf637a5 fix: remove duplicate 'v' in banner version display
 - 5d399b8 fix: simplify rootdetect call — --rootdetect already skips auto detection
 - 2394ec4 refactor: move root detection before config selection in install flow
@@ -25,4 +26,3 @@
 - dbda9f0 fix: remove duplicate 'v' prefix in version log output
 - ee590d3 docs: README 声明依赖模块（TrickyStore/TEESimulator 三选一）[Add dependency disclaimer]
 - 589f014 docs: 更新 CLAUDE.md（自动更新 + CI 工作流说明）[Update CLAUDE.md]
-- 1b92304 docs: 更新 README 项目结构（dev.json 已移至 dev 分支）[Update README]

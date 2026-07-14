@@ -7,8 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 TeeForge-CD is a Magisk/KernelSU module that:
 - Auto-populates Tricky Store's `target.txt` with user-installed apps
 - Implements weak bootloader hiding via resetprop (supports resetprop-rs)
-- Manages keybox files with CDN mirror and obfuscation
-- Auto-detects region (China/Global) and uses mirrors for downloads
+- Manages keybox files with CDN and obfuscation
 
 Primary language: **C** (minimal binary size, direct NDK support).
 
@@ -24,14 +23,8 @@ export NDK="/path/to/android-ndk"
 # 构建并打包 Magisk 模块 .zip [Build and package Magisk module]
 ./package.sh
 
-# 清理后重新打包 [Clean and repackage]
-./package.sh --clean
-
 # 清理构建产物 [Clean build artifacts]
 ./clean.sh
-
-# 构建并推送到设备 [Build and push to device]
-./build.sh --push
 ```
 
 ## Architecture
@@ -39,10 +32,7 @@ export NDK="/path/to/android-ndk"
 ### 开机流程 Boot Flow
 ```
 service.sh
-    ↓ 检测 resetprop-rs
-    ↓ export RESETPROP_RS=...
     ↓ teeforge --hide-bl (弱隐 BL)
-    ↓ teeforge --keybox (获取 keybox)
     ↓ teeforge --generate (生成 target.txt)
 ```
 
@@ -51,29 +41,31 @@ service.sh
 teeforge --generate           # 生成 target.txt
 teeforge --hide-bl            # 弱隐 bootloader
 teeforge --keybox             # 获取并更新 keybox
-teeforge --download URL OUT   # 下载文件（带镜像回退）
+teeforge --volume SEC         # 音量键监听（输出 1/0/-1）
 teeforge --verbose            # 启用调试日志
 teeforge --config FILE        # 使用自定义配置
 ```
 
 ### 配置文件 Configuration (`module/config.conf`)
 ```ini
-region=auto                         # auto/cn/global
-retry_count=3                       # 下载重试次数
-cn_mirrors=https://gh-proxy.org,... # 中国镜像站
-keybox_dir=/data/adb/teeforge/keybox/
+packages_xml=/data/system/packages.xml
 target_txt=/data/adb/tricky_store/target.txt
+keybox_dir=/data/adb/teeforge/keybox/
+debug=0                         # 0=关闭, 1=开启（日志写入文件）
+log_dir=/data/adb/teeforge/logs/
 ```
 
 ### 关键实现细节 Key Implementation Details
 
-- **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（A-Z），运行时拼合解码。源码备份在 `backup/`（gitignored）
-- **blhide.c**: 从环境变量 `RESETPROP_RS` 获取 resetprop-rs 路径，支持 `--stealth`、`--compact`、`--delete`
-- **download.c**: 自动检测地区（curl 测试 GitHub 连通性），中国大陆用户走镜像站
+- **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（G/M/T/A/P 等），运行时拼合解密。源码备份在 `backup/`（gitignored）
+- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），支持 `--stealth`、`--compact`、`--delete`
+- **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
 
 ### GitHub Action
-`.github/workflows/keybox-sync.yml` 每12小时同步上游 keybox，推送到 `omg` 分支（混淆文件名，15个文件）
+- `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `omg` 分支（混淆文件名，15个文件）
+- `dev.yml` — push 触发 dev 构建，产物发布到 Actions
+- `release.yml` — 推送版本标签触发 Release 构建
 
 ## Code Style
 
@@ -93,9 +85,10 @@ target_txt=/data/adb/tricky_store/target.txt
 | `native/src/utils.c` | 日志、文件 I/O、配置解析 |
 | `native/src/blhide.c` | 弱隐 BL（resetprop 属性伪装） |
 | `native/src/keybox.c` | Keybox 获取与解密（混淆） |
-| `native/src/download.c` | 下载模块（地区检测、镜像回退） |
+| `native/src/volume.c` | 音量键监听 |
 | `native/include/teeforge.h` | 公共头文件 |
 | `module/config.conf` | 默认配置 |
 | `module/service.sh` | 开机服务 |
-| `module/customize.sh` | 安装脚本（下载 resetprop-rs） |
-| `.github/workflows/keybox-sync.yml` | Keybox 同步 Action |
+| `module/customize.sh` | 安装脚本（配置保留逻辑） |
+| `module/uninstall.sh` | 卸载脚本 |
+| `module/resetprop-rs/` | 预置 resetprop-rs 二进制 |

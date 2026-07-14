@@ -5,9 +5,9 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 ## 功能
 
 - **自动填充 target.txt** — 读取用户已安装 app，写入 Tricky Store 目标列表
-- **弱隐 BL** — 通过 resetprop 伪装 bootloader 状态（支持 resetprop-rs --stealth）
+- **弱隐 BL** — 通过 resetprop 伪装 bootloader 状态（预置 resetprop-rs，支持 --stealth）
 - **Keybox 管理** — 从 CDN 获取 keybox，自动解密同步到 Tricky Store
-- **地区检测** — 自动检测中国大陆/海外，国内用户走镜像站下载
+- **音量键交互** — 安装时音量键选择配置保留/清除
 
 ## 快速开始
 
@@ -20,9 +20,6 @@ export NDK="/path/to/android-ndk"
 
 # 打包 Magisk 模块
 ./package.sh
-
-# 推送到设备测试
-./build.sh --push
 ```
 
 ## 命令行
@@ -31,7 +28,7 @@ export NDK="/path/to/android-ndk"
 teeforge --generate           # 生成 target.txt
 teeforge --hide-bl            # 弱隐 bootloader
 teeforge --keybox             # 获取并更新 keybox
-teeforge --download URL OUT   # 下载文件（带镜像回退）
+teeforge --volume SEC         # 音量键监听（输出 1/0/-1）
 teeforge --verbose            # 调试日志
 teeforge --config FILE        # 自定义配置
 ```
@@ -41,9 +38,11 @@ teeforge --config FILE        # 自定义配置
 编辑 `module/config.conf`：
 
 ```ini
-region=auto                         # auto/cn/global
-retry_count=3                       # 下载重试次数
-cn_mirrors=https://gh-proxy.org,... # 中国镜像站
+packages_xml=/data/system/packages.xml
+target_txt=/data/adb/tricky_store/target.txt
+keybox_dir=/data/adb/teeforge/keybox/
+debug=0
+log_dir=/data/adb/teeforge/logs/
 ```
 
 ## 技术栈
@@ -64,12 +63,14 @@ TeeForge-CD/
 │   ├── target.c         # 包列表解析
 │   ├── blhide.c         # 弱隐 BL
 │   ├── keybox.c         # Keybox 获取
-│   ├── download.c       # 下载模块
+│   ├── volume.c         # 音量键监听
 │   └── utils.c          # 工具函数
 ├── module/              # 模块文件
 │   ├── service.sh       # 开机服务
 │   ├── customize.sh     # 安装脚本
-│   └── config.conf      # 配置
+│   ├── uninstall.sh     # 卸载脚本
+│   ├── config.conf      # 配置
+│   └── resetprop-rs/    # 预置二进制
 ├── .github/workflows/   # GitHub Actions
 ├── build.sh             # 构建脚本
 ├── package.sh           # 打包脚本

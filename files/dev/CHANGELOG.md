@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.3.2-3c38e1d
+## TeeForge-CD Dev v0.3.2-413cb92
 
 ### 构建信息 Build Info
-- Version: `v0.3.2-3c38e1d`
-- Version Code: `96`
-- Commit: `3c38e1d`
+- Version: `v0.3.2-413cb92`
+- Version Code: `97`
+- Commit: `413cb92`
 
 ### 最近提交 Recent Commits
+- 413cb92 fix: move kaomoji before status icon in description
 - 3c38e1d docs: fix CLAUDE.md and README.md review findings
 - f5e8b5e fix: medium C code issues from review
 - b7ef71b fix(ci): keybox-sync critical issues
@@ -25,4 +26,3 @@
 - db4e160 fix: replace curl with wget for keybox download
 - 5024e0c fix: banner indentation
 - bf637a5 fix: remove duplicate 'v' in banner version display
-- 5d399b8 fix: simplify rootdetect call — --rootdetect already skips auto detection

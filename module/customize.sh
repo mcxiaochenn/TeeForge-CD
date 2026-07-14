@@ -91,8 +91,8 @@ fi
 # 更新模块描述 Update module description
 ARCH_ABI=$(getprop ro.product.cpu.abi)
 case "$ARCH_ABI" in
-    arm64-v8a)    ARCH="arm64" ;;
-    armeabi-v7a)  ARCH="arm" ;;
+    arm64-v8a)    ARCH="arm64-v8a" ;;
+    armeabi-v7a)  ARCH="armeabi-v7a" ;;
     x86_64)       ARCH="x86_64" ;;
     x86)          ARCH="x86" ;;
     *)            ARCH="$ARCH_ABI" ;;

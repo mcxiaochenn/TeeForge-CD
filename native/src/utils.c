@@ -304,9 +304,9 @@ int update_description(void) {
     /* 架构 Architecture */
     const char *arch =
 #if defined(__aarch64__)
-        "arm64";
+        "arm64-v8a";
 #elif defined(__arm__)
-        "arm";
+        "armeabi-v7a";
 #elif defined(__x86_64__)
         "x86_64";
 #elif defined(__i386__)

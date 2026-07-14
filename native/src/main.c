@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
 
     /* 设置日志级别 Setup logging */
     log_set_level(verbose ? LOG_DEBUG : LOG_INFO);
-    log_msg(LOG_INFO, "TeeForge-CD v%s 启动中... [starting...]", TEEFORGE_VERSION);
+    log_msg(LOG_INFO, "TeeForge-CD %s 启动中... [starting...]", TEEFORGE_VERSION);
 
     /* 加载配置 Load config */
     config_load(config_file);

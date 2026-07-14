@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-1375599
+## TeeForge-CD Dev v0.2.1-2394ec4
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-1375599`
-- Version Code: `75`
-- Commit: `1375599`
+- Version: `v0.2.1-2394ec4`
+- Version Code: `76`
+- Commit: `2394ec4`
 
 ### 最近提交 Recent Commits
+- 2394ec4 refactor: move root detection before config selection in install flow
 - 1375599 fix: volume key prompt polluted by root detection output during install
 - 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically
 - 321835b refactor: dynamically generate config.conf at install time
@@ -25,4 +26,3 @@
 - 1b92304 docs: 更新 README 项目结构（dev.json 已移至 dev 分支）[Update README]
 - f707deb release: v0.2.1 — update release.json and CHANGELOG.md [auto]
 - 63ef470 fix: 修正 author 字段 [Fix author field]
-- 824fc8d fix: dev 构建写入 updateJson 指向 dev 分支 [Dev build sets updateJson to dev branch]

@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-83ee3af
+## TeeForge-CD Dev v0.3.0-c07fe4a
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-83ee3af`
-- Version Code: `84`
-- Commit: `83ee3af`
+- Version: `v0.3.0-c07fe4a`
+- Version Code: `85`
+- Commit: `c07fe4a`
 
 ### 最近提交 Recent Commits
+- c07fe4a fix: remove stale release.json write to master (update/ dir deleted)
 - 83ee3af Refactor README to eliminate redundant warnings
 - d117c56 fix: debug mode not enabled in dev builds; download fallback strategy
 - 9c68080 docs: update README and TODO
@@ -25,4 +26,3 @@
 - f6f9b8d feat: show ASCII banner + version + root info when run without args
 - 62e5389 chore: remove update/ from master (now on page branch)
 - 99fa1ac refactor: push all CDN files to page branch/files/
-- 0fee087 refactor: replace jsdelivr CDN with self-hosted teeforge.mcxiaochen.top

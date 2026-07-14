@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.2.1-ae41301
+## TeeForge-CD Dev v0.2.1-92f54b0
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-ae41301`
-- Version Code: `72`
-- Commit: `ae41301`
+- Version: `v0.2.1-92f54b0`
+- Version Code: `74`
+- Commit: `92f54b0`
 
 ### 最近提交 Recent Commits
+- 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically
+- 321835b refactor: dynamically generate config.conf at install time
 - ae41301 refactor: split config into sys.conf (auto-generated) and config.conf (user)
 - cefb4d9 fix: skip double root detection when --rootdetect flag is used
 - c8402c2 feat: root detection runs every execution, saves to config; --no-rootdetect to skip
@@ -24,5 +26,3 @@
 - 63ef470 fix: 修正 author 字段 [Fix author field]
 - 824fc8d fix: dev 构建写入 updateJson 指向 dev 分支 [Dev build sets updateJson to dev branch]
 - ee57c34 chore: 移除 master 上的 dev.json（由 dev 分支自动维护）[Remove dev.json from master]
-- 7ff2c50 release: v0.2.0 — update release.json and CHANGELOG.md [auto]
-- b0a6429 fix: release 推送使用 HEAD:master 兼容 detached HEAD [Fix push for detached HEAD]

@@ -26,11 +26,12 @@ static void print_usage(const char *prog) {
     printf("  --generate    生成 target.txt [Generate target.txt]\n");
     printf("  --hide-bl     弱隐 bootloader [Weak bootloader hiding]\n");
     printf("  --keybox      获取并更新 keybox [Fetch and update keybox]\n");
-    printf("  --rootdetect  检测 root 方式并保存 [Detect root method and save]\n");
-    printf("  --volume SEC  音量键监听 [Volume key listen] (输出 1/0)\n");
-    printf("  --verbose     启用调试日志 [Enable debug logging]\n");
-    printf("  --config FILE 使用自定义配置文件 [Use custom config file]\n");
-    printf("  --help        显示帮助 [Show this help]\n");
+    printf("  --rootdetect    检测 root 方式并输出 [Detect root method, output to stdout]\n");
+    printf("  --no-rootdetect 跳过 root 检测 [Skip root detection]\n");
+    printf("  --volume SEC    音量键监听 [Volume key listen] (输出 1/0)\n");
+    printf("  --verbose       启用调试日志 [Enable debug logging]\n");
+    printf("  --config FILE   使用自定义配置文件 [Use custom config file]\n");
+    printf("  --help          显示帮助 [Show this help]\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -38,6 +39,7 @@ int main(int argc, char *argv[]) {
     int do_hide_bl = 0;
     int do_keybox = 0;
     int do_rootdetect = 0;
+    int skip_rootdetect = 0;
     int do_volume = 0;
     int volume_timeout = 10;
     int verbose = 0;
@@ -53,6 +55,8 @@ int main(int argc, char *argv[]) {
             do_keybox = 1;
         } else if (strcmp(argv[i], "--rootdetect") == 0) {
             do_rootdetect = 1;
+        } else if (strcmp(argv[i], "--no-rootdetect") == 0) {
+            skip_rootdetect = 1;
         } else if (strcmp(argv[i], "--volume") == 0) {
             do_volume = 1;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -84,9 +88,12 @@ int main(int argc, char *argv[]) {
 
         /* 加载配置并检测 root Load config and detect root */
         config_load(config_file);
-        char root_method[64], root_version[32];
-        root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
-        printf("  Root: %s (v%s)\n\n", root_method, root_version);
+        if (!skip_rootdetect) {
+            char root_method[64], root_version[32];
+            root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
+            printf("  Root: %s (v%s)\n\n", root_method, root_version);
+            root_detect_save(config_file, root_method);
+        }
 
         print_usage(argv[0]);
         return 0;
@@ -104,10 +111,13 @@ int main(int argc, char *argv[]) {
         log_msg(LOG_WARN, "未以 root 运行 [Not running as root]");
     }
 
-    /* 检测 root 方式 Detect root method (每次运行 every run) */
+    /* 检测 root 方式并保存 Detect root method and save (每次运行 every run) */
     char root_method[64], root_version[32];
-    root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
-    log_msg(LOG_INFO, "Root: %s (v%s)", root_method, root_version);
+    if (!skip_rootdetect) {
+        root_detect(root_method, sizeof(root_method), root_version, sizeof(root_version));
+        log_msg(LOG_INFO, "Root: %s (v%s)", root_method, root_version);
+        root_detect_save(config_file, root_method);
+    }
 
     /* 执行任务 Execute */
     int ret = 0;

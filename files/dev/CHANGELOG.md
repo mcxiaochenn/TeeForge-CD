@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.3.1-6a82185
+## TeeForge-CD Dev v0.3.2-ab3b378
 
 ### 构建信息 Build Info
-- Version: `v0.3.1-6a82185`
-- Version Code: `86`
-- Commit: `6a82185`
+- Version: `v0.3.2-ab3b378`
+- Version Code: `87`
+- Commit: `ab3b378`
 
 ### 最近提交 Recent Commits
+- ab3b378 docs: update CLAUDE.md — download fallback, CDN zip distribution
 - 6a82185 feat: release zip pushed to page branch, zipUrl uses self-hosted CDN
 - c07fe4a fix: remove stale release.json write to master (update/ dir deleted)
 - 83ee3af Refactor README to eliminate redundant warnings
@@ -25,4 +26,3 @@
 - c8402c2 feat: root detection runs every execution, saves to config; --no-rootdetect to skip
 - 4034c05 fix: changelog commit list formatting — each commit on its own line
 - f6f9b8d feat: show ASCII banner + version + root info when run without args
-- 62e5389 chore: remove update/ from master (now on page branch)

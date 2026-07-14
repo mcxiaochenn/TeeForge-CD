@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeeForge-CD</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 640px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00d4ff, #7b2dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .tagline {
+            color: #888;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+        .badge {
+            display: inline-block;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 0.3rem 0.8rem;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin: 0.2rem;
+        }
+        .badge.highlight {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+        .links {
+            margin-top: 2rem;
+        }
+        .links a {
+            display: inline-block;
+            margin: 0.4rem;
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #7b2dff);
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-secondary {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            color: #ccc;
+        }
+        .btn-secondary:hover { border-color: #00d4ff; color: #00d4ff; }
+        .footer {
+            margin-top: 3rem;
+            color: #555;
+            font-size: 0.8rem;
+        }
+        .footer a { color: #666; text-decoration: none; }
+        .footer a:hover { color: #00d4ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TeeForge-CD</h1>
+        <p class="tagline">Tricky Store Target 自动管理 · 弱隐 BL · Keybox 自动更新</p>
+
+        <div>
+            <span class="badge highlight">Magisk</span>
+            <span class="badge highlight">KernelSU</span>
+            <span class="badge highlight">APatch</span>
+            <span class="badge">Android 7.0+</span>
+            <span class="badge">arm64 / armeabi-v7a</span>
+        </div>
+
+        <div class="links">
+            <a href="https://github.com/mcxiaochenn/TeeForge-CD" class="btn-primary">GitHub 仓库</a>
+            <a href="https://github.com/mcxiaochenn/TeeForge-CD/releases" class="btn-secondary">下载 Release</a>
+        </div>
+
+        <p class="footer">
+            Made by <a href="https://github.com/mcxiaochenn">辰渊尘</a>
+            · 此域名仅用于 CDN 文件分发
+        </p>
+    </div>
+</body>
+</html>

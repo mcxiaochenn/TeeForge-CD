@@ -71,6 +71,7 @@ root_version=1234               # 自动检测 auto-detected
 - **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（G/M/T/A/P 等），运行时拼合解密。源码备份在 `backup/`（gitignored）
   - 解密流程：下载 → base64 解码 → XOR(SHA256(pubkey)) → 10x base64 → hex decode → ROT13 → XML
   - 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
+  - 下载降级策略：`curl -sL` → `wget -qO-` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
   - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
 - **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），支持 `--stealth`、`--compact`、`--delete`。检测到无执行权限时自动 `chmod 755`
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
@@ -86,7 +87,7 @@ root_version=1234               # 自动检测 auto-detected
 ### 自动更新 Auto Update
 - `module.prop` 中 `updateJson` 指向 `teeforge.mcxiaochen.top/files/update/release.json`
 - dev 构建会将 `updateJson` 改为指向 `teeforge.mcxiaochen.top/files/dev/update/dev.json`
-- release zip 用 GitHub Release 直链，dev zip 用自建 CDN（`page` 分支 `files/dev/`）
+- release zip 和 dev zip 均通过自建 CDN 分发（`page` 分支 `files/`）
 
 ## Code Style
 

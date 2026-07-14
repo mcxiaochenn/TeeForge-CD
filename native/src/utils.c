@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <time.h>
+#include <unistd.h>
 
 /* ===== 全局配置 Global Config ===== */
 config_t g_config;
@@ -315,27 +316,53 @@ int update_description(void) {
         "unknown";
 #endif
 
+    /* Root 检测（重试 3 次，兼容开机早期 env 未就绪） */
+    /* Root detection (retry 3x, compatible with early boot env not ready) */
+    char method[64], version[32];
+    snprintf(method, sizeof(method), "%s", g_config.root_method);
+    snprintf(version, sizeof(version), "%s", g_config.root_version);
+
+    for (int i = 0; i < 3; i++) {
+        if (strcmp(method, "Unknown") != 0) break;
+        log_msg(LOG_DEBUG, "Root 未知，重试 %d/3 [Root unknown, retry %d/3]", i + 1, i + 1);
+        sleep(2);
+        root_detect(method, sizeof(method), version, sizeof(version));
+        if (strcmp(method, "Unknown") != 0) {
+            /* 更新配置文件 Update config file */
+            strncpy(g_config.root_method, method, 63);
+            strncpy(g_config.root_version, version, 31);
+            root_detect_save(SYS_CONFIG_FILE, method, version);
+        }
+    }
+
     /* keybox 更新时间 Keybox update time */
     char timebuf[32];
     const char *kb_time = "N/A";
     char keybox_path[MAX_PATH_LEN];
-    snprintf(keybox_path, sizeof(keybox_path), "%s/current.keybox", g_config.keybox_dir);
+    snprintf(keybox_path, sizeof(keybox_path), "%s/keybox.xml", g_config.keybox_dir);
     if (file_exists(keybox_path)) {
         kb_time = file_mtime_str(keybox_path, timebuf, sizeof(timebuf));
     }
 
-    /* 状态指示 Status indicator */
-    const char *status = "✅";
+    /* 状态指示 + 颜文字 Status indicator + kaomoji */
+    const char *kaomoji;
+    if (strcmp(method, "Unknown") == 0) {
+        kaomoji = "(;´д`)";
+    } else if (strcmp(kb_time, "N/A") == 0) {
+        kaomoji = "(・・?";
+    } else {
+        kaomoji = "( •̀ ω •́ )✧";
+    }
 
     /* 拼接描述 Build description */
     char desc[512];
     snprintf(desc, sizeof(desc),
-        "%s [%s] %s | arch: %s | keybox: %s",
-        status,
-        g_config.root_method,
+        "✅ [%s] %s | arch: %s | keybox: %s %s",
+        method,
         TEEFORGE_VERSION,
         arch,
-        kb_time);
+        kb_time,
+        kaomoji);
 
     /* 更新 module.prop 的 description 行 Update description line in module.prop */
     config_update_key(prop_path, "description", desc);

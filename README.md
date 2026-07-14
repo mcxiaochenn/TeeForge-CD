@@ -8,18 +8,15 @@
 Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 
 > ⚠️ **本模块不能单独使用**，需搭配以下模块三选一：
-
-> ⚠️ **Dev 版本不稳定**，仅用于测试，正式使用请安装 Release 版：
-> [Latest Release](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest)
-
-
 > - [TrickyStore](https://github.com/5ec1cff/TrickyStore)
 > - [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
 > - [TEESimulator](https://github.com/JingMatrix/TEESimulator)
-
 ---
 
 ## 为什么选择 TeeForge-CD
+
+> ⚠️ **Dev 版本不稳定**，仅用于测试，正式使用请安装 Release 版：
+> [Latest Release](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest)
 
 你还在一个个手动添加 target.txt？
 你还在为 bootloader 状态暴露而焦虑？

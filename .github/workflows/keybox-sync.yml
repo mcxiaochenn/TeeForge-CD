@@ -116,18 +116,23 @@ jobs:
 
           echo "real_file=$SEED" >> $GITHUB_OUTPUT
 
-      - name: Force push to omg branch
+      - name: Force push to page branch
         if: steps.fetch.outputs.need_update == 'true'
         run: |
-          cd /tmp/omg_push
-          git init
+          # 克隆 page 分支 Clone page branch
+          git clone --branch page --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/page_push
+
+          # 复制 keybox 文件到 files/keybox/ Copy keybox files to files/keybox/
+          mkdir -p /tmp/page_push/files/keybox
+          cp /tmp/omg_push/keybox/* /tmp/page_push/files/keybox/
+
+          # 推送到 page 分支 Push to page branch
+          cd /tmp/page_push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b omg
-          git add keybox/
+          git add files/keybox/
           git commit -m "keybox: update $(date +%Y-%m-%d)"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push -f origin omg
+          git push origin page
 
       - name: Sync status to master
         if: steps.fetch.outputs.need_update == 'true'

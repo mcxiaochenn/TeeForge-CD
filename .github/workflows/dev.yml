@@ -87,18 +87,22 @@ jobs:
           ${LOG}
           CHANGELOG
 
-      - name: Push to dev branch
+      - name: Push to page branch
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           VERSION_CODE: ${{ steps.ver.outputs.versionCode }}
         run: |
-          # 准备 dev 分支内容 Prepare dev branch content
-          mkdir -p /tmp/dev_push/update
-          cp out/teeforge_cd-*.zip /tmp/dev_push/teeforge_cd-dev.zip
-          cp /tmp/CHANGELOG.md /tmp/dev_push/CHANGELOG.md
+          # 克隆 page 分支 Clone page branch
+          git clone --branch page --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/page_push
+          cd /tmp/page_push
 
-          # 生成 dev.json（CDN 指向 dev 分支）
-          cat > /tmp/dev_push/update/dev.json << EOF
+          # 准备 dev 文件 Prepare dev files
+          mkdir -p files/dev/update
+          cp ${{ github.workspace }}/out/teeforge_cd-*.zip files/dev/teeforge_cd-dev.zip
+          cp /tmp/CHANGELOG.md files/dev/CHANGELOG.md
+
+          # 生成 dev.json
+          cat > files/dev/update/dev.json << EOF
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
@@ -107,13 +111,9 @@ jobs:
           }
           EOF
 
-          # 推送到 dev 分支（orphan，只含构建产物）
-          cd /tmp/dev_push
-          git init
+          # 推送到 page 分支 Push to page branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b dev
-          git add .
-          git commit -m "dev: $VERSION [auto]"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git push -f origin dev
+          git add files/
+          git commit -m "dev: $VERSION [auto]" || true
+          git push origin page

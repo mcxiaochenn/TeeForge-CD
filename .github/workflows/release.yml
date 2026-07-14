@@ -125,7 +125,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
         run: |
-          # release.json：zip 用 GitHub Release 直链，changelog 用 CDN
+          # 更新 master 分支的 release.json（供仓库访问）
           cat > update/release.json << EOF
           {
             "versionCode": $VERSION_CODE,
@@ -139,3 +139,32 @@ jobs:
           git add update/release.json CHANGELOG.md
           git commit -m "release: $VERSION — update release.json and CHANGELOG.md [auto]" || true
           git push origin HEAD:master
+
+      - name: Push to page branch
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          # 克隆 page 分支 Clone page branch
+          git clone --branch page --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/page_push
+          cd /tmp/page_push
+
+          # 准备 CDN 文件 Prepare CDN files
+          mkdir -p files/update
+          cp ${{ github.workspace }}/CHANGELOG.md files/CHANGELOG.md
+
+          cat > files/update/release.json << EOF
+          {
+            "versionCode": $VERSION_CODE,
+            "version": "$VERSION",
+            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VERSION/teeforge_cd-$VERSION.zip",
+            "changelog": "https://teeforge.mcxiaochen.top/files/CHANGELOG.md"
+          }
+          EOF
+
+          # 推送到 page 分支 Push to page branch
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add files/
+          git commit -m "release: $VERSION [auto]" || true
+          git push origin page

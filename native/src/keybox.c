@@ -20,7 +20,7 @@ static void get_month_filename(char *f, size_t sz) {
     if (fp) { if (fgets(f, sz, fp)) { char *nl = strchr(f, '\n'); if (nl) *nl = '\0'; } pclose(fp); }
 }
 
-/* 尝试下载，返回 popen 句柄 Try download, return popen handle */
+/* 尝试下载工具 Try a download tool, return popen handle */
 static FILE *try_download(const char *url, const char *tool) {
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "%s '%s'", tool, url);
@@ -28,28 +28,65 @@ static FILE *try_download(const char *url, const char *tool) {
     return popen(cmd, "r");
 }
 
-static char *dl_url(const char *url, size_t *out) {
+/* 尝试下载并读取数据 Try download and read data, NULL if no data */
+static char *try_download_and_read(const char *url, const char *tool, size_t *out) {
+    FILE *fp = try_download(url, tool);
+    if (!fp) return NULL;
+
     char *d = NULL; size_t l = 0, c = 65536; char b[4096];
+    d = malloc(c);
+    if (!d) { pclose(fp); return NULL; }
+
+    while (1) {
+        size_t n = fread(b, 1, sizeof(b), fp);
+        if (n == 0) break;
+        if (l+n > c) {
+            c *= 2;
+            char *nd = realloc(d, c);
+            if (!nd) { free(d); pclose(fp); return NULL; }
+            d = nd;
+        }
+        memcpy(d+l, b, n); l += n;
+    }
+    pclose(fp);
+
+    if (l == 0) { free(d); return NULL; }
+    d[l] = '\0';
+    if (out) *out = l;
+    return d;
+}
+
+static char *dl_url(const char *url, size_t *out) {
     log_msg(LOG_DEBUG, "下载 [Download]: %s", url);
-    d = malloc(c); if (!d) return NULL;
 
     /* 降级策略 Fallback: curl → wget → busybox wget */
-    FILE *fp = NULL;
-    fp = try_download(url, "curl -sL");
-    if (!fp) fp = try_download(url, "wget -qO-");
-    if (!fp && dir_exists("/data/adb/ksu/bin"))
-        fp = try_download(url, "/data/adb/ksu/bin/busybox wget -qO-");
-    if (!fp && dir_exists("/data/adb/ap/bin"))
-        fp = try_download(url, "/data/adb/ap/bin/busybox wget -qO-");
-    if (!fp && dir_exists("/data/adb/magisk"))
-        fp = try_download(url, "/data/adb/magisk/busybox wget -qO-");
-    if (!fp) { free(d); return NULL; }
+    char *data = NULL;
+    size_t len = 0;
 
-    while (1) { size_t n = fread(b, 1, sizeof(b), fp); if (n == 0) break;
-        if (l+n > c) { c *= 2; char *nd = realloc(d, c); if (!nd) { free(d); pclose(fp); return NULL; } d = nd; }
-        memcpy(d+l, b, n); l += n; }
-    pclose(fp); if (l == 0) { free(d); return NULL; }
-    d[l] = '\0'; if (out) *out = l; return d;
+    data = try_download_and_read(url, "curl -sL", &len);
+    if (data) goto done;
+
+    data = try_download_and_read(url, "wget -qO-", &len);
+    if (data) goto done;
+
+    if (dir_exists("/data/adb/ksu/bin")) {
+        data = try_download_and_read(url, "/data/adb/ksu/bin/busybox wget -qO-", &len);
+        if (data) goto done;
+    }
+    if (dir_exists("/data/adb/ap/bin")) {
+        data = try_download_and_read(url, "/data/adb/ap/bin/busybox wget -qO-", &len);
+        if (data) goto done;
+    }
+    if (dir_exists("/data/adb/magisk")) {
+        data = try_download_and_read(url, "/data/adb/magisk/busybox wget -qO-", &len);
+        if (data) goto done;
+    }
+
+    return NULL;
+
+done:
+    if (out) *out = len;
+    return data;
 }
 
 int keybox_fetch(void) {

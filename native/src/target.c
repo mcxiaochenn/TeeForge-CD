@@ -33,8 +33,8 @@ int target_generate(void) {
         return -1;
     }
 
-    /* 收集包名 Collect package names */
-    char packages[MAX_PACKAGES][MAX_PKG_NAME];
+    /* 收集包名 Collect package names (static 避免 512KB 栈溢出 avoid 512KB stack overflow) */
+    static char packages[MAX_PACKAGES][MAX_PKG_NAME];
     int count = 0;
 
     char line[MAX_LINE];

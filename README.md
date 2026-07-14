@@ -91,8 +91,8 @@ TeeForge-CD/
 │   ├── action.sh          # 手动执行
 │   └── resetprop-rs/      # 预置二进制
 ├── update/                # KernelSU 自动更新
-│   ├── release.json       # release 版本信息（CDN）
-│   └── dev.json           # dev 版本信息（CDN）
+│   └── release.json       # release 版本信息（CDN，dev 版在 dev 分支）
+├── CHANGELOG.md           # 自动生成（release workflow）
 ├── .github/workflows/     # CI/CD 全自动
 └── docs/                  # 架构、反思、待办
 ```

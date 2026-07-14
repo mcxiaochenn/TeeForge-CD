@@ -12,6 +12,7 @@ static void print_usage(const char *prog) {
     printf("  --generate    生成 target.txt [Generate target.txt]\n");
     printf("  --hide-bl     弱隐 bootloader [Weak bootloader hiding]\n");
     printf("  --keybox      获取并更新 keybox [Fetch and update keybox]\n");
+    printf("  --rootdetect  检测 root 方式并保存 [Detect root method and save]\n");
     printf("  --volume SEC  音量键监听 [Volume key listen] (输出 1/0)\n");
     printf("  --verbose     启用调试日志 [Enable debug logging]\n");
     printf("  --config FILE 使用自定义配置文件 [Use custom config file]\n");
@@ -22,6 +23,7 @@ int main(int argc, char *argv[]) {
     int do_generate = 0;
     int do_hide_bl = 0;
     int do_keybox = 0;
+    int do_rootdetect = 0;
     int do_volume = 0;
     int volume_timeout = 10;
     int verbose = 0;
@@ -35,6 +37,8 @@ int main(int argc, char *argv[]) {
             do_hide_bl = 1;
         } else if (strcmp(argv[i], "--keybox") == 0) {
             do_keybox = 1;
+        } else if (strcmp(argv[i], "--rootdetect") == 0) {
+            do_rootdetect = 1;
         } else if (strcmp(argv[i], "--volume") == 0) {
             do_volume = 1;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -60,7 +64,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* 默认：无参数时执行生成 Default: generate if no args */
-    if (!do_generate && !do_hide_bl && !do_keybox && !do_volume && argc == 1) {
+    if (!do_generate && !do_hide_bl && !do_keybox && !do_rootdetect && !do_volume && argc == 1) {
         do_generate = 1;
     }
 
@@ -92,6 +96,16 @@ int main(int argc, char *argv[]) {
     if (do_keybox) {
         log_msg(LOG_INFO, "");
         ret = keybox_fetch();
+    }
+
+    if (do_rootdetect) {
+        char method[64], version[32];
+        root_detect(method, sizeof(method), version, sizeof(version));
+        /* 输出到 stdout（供 shell 脚本捕获）Output to stdout (for shell script) */
+        printf("%s\n%s\n", method, version);
+        /* 保存到配置文件 Save to config file */
+        root_detect_save(config_file, method);
+        return 0;
     }
 
     if (do_volume) {

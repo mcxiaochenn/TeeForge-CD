@@ -58,14 +58,18 @@ log_dir=/data/adb/teeforge/logs/
 ### 关键实现细节 Key Implementation Details
 
 - **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（G/M/T/A/P 等），运行时拼合解密。源码备份在 `backup/`（gitignored）
-- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），支持 `--stealth`、`--compact`、`--delete`
+  - 解密流程：下载 → base64 解码 → XOR(SHA256(pubkey)) → 10x base64 → hex decode → ROT13 → XML
+  - 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
+  - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
+- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），支持 `--stealth`、`--compact`、`--delete`。检测到无执行权限时自动 `chmod 755`
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
+- **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志
 
 ### GitHub Action
 - `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `omg` 分支（混淆文件名，15个文件）
-- `dev.yml` — push 触发 dev 构建，产物发布到 Actions
-- `release.yml` — 推送版本标签触发 Release 构建
+- `dev.yml` — push 触发 dev 构建，产物发布到 Actions。版本号同步更新 `teeforge.h` 和 `module.prop`
+- `release.yml` — 推送版本标签触发 Release 构建。同上
 
 ## Code Style
 
@@ -91,4 +95,5 @@ log_dir=/data/adb/teeforge/logs/
 | `module/service.sh` | 开机服务 |
 | `module/customize.sh` | 安装脚本（配置保留逻辑） |
 | `module/uninstall.sh` | 卸载脚本 |
-| `module/resetprop-rs/` | 预置 resetprop-rs 二进制 |
+| `module/action.sh` | 手动执行（keybox + generate） |
+| `module/resetprop-rs/` | 预置 resetprop-rs 二进制（arm64-v8a + armeabi-v7a） |

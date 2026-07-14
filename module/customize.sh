@@ -63,6 +63,12 @@ ui_print "  Arch: $ARCH"
 set_perm_recursive $MODPATH 0 0 0755 0644
 set_perm $MODPATH/teeforge 0 0 0755
 
+# resetprop-rs 需要执行权限（set_perm_recursive 会重置为 0644）
+# resetprop-rs needs execute permission (set_perm_recursive resets to 0644)
+for f in "$MODPATH/resetprop-rs"/resetprop-*; do
+    [ -f "$f" ] && set_perm "$f" 0 0 0755
+done
+
 ui_print " "
 ui_print "  Done! Reboot to activate"
 ui_print "  完成！重启生效"

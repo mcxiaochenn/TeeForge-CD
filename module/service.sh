@@ -5,6 +5,11 @@
 
 MODDIR=${0%/*}
 
+# 确保 resetprop-rs 有执行权限 Ensure resetprop-rs is executable
+for f in "$MODDIR/resetprop-rs"/resetprop-*; do
+    [ -f "$f" ] && chmod 755 "$f"
+done
+
 # 检测 resetprop-rs Detect resetprop-rs
 RESETPROP_RS=""
 for f in "$MODDIR/resetprop-rs"/resetprop-*; do
@@ -27,6 +32,3 @@ $MODDIR/teeforge --hide-bl
 
 # 生成 target.txt Generate target.txt
 $MODDIR/teeforge --generate
-
-# 记录完成 Log completion
-echo "[TeeForge-CD] 开机服务完成 [Boot service completed]" >> /data/adb/teeforge/teeforge.log

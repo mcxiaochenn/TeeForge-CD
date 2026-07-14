@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.3.2-cdd225f
+## TeeForge-CD Dev v0.3.2-3c38e1d
 
 ### 构建信息 Build Info
-- Version: `v0.3.2-cdd225f`
-- Version Code: `93`
-- Commit: `cdd225f`
+- Version: `v0.3.2-3c38e1d`
+- Version Code: `96`
+- Commit: `3c38e1d`
 
 ### 最近提交 Recent Commits
+- 3c38e1d docs: fix CLAUDE.md and README.md review findings
+- f5e8b5e fix: medium C code issues from review
+- b7ef71b fix(ci): keybox-sync critical issues
 - cdd225f fix: description retry root detection, fix keybox path, add kaomoji
 - 39cfbd9 fix: download fallback now checks actual data, not popen return
 - 78032a2 refactor: remove shell description update from customize.sh, rely on C binary via service.sh
@@ -23,6 +26,3 @@
 - 5024e0c fix: banner indentation
 - bf637a5 fix: remove duplicate 'v' in banner version display
 - 5d399b8 fix: simplify rootdetect call — --rootdetect already skips auto detection
-- 2394ec4 refactor: move root detection before config selection in install flow
-- 1375599 fix: volume key prompt polluted by root detection output during install
-- 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically

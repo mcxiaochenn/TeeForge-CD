@@ -357,12 +357,12 @@ int update_description(void) {
     /* 拼接描述 Build description */
     char desc[512];
     snprintf(desc, sizeof(desc),
-        "✅ [%s] %s | arch: %s | keybox: %s %s",
+        "%s ✅ [%s] %s | arch: %s | keybox: %s",
+        kaomoji,
         method,
         TEEFORGE_VERSION,
         arch,
-        kb_time,
-        kaomoji);
+        kb_time);
 
     /* 更新 module.prop 的 description 行 Update description line in module.prop */
     config_update_key(prop_path, "description", desc);

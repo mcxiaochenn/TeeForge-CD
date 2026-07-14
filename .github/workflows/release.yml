@@ -71,7 +71,7 @@ jobs:
             LOG=$(git log ${PREV_TAG}..HEAD --oneline --no-decorate)
           fi
 
-          # 写入 changelog 文件
+          # 写入 Release body 用的 changelog
           cat > /tmp/CHANGELOG.md << CHANGELOG
           ## TeeForge-CD ${{ steps.version.outputs.version }}
 
@@ -94,6 +94,20 @@ jobs:
           | teeforge | 独立二进制（调试用）|
           CHANGELOG
 
+          # 同时更新仓库中的 CHANGELOG.md（供 CDN 访问）
+          # Also update repo CHANGELOG.md (for CDN access)
+          cat > CHANGELOG.md << CHANGELOG
+          ## TeeForge-CD ${{ steps.version.outputs.version }}
+
+          ### 构建信息 Build Info
+          - Version: \`${{ steps.version.outputs.version }}\`
+          - Version Code: \`${{ steps.version.outputs.versionCode }}\`
+          - Commit: \`${{ github.sha }}\`
+
+          ### 更新内容 Changes
+          ${LOG}
+          CHANGELOG
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -106,21 +120,22 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Update release.json
+      - name: Update release.json and CHANGELOG.md
         env:
           VERSION: ${{ steps.version.outputs.version }}
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
         run: |
+          # release.json：zip 用 GitHub Release 直链，changelog 用 CDN
           cat > update/release.json << EOF
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
-            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@$VERSION/teeforge_cd-$VERSION.zip",
+            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VERSION/teeforge_cd-$VERSION.zip",
             "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/CHANGELOG.md"
           }
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add update/release.json
-          git commit -m "release: update release.json to $VERSION [auto]" || true
+          git add update/release.json CHANGELOG.md
+          git commit -m "release: $VERSION — update release.json and CHANGELOG.md [auto]" || true
           git push origin master

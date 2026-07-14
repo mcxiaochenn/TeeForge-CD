@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -31,19 +31,16 @@ jobs:
           COMMIT_COUNT=$(git rev-list --count HEAD)
           COMMIT_HASH=$(git rev-parse --short HEAD)
 
-          # 获取最新 release tag
           LATEST_TAG=$(gh release list -R ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null)
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
             LATEST_TAG="v0.0.0"
           fi
 
-          # dev 版本: v0.1.1-abc1234
           DEV_VERSION="${LATEST_TAG}-${COMMIT_HASH}"
 
           echo "version=$DEV_VERSION" >> $GITHUB_OUTPUT
           echo "versionCode=$COMMIT_COUNT" >> $GITHUB_OUTPUT
           echo "commitHash=$COMMIT_HASH" >> $GITHUB_OUTPUT
-          echo "latestTag=$LATEST_TAG" >> $GITHUB_OUTPUT
 
       - name: Build
         env:
@@ -52,20 +49,15 @@ jobs:
         run: |
           echo "Building version=$VERSION code=$VERSION_CODE"
 
-          # 写入版本号 Write version
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
           sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
           sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
-
-          # dev 构建默认开启 debug
           sed -i "s/^debug=.*/debug=1/" module/config.conf
 
-          # 构建
           chmod +x build.sh
           ./build.sh
 
-          # 打包
           chmod +x package.sh
           ./package.sh
 
@@ -78,16 +70,49 @@ jobs:
             out/teeforge_cd-*.zip
           retention-days: 30
 
-      - name: Update dev.json
+      - name: Generate changelog
+        run: |
+          LOG=$(git log --oneline --no-decorate -20)
+          COMMIT_HASH="${{ steps.ver.outputs.commitHash }}"
+          cat > /tmp/CHANGELOG.md << CHANGELOG
+          ## TeeForge-CD Dev ${{ steps.ver.outputs.version }}
+
+          ### 构建信息 Build Info
+          - Version: \`${{ steps.ver.outputs.version }}\`
+          - Version Code: \`${{ steps.ver.outputs.versionCode }}\`
+          - Commit: \`${COMMIT_HASH}\`
+
+          ### 最近提交 Recent Commits
+          ${LOG}
+          CHANGELOG
+
+      - name: Push to dev branch
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           VERSION_CODE: ${{ steps.ver.outputs.versionCode }}
         run: |
-          cat > update/dev.json << EOF
+          # 准备 dev 分支内容 Prepare dev branch content
+          mkdir -p /tmp/dev_push/update
+          cp out/teeforge_cd-*.zip /tmp/dev_push/teeforge_cd-dev.zip
+          cp /tmp/CHANGELOG.md /tmp/dev_push/CHANGELOG.md
+
+          # 生成 dev.json（CDN 指向 dev 分支）
+          cat > /tmp/dev_push/update/dev.json << EOF
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
-            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/teeforge_cd-dev.zip",
-            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@master/CHANGELOG.md"
+            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@dev/teeforge_cd-dev.zip",
+            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@dev/CHANGELOG.md"
           }
           EOF
+
+          # 推送到 dev 分支（orphan，只含构建产物）
+          cd /tmp/dev_push
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b dev
+          git add .
+          git commit -m "dev: $VERSION [auto]"
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push -f origin dev

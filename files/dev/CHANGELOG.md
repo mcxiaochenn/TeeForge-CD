@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-653a665
+## TeeForge-CD Dev v0.2.1-9c68080
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-653a665`
-- Version Code: `81`
-- Commit: `653a665`
+- Version: `v0.2.1-9c68080`
+- Version Code: `82`
+- Commit: `9c68080`
 
 ### 最近提交 Recent Commits
+- 9c68080 docs: update README and TODO
 - 653a665 docs: update CLAUDE.md with latest CLI, config, and CI changes
 - db4e160 fix: replace curl with wget for keybox download
 - 5024e0c fix: banner indentation
@@ -25,4 +26,3 @@
 - 0fee087 refactor: replace jsdelivr CDN with self-hosted teeforge.mcxiaochen.top
 - 24566cd refactor: move root detection before existing installation check
 - d570f48 feat: add root method detection via --rootdetect flag
-- dbda9f0 fix: remove duplicate 'v' prefix in version log output

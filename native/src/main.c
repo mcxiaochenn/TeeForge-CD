@@ -12,10 +12,9 @@ static void print_usage(const char *prog) {
     printf("  --generate    生成 target.txt [Generate target.txt]\n");
     printf("  --hide-bl     弱隐 bootloader [Weak bootloader hiding]\n");
     printf("  --keybox      获取并更新 keybox [Fetch and update keybox]\n");
-    printf("  --download URL OUTPUT  下载文件 [Download file]\n");
     printf("  --volume SEC  音量键监听 [Volume key listen] (输出 1/0)\n");
     printf("  --verbose     启用调试日志 [Enable debug logging]\n");
-    printf("  --config FILE 使用自定义配置文件 [Use custom config file] (default: %s)\n", CONFIG_FILE);
+    printf("  --config FILE 使用自定义配置文件 [Use custom config file]\n");
     printf("  --help        显示帮助 [Show this help]\n");
 }
 
@@ -23,13 +22,10 @@ int main(int argc, char *argv[]) {
     int do_generate = 0;
     int do_hide_bl = 0;
     int do_keybox = 0;
-    int do_download = 0;
     int do_volume = 0;
     int volume_timeout = 10;
     int verbose = 0;
     const char *config_file = CONFIG_FILE;
-    const char *dl_url = NULL;
-    const char *dl_output = NULL;
 
     /* 解析参数 Parse arguments */
     for (int i = 1; i < argc; i++) {
@@ -43,15 +39,6 @@ int main(int argc, char *argv[]) {
             do_volume = 1;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
                 volume_timeout = atoi(argv[++i]);
-            }
-        } else if (strcmp(argv[i], "--download") == 0) {
-            do_download = 1;
-            if (i + 2 < argc) {
-                dl_url = argv[++i];
-                dl_output = argv[++i];
-            } else {
-                fprintf(stderr, "--download 需要 URL 和输出路径 [--download requires URL and output path]\n");
-                return 1;
             }
         } else if (strcmp(argv[i], "--verbose") == 0) {
             verbose = 1;
@@ -73,7 +60,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* 默认：无参数时执行生成 Default: generate if no args */
-    if (!do_generate && !do_hide_bl && !do_keybox && !do_download && !do_volume && argc == 1) {
+    if (!do_generate && !do_hide_bl && !do_keybox && !do_volume && argc == 1) {
         do_generate = 1;
     }
 
@@ -86,7 +73,7 @@ int main(int argc, char *argv[]) {
 
     /* 检查 root 权限 Check if running as root */
     if (getuid() != 0) {
-        log_msg(LOG_WARN, "未以 root 运行，可能无法读取系统文件 [Not running as root, may fail to read system files]");
+        log_msg(LOG_WARN, "未以 root 运行 [Not running as root]");
     }
 
     /* 执行任务 Execute */
@@ -107,23 +94,7 @@ int main(int argc, char *argv[]) {
         ret = keybox_fetch();
     }
 
-    if (do_download && dl_url && dl_output) {
-        dl_detect_region();
-        size_t len = 0;
-        char *data = dl_download_with_retry(dl_url, &len);
-        if (data && len > 0) {
-            ret = write_file(dl_output, data, len);
-            free(data);
-            if (ret == 0) {
-                log_msg(LOG_INFO, "下载完成 [Download complete]: %s (%zu bytes)", dl_output, len);
-            }
-        } else {
-            ret = -1;
-        }
-    }
-
     if (do_volume) {
-        /* 输出 1=音量+, 0=音量-, -1=超时 */
         int result = volume_listen(volume_timeout);
         printf("%d\n", result);
         return (result >= 0) ? 0 : 1;

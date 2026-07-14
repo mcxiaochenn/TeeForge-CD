@@ -19,6 +19,9 @@ $MODDIR/teeforge --config "$CONFIG" --keybox 2>&1 | while IFS= read -r line; do
 done
 echo ""
 
+# 更新模块描述 Update module description
+$MODDIR/teeforge --config "$CONFIG" --update-desc 2>/dev/null
+
 # 更新 target.txt
 echo "[2/2] 更新 target.txt [Updating target.txt]..."
 echo ""

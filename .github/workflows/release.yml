@@ -134,12 +134,13 @@ jobs:
           # 准备 CDN 文件 Prepare CDN files
           mkdir -p files/update
           cp ${{ github.workspace }}/CHANGELOG.md files/CHANGELOG.md
+          cp ${{ github.workspace }}/out/teeforge_cd-$VERSION.zip files/teeforge_cd-$VERSION.zip
 
           cat > files/update/release.json << EOF
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
-            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VERSION/teeforge_cd-$VERSION.zip",
+            "zipUrl": "https://teeforge.mcxiaochen.top/files/teeforge_cd-$VERSION.zip",
             "changelog": "https://teeforge.mcxiaochen.top/files/CHANGELOG.md"
           }
           EOF

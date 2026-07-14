@@ -46,14 +46,19 @@ teeforge --verbose            # 启用调试日志
 teeforge --config FILE        # 使用自定义配置
 ```
 
-### 配置文件 Configuration (`module/config.conf`)
+### 配置文件 Configuration
 ```ini
+# config.conf（用户配置，保留跨更新 User config, preserved across updates）
+debug=0                         # 0=关闭, 1=开启（日志写入文件）
+
+# sys.conf（系统配置，安装时自动生成 System config, auto-generated at install）
 packages_xml=/data/system/packages.xml
 target_txt=/data/adb/tricky_store/target.txt
 keybox_dir=/data/adb/teeforge/keybox/
-debug=0                         # 0=关闭, 1=开启（日志写入文件）
+sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
-root_method=Unknown             # 自动检测 auto-detected: Magisk/KernelSU/APatch
+root_method=KernelSU            # 自动检测 auto-detected
+root_version=1234               # 自动检测 auto-detected
 ```
 
 ### 关键实现细节 Key Implementation Details

@@ -85,22 +85,25 @@ int root_detect(char *method, size_t mlen, char *version, size_t vlen) {
     return 1;
 }
 
-int root_detect_save(const char *config_path, const char *method) {
-    if (!config_path || !method) return -1;
+/* 更新配置文件中的 key=value 行 Update key=value line in config file */
+static int config_update_key(const char *config_path, const char *key, const char *value) {
+    if (!config_path || !key || !value) return -1;
 
-    /* 读取现有配置 Read existing config */
     char *data = read_file(config_path, NULL);
     if (!data) {
         /* 文件不存在，直接写入 File doesn't exist, write directly */
-        return write_file(config_path, method, strlen(method));
+        char line[256];
+        snprintf(line, sizeof(line), "%s=%s\n", key, value);
+        return write_file(config_path, line, strlen(line));
     }
 
-    /* 查找已有的 root_method 行 Search for existing root_method line */
-    char key_pattern[] = "root_method=";
-    char *pos = strstr(data, key_pattern);
+    /* 构建搜索模式 Build search pattern */
+    char pattern[128];
+    snprintf(pattern, sizeof(pattern), "%s=", key);
+    char *pos = strstr(data, pattern);
 
     /* 构建新内容 Build new content */
-    size_t new_len = strlen(data) + strlen(method) + 32;
+    size_t new_len = strlen(data) + strlen(key) + strlen(value) + 8;
     char *new_data = (char *)malloc(new_len);
     if (!new_data) {
         free(data);
@@ -111,16 +114,15 @@ int root_detect_save(const char *config_path, const char *method) {
         /* 替换已有行 Replace existing line */
         size_t prefix_len = (size_t)(pos - data);
         char *after = strchr(pos, '\n');
-        snprintf(new_data, new_len, "%.*sroot_method=%s%s",
-                 (int)prefix_len, data, method, after ? after : "\n");
+        snprintf(new_data, new_len, "%.*s%s=%s%s",
+                 (int)prefix_len, data, key, value, after ? after : "\n");
     } else {
         /* 追加到末尾 Append to end */
         size_t cur_len = strlen(data);
-        /* 确保末尾有换行 Ensure trailing newline */
         if (cur_len > 0 && data[cur_len - 1] != '\n') {
-            snprintf(new_data, new_len, "%s\nroot_method=%s\n", data, method);
+            snprintf(new_data, new_len, "%s\n%s=%s\n", data, key, value);
         } else {
-            snprintf(new_data, new_len, "%sroot_method=%s\n", data, method);
+            snprintf(new_data, new_len, "%s%s=%s\n", data, key, value);
         }
     }
 
@@ -128,4 +130,13 @@ int root_detect_save(const char *config_path, const char *method) {
     free(new_data);
     free(data);
     return ret;
+}
+
+int root_detect_save(const char *config_path, const char *method, const char *version) {
+    if (!config_path || !method) return -1;
+    config_update_key(config_path, "root_method", method);
+    if (version && version[0]) {
+        config_update_key(config_path, "root_version", version);
+    }
+    return 0;
 }

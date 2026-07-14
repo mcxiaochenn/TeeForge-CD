@@ -11,21 +11,10 @@
 /* ===== 全局配置 Global Config ===== */
 config_t g_config;
 
-int config_load(const char *path) {
-    /* 设置默认值 Set defaults */
-    strncpy(g_config.packages_xml, DEFAULT_PACKAGES, MAX_PATH_LEN - 1);
-    strncpy(g_config.target_txt, DEFAULT_TARGET_TXT, MAX_PATH_LEN - 1);
-    strncpy(g_config.keybox_dir, DEFAULT_KEYBOX_DIR, MAX_PATH_LEN - 1);
-    strncpy(g_config.sources_conf, DEFAULT_SOURCES, MAX_PATH_LEN - 1);
-    strncpy(g_config.log_dir, DEFAULT_LOG_DIR, MAX_PATH_LEN - 1);
-    g_config.debug = 0;
-
-    /* 尝试加载配置文件 Try to load config file */
+/* 解析单个配置文件 Parse a single config file */
+static void config_parse_file(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) {
-        log_msg(LOG_WARN, "配置文件未找到: %s, 使用默认值 [Config not found: %s, using defaults]", path, path);
-        return 0;
-    }
+    if (!f) return;
 
     char line[MAX_LINE];
     while (fgets(line, sizeof(line), f)) {
@@ -49,19 +38,41 @@ int config_load(const char *path) {
             strncpy(g_config.sources_conf, val, MAX_PATH_LEN - 1);
         } else if (strcmp(key, "log_dir") == 0) {
             strncpy(g_config.log_dir, val, MAX_PATH_LEN - 1);
+        } else if (strcmp(key, "root_method") == 0) {
+            strncpy(g_config.root_method, val, 63);
+        } else if (strcmp(key, "root_version") == 0) {
+            strncpy(g_config.root_version, val, 31);
         } else if (strcmp(key, "debug") == 0) {
             g_config.debug = atoi(val);
         }
     }
 
     fclose(f);
+}
+
+int config_load(const char *path) {
+    /* 设置默认值 Set defaults */
+    strncpy(g_config.packages_xml, DEFAULT_PACKAGES, MAX_PATH_LEN - 1);
+    strncpy(g_config.target_txt, DEFAULT_TARGET_TXT, MAX_PATH_LEN - 1);
+    strncpy(g_config.keybox_dir, DEFAULT_KEYBOX_DIR, MAX_PATH_LEN - 1);
+    strncpy(g_config.sources_conf, DEFAULT_SOURCES, MAX_PATH_LEN - 1);
+    strncpy(g_config.log_dir, DEFAULT_LOG_DIR, MAX_PATH_LEN - 1);
+    strncpy(g_config.root_method, "Unknown", 63);
+    strncpy(g_config.root_version, "unknown", 31);
+    g_config.debug = 0;
+
+    /* 加载 sys.conf（系统配置）Load sys.conf (system config) */
+    config_parse_file(SYS_CONFIG_FILE);
+
+    /* 加载 config.conf（用户配置，可覆盖 debug）Load config.conf (user config, can override debug) */
+    config_parse_file(path);
 
     /* 确保日志目录存在 Ensure log directory exists */
     if (g_config.debug) {
         ensure_dir(g_config.log_dir);
     }
 
-    log_msg(LOG_INFO, "已加载配置 [Loaded config]: %s (debug=%d)", path, g_config.debug);
+    log_msg(LOG_INFO, "已加载配置 [Loaded config]: %s + %s (debug=%d)", SYS_CONFIG_FILE, path, g_config.debug);
     return 0;
 }
 

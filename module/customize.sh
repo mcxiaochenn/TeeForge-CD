@@ -18,12 +18,6 @@ for f in "$MODPATH/resetprop-rs"/resetprop-*; do
     [ -f "$f" ] && chmod 755 "$f"
 done
 
-# 检测 root 方式 Detect root method (via binary)
-ROOT_RESULT=$($MODPATH/teeforge --rootdetect --config "$CONFIG_FILE" 2>/dev/null)
-ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
-ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
-[ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
-
 # 检查已有安装 Check existing installation
 if [ -d "$TEEFORGE_DIR" ]; then
     if [ -f "$CONFIG_FILE" ]; then
@@ -53,13 +47,32 @@ ui_print "  创建目录 [Creating dirs]..."
 mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
 
-# 复制配置文件 Copy config file
+# 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)
+cat > "$TEEFORGE_DIR/sys.conf" << EOF
+# TeeForge-CD System Configuration (auto-generated, don't edit)
+# 系统配置（自动生成，勿手动修改）
+
+packages_xml=/data/system/packages.xml
+target_txt=/data/adb/tricky_store/target.txt
+keybox_dir=/data/adb/teeforge/keybox/
+sources_conf=/data/adb/teeforge/sources.conf
+log_dir=/data/adb/teeforge/logs/
+EOF
+ui_print "  sys.conf 已生成 [sys.conf generated]"
+
+# 复制用户配置（仅 debug 设置）Copy user config (debug setting only)
 if [ ! -f "$CONFIG_FILE" ]; then
     cp $MODPATH/config.conf "$CONFIG_FILE"
-    ui_print "  配置已创建 [Config created]"
+    ui_print "  config.conf 已创建 [config.conf created]"
 else
-    ui_print "  配置已保留 [Config preserved]"
+    ui_print "  config.conf 已保留 [config.conf preserved]"
 fi
+
+# 检测 root 方式并写入 sys.conf Detect root method and save to sys.conf
+ROOT_RESULT=$($MODPATH/teeforge --rootdetect --config "$CONFIG_FILE" 2>/dev/null)
+ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
+ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
+[ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
 
 # 显示预置的 resetprop-rs
 ARCH=$(getprop ro.product.cpu.abi)

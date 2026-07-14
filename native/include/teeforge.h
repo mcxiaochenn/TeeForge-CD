@@ -14,6 +14,7 @@
 #define DEFAULT_LOG_DIR     "/data/adb/teeforge/logs/"
 
 #define CONFIG_FILE         "./config.conf"
+#define SYS_CONFIG_FILE     "./sys.conf"
 
 /* ===== 限制 Limits ===== */
 #define MAX_LINE         4096
@@ -28,6 +29,8 @@ typedef struct {
     char keybox_dir[MAX_PATH_LEN];
     char sources_conf[MAX_PATH_LEN];
     char log_dir[MAX_PATH_LEN];
+    char root_method[64];              /* Root 方式 Root method */
+    char root_version[32];             /* Root 版本 Root version */
     int debug;                         /* 调试开关 Debug switch */
 } config_t;
 
@@ -76,6 +79,6 @@ int volume_listen(int timeout_sec);
 
 /* ===== Root 检测 Root Detection (rootdetect.c) ===== */
 int root_detect(char *method, size_t mlen, char *version, size_t vlen);
-int root_detect_save(const char *config_path, const char *method);
+int root_detect_save(const char *config_path, const char *method, const char *version);
 
 #endif /* TEEFORGE_H */

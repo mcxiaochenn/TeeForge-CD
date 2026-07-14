@@ -122,26 +122,6 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Update release.json and CHANGELOG.md
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
-        run: |
-          # 更新 master 分支的 release.json（供仓库访问）
-          cat > update/release.json << EOF
-          {
-            "versionCode": $VERSION_CODE,
-            "version": "$VERSION",
-            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/$VERSION/teeforge_cd-$VERSION.zip",
-            "changelog": "https://teeforge.mcxiaochen.top/files/CHANGELOG.md"
-          }
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add update/release.json CHANGELOG.md
-          git commit -m "release: $VERSION — update release.json and CHANGELOG.md [auto]" || true
-          git push origin HEAD:master
-
       - name: Push to page branch
         env:
           VERSION: ${{ steps.version.outputs.version }}

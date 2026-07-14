@@ -68,8 +68,13 @@ log_dir=/data/adb/teeforge/logs/
 
 ### GitHub Action
 - `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `omg` 分支（混淆文件名，15个文件）
-- `dev.yml` — push 触发 dev 构建，产物发布到 Actions。版本号同步更新 `teeforge.h` 和 `module.prop`
-- `release.yml` — 推送版本标签触发 Release 构建。同上
+- `dev.yml` — push 触发 dev 构建，产物推送到 `dev` 分支（不污染 master），自动更新 `update/dev.json`。版本号同步更新 `teeforge.h` 和 `module.prop`，`updateJson` 改为指向 dev 分支
+- `release.yml` — 推送版本标签触发 Release 构建，自动更新 `update/release.json` 和 `CHANGELOG.md` 并推送到 master
+
+### 自动更新 Auto Update
+- `module.prop` 中 `updateJson` 指向 `update/release.json`（CDN）
+- dev 构建会将 `updateJson` 改为指向 `dev` 分支的 `update/dev.json`
+- release zip 用 GitHub Release 直链，dev zip 用 jsdelivr CDN（`@dev` 分支）
 
 ## Code Style
 

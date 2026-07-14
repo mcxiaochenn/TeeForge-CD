@@ -52,7 +52,7 @@ jobs:
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
           sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
-          sed -i "s|^updateJson=.*|updateJson=https://cdn.jsdelivr.net/gh/${{ github.repository }}@dev/update/dev.json|" module/module.prop
+          sed -i "s|^updateJson=.*|updateJson=https://teeforge.mcxiaochen.top/files/dev/update/dev.json|" module/module.prop
           sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
           sed -i "s/^debug=.*/debug=1/" module/config.conf
 
@@ -102,8 +102,8 @@ jobs:
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
-            "zipUrl": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@dev/teeforge_cd-dev.zip",
-            "changelog": "https://cdn.jsdelivr.net/gh/${{ github.repository }}@dev/CHANGELOG.md"
+            "zipUrl": "https://teeforge.mcxiaochen.top/files/dev/teeforge_cd-dev.zip",
+            "changelog": "https://teeforge.mcxiaochen.top/files/dev/CHANGELOG.md"
           }
           EOF
 

@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.3.2-39cfbd9
+## TeeForge-CD Dev v0.3.2-cdd225f
 
 ### 构建信息 Build Info
-- Version: `v0.3.2-39cfbd9`
-- Version Code: `92`
-- Commit: `39cfbd9`
+- Version: `v0.3.2-cdd225f`
+- Version Code: `93`
+- Commit: `cdd225f`
 
 ### 最近提交 Recent Commits
+- cdd225f fix: description retry root detection, fix keybox path, add kaomoji
 - 39cfbd9 fix: download fallback now checks actual data, not popen return
 - 78032a2 refactor: remove shell description update from customize.sh, rely on C binary via service.sh
 - 5654f36 fix: show full ABI arch (arm64-v8a/armeabi-v7a) in description
@@ -25,4 +26,3 @@
 - 2394ec4 refactor: move root detection before config selection in install flow
 - 1375599 fix: volume key prompt polluted by root detection output during install
 - 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically
-- 321835b refactor: dynamically generate config.conf at install time

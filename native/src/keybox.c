@@ -20,13 +20,31 @@ static void get_month_filename(char *f, size_t sz) {
     if (fp) { if (fgets(f, sz, fp)) { char *nl = strchr(f, '\n'); if (nl) *nl = '\0'; } pclose(fp); }
 }
 
-static char *dl_url(const char *url, size_t *out) {
+/* 尝试下载，返回 popen 句柄 Try download, return popen handle */
+static FILE *try_download(const char *url, const char *tool) {
     char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "%s '%s'", tool, url);
+    log_msg(LOG_DEBUG, "尝试下载 [Trying]: %s", tool);
+    return popen(cmd, "r");
+}
+
+static char *dl_url(const char *url, size_t *out) {
     char *d = NULL; size_t l = 0, c = 65536; char b[4096];
     log_msg(LOG_DEBUG, "下载 [Download]: %s", url);
     d = malloc(c); if (!d) return NULL;
-    snprintf(cmd, sizeof(cmd), "wget -qO- '%s'", url);
-    FILE *fp = popen(cmd, "r"); if (!fp) { free(d); return NULL; }
+
+    /* 降级策略 Fallback: curl → wget → busybox wget */
+    FILE *fp = NULL;
+    fp = try_download(url, "curl -sL");
+    if (!fp) fp = try_download(url, "wget -qO-");
+    if (!fp && dir_exists("/data/adb/ksu/bin"))
+        fp = try_download(url, "/data/adb/ksu/bin/busybox wget -qO-");
+    if (!fp && dir_exists("/data/adb/ap/bin"))
+        fp = try_download(url, "/data/adb/ap/bin/busybox wget -qO-");
+    if (!fp && dir_exists("/data/adb/magisk"))
+        fp = try_download(url, "/data/adb/magisk/busybox wget -qO-");
+    if (!fp) { free(d); return NULL; }
+
     while (1) { size_t n = fread(b, 1, sizeof(b), fp); if (n == 0) break;
         if (l+n > c) { c *= 2; char *nd = realloc(d, c); if (!nd) { free(d); pclose(fp); return NULL; } d = nd; }
         memcpy(d+l, b, n); l += n; }

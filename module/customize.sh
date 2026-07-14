@@ -68,15 +68,22 @@ ui_print "  sys.conf 已生成 [sys.conf generated]"
 
 # 生成用户配置（仅 debug 设置）Generate user config (debug setting only)
 if [ ! -f "$CONFIG_FILE" ]; then
+    # 从模块包读取 debug 值（dev 构建为 1，release 为 0）
+    # Read debug value from module zip (dev=1, release=0)
+    MODULE_DEBUG=0
+    if [ -f "$MODPATH/config.conf" ]; then
+        MODULE_DEBUG=$(grep '^debug=' "$MODPATH/config.conf" | cut -d'=' -f2)
+        [ -z "$MODULE_DEBUG" ] && MODULE_DEBUG=0
+    fi
     cat > "$CONFIG_FILE" << EOF
 # TeeForge-CD User Configuration
 # 用户配置 [User configuration]
 
 # 0: 关闭 Off (默认 default)
 # 1: 开启 On（日志写入文件 Logs written to file）
-debug=0
+debug=$MODULE_DEBUG
 EOF
-    ui_print "  config.conf 已创建 [config.conf created]"
+    ui_print "  config.conf 已创建 [config.conf created] (debug=$MODULE_DEBUG)"
 else
     ui_print "  config.conf 已保留 [config.conf preserved]"
 fi

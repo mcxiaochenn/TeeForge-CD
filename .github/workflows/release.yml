@@ -138,4 +138,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add update/release.json CHANGELOG.md
           git commit -m "release: $VERSION — update release.json and CHANGELOG.md [auto]" || true
-          git push origin master
+          git push origin HEAD:master

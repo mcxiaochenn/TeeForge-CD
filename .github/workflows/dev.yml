@@ -54,7 +54,12 @@ jobs:
           sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
           sed -i "s|^updateJson=.*|updateJson=https://teeforge.mcxiaochen.top/files/dev/update/dev.json|" module/module.prop
           sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
-          sed -i "s/^debug=.*/debug=1/" module/config.conf
+          # config.conf 已从仓库移除，dev 构建动态生成（debug=1）
+          # config.conf removed from repo, generate dynamically for dev (debug=1)
+          cat > module/config.conf << EOF
+          # TeeForge-CD User Configuration (dev build)
+          debug=1
+          EOF
 
           chmod +x build.sh
           ./build.sh

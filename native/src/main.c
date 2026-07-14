@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     /* 默认：无参数时展示信息 Default: show info if no args */
     if (!do_generate && !do_hide_bl && !do_keybox && !do_rootdetect && !do_volume && argc == 1) {
         print_banner();
-        printf("\n  v%s\n\n", TEEFORGE_VERSION);
+        printf("\n  %s\n\n", TEEFORGE_VERSION);
 
         /* 加载配置并检测 root Load config and detect root */
         config_load(config_file);

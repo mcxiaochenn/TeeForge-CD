@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-99fa1ac
+## TeeForge-CD Dev v0.2.1-62e5389
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-99fa1ac`
-- Version Code: `66`
-- Commit: `99fa1ac`
+- Version: `v0.2.1-62e5389`
+- Version Code: `67`
+- Commit: `62e5389`
 
 ### 最近提交 Recent Commits
+62e5389 chore: remove update/ from master (now on page branch)
 99fa1ac refactor: push all CDN files to page branch/files/
 0fee087 refactor: replace jsdelivr CDN with self-hosted teeforge.mcxiaochen.top
 24566cd refactor: move root detection before existing installation check
@@ -25,4 +26,3 @@ b0a6429 fix: release 推送使用 HEAD:master 兼容 detached HEAD [Fix push for
 c17b591 feat: KernelSU 自动更新 updateJson + CDN 加速 [KernelSU auto-update with CDN]
 f75ebc7 docs: 更新 TODO，标记日志系统已完成 [Update TODO, mark logging as done]
 dc566ff Update README content and formatting
-d208a6c Update README with new quotes and formatting

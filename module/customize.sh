@@ -18,6 +18,12 @@ for f in "$MODPATH/resetprop-rs"/resetprop-*; do
     [ -f "$f" ] && chmod 755 "$f"
 done
 
+# 检测 root 方式 Detect root method (安装时安装前，环境变量可用)
+ROOT_RESULT=$($MODPATH/teeforge --rootdetect --no-rootdetect 2>/dev/null)
+ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
+ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
+[ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
+
 # 检查已有安装 Check existing installation
 if [ -d "$TEEFORGE_DIR" ]; then
     if [ -f "$CONFIG_FILE" ]; then
@@ -74,12 +80,6 @@ EOF
 else
     ui_print "  config.conf 已保留 [config.conf preserved]"
 fi
-
-# 检测 root 方式并写入 sys.conf Detect root method and save to sys.conf
-ROOT_RESULT=$($MODPATH/teeforge --rootdetect --config "$CONFIG_FILE" 2>/dev/null)
-ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
-ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
-[ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
 
 # 显示预置的 resetprop-rs
 ARCH=$(getprop ro.product.cpu.abi)

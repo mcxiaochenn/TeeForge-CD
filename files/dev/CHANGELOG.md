@@ -1,11 +1,15 @@
-## TeeForge-CD Dev v0.3.2-dbc568d
+## TeeForge-CD Dev v0.3.2-39cfbd9
 
 ### 构建信息 Build Info
-- Version: `v0.3.2-dbc568d`
-- Version Code: `88`
-- Commit: `dbc568d`
+- Version: `v0.3.2-39cfbd9`
+- Version Code: `92`
+- Commit: `39cfbd9`
 
 ### 最近提交 Recent Commits
+- 39cfbd9 fix: download fallback now checks actual data, not popen return
+- 78032a2 refactor: remove shell description update from customize.sh, rely on C binary via service.sh
+- 5654f36 fix: show full ABI arch (arm64-v8a/armeabi-v7a) in description
+- b32bd1e feat: dynamic module description with status info
 - dbc568d docs: update TODO and README with latest features
 - ab3b378 docs: update CLAUDE.md — download fallback, CDN zip distribution
 - 6a82185 feat: release zip pushed to page branch, zipUrl uses self-hosted CDN
@@ -22,7 +26,3 @@
 - 1375599 fix: volume key prompt polluted by root detection output during install
 - 92f54b0 fix: dev build failed — config.conf deleted from repo, generate dynamically
 - 321835b refactor: dynamically generate config.conf at install time
-- ae41301 refactor: split config into sys.conf (auto-generated) and config.conf (user)
-- cefb4d9 fix: skip double root detection when --rootdetect flag is used
-- c8402c2 feat: root detection runs every execution, saves to config; --no-rootdetect to skip
-- 4034c05 fix: changelog commit list formatting — each commit on its own line

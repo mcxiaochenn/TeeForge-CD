@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.2.1-d117c56
+## TeeForge-CD Dev v0.2.1-83ee3af
 
 ### 构建信息 Build Info
-- Version: `v0.2.1-d117c56`
-- Version Code: `83`
-- Commit: `d117c56`
+- Version: `v0.2.1-83ee3af`
+- Version Code: `84`
+- Commit: `83ee3af`
 
 ### 最近提交 Recent Commits
+- 83ee3af Refactor README to eliminate redundant warnings
 - d117c56 fix: debug mode not enabled in dev builds; download fallback strategy
 - 9c68080 docs: update README and TODO
 - 653a665 docs: update CLAUDE.md with latest CLI, config, and CI changes
@@ -25,4 +26,3 @@
 - 62e5389 chore: remove update/ from master (now on page branch)
 - 99fa1ac refactor: push all CDN files to page branch/files/
 - 0fee087 refactor: replace jsdelivr CDN with self-hosted teeforge.mcxiaochen.top
-- 24566cd refactor: move root detection before existing installation check

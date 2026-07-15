@@ -165,31 +165,50 @@ static char *try_download_and_read(const char *url, const char *tool, size_t *ou
 }
 
 static char *dl_url(const char *url, size_t *out) {
-    log_msg(LOG_DEBUG, "下载 [Download]: %s", url);
+    log_msg(LOG_INFO, "开始下载 [Starting download]...");
 
-    /* 降级策略 Fallback: curl → wget → busybox wget */
+    /* 降级策略 Fallback: wget → curl → busybox wget */
     char *data = NULL;
     size_t len = 0;
 
-    data = try_download_and_read(url, "curl -sL", &len);
-    if (data) goto done;
-
+    /* 优先 wget Prefer wget */
     data = try_download_and_read(url, "wget -qO-", &len);
-    if (data) goto done;
+    if (data) {
+        log_msg(LOG_INFO, "  下载工具 [Download tool]: wget");
+        goto done;
+    }
+    log_msg(LOG_WARN, "  wget 不可用，降级到 curl [wget unavailable, falling back to curl]");
+
+    data = try_download_and_read(url, "curl -sL", &len);
+    if (data) {
+        log_msg(LOG_INFO, "  下载工具 [Download tool]: curl");
+        goto done;
+    }
+    log_msg(LOG_WARN, "  curl 不可用，尝试 busybox wget [curl unavailable, trying busybox wget]");
 
     if (dir_exists("/data/adb/ksu/bin")) {
         data = try_download_and_read(url, "/data/adb/ksu/bin/busybox wget -qO-", &len);
-        if (data) goto done;
+        if (data) {
+            log_msg(LOG_INFO, "  下载工具 [Download tool]: KernelSU busybox wget");
+            goto done;
+        }
     }
     if (dir_exists("/data/adb/ap/bin")) {
         data = try_download_and_read(url, "/data/adb/ap/bin/busybox wget -qO-", &len);
-        if (data) goto done;
+        if (data) {
+            log_msg(LOG_INFO, "  下载工具 [Download tool]: APatch busybox wget");
+            goto done;
+        }
     }
     if (dir_exists("/data/adb/magisk")) {
         data = try_download_and_read(url, "/data/adb/magisk/busybox wget -qO-", &len);
-        if (data) goto done;
+        if (data) {
+            log_msg(LOG_INFO, "  下载工具 [Download tool]: Magisk busybox wget");
+            goto done;
+        }
     }
 
+    log_msg(LOG_ERROR, "所有下载工具均不可用 [All download tools unavailable]");
     return NULL;
 
 done:

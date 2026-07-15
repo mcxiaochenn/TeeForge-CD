@@ -110,29 +110,34 @@ static int is_executable(const char *path) {
     return access(path, X_OK) == 0;
 }
 
+/* 标准 resetprop 固定路径 Standard resetprop fixed paths */
+static const char *std_resetprop_paths[] = {
+    "/data/adb/ksu/bin/resetprop",
+    "/data/adb/ap/bin/resetprop",
+    "/data/adb/magisk/resetprop",
+    NULL
+};
+
+/* 查找可用的标准 resetprop Find available standard resetprop */
+static const char *find_std_resetprop(void) {
+    for (int i = 0; std_resetprop_paths[i] != NULL; i++) {
+        if (is_executable(std_resetprop_paths[i])) return std_resetprop_paths[i];
+    }
+    return NULL;
+}
+
 /* 检测 resetprop 工具类型并缓存命令路径 Detect and cache resetprop command */
 static void detect_prop_tool(void) {
     /* 用户配置优先 User config takes priority */
     if (strcmp(g_config.prop_tool, "standard") == 0) {
         g_prop_tool = PROP_TOOL_STANDARD;
-        /* 标准 resetprop 降级策略 Standard resetprop fallback */
-        const char *std_paths[] = {
-            "/data/adb/ksu/bin/resetprop",
-            "/data/adb/ap/bin/resetprop",
-            "/data/adb/magisk/resetprop",
-            NULL
-        };
-        /* 尝试固定路径（PATH 在 popen/system 中不一定可用） */
-        for (int i = 0; std_paths[i] != NULL; i++) {
-            if (file_exists(std_paths[i]) && is_executable(std_paths[i])) {
-                g_resetprop_cmd = std_paths[i];
-                log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: %s", g_resetprop_cmd);
-                return;
-            }
+        const char *found = find_std_resetprop();
+        if (found) {
+            g_resetprop_cmd = found;
+        } else {
+            g_resetprop_cmd = "resetprop";
         }
-        /* 回退 PATH 中的 resetprop */
-        g_resetprop_cmd = "resetprop";
-        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: PATH");
+        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: %s", g_resetprop_cmd);
         return;
     }
 
@@ -184,7 +189,7 @@ static void detect_prop_tool(void) {
     }
 
     /* 3. 系统 PATH */
-    int ret = system("command -v resetprop-rs > /dev/null 2>&1");
+    int ret = system("which resetprop-rs > /dev/null 2>&1");
     if (ret == 0) {
         g_prop_tool = PROP_TOOL_RS;
         g_resetprop_cmd = "resetprop-rs";
@@ -194,21 +199,13 @@ static void detect_prop_tool(void) {
 
     /* rs 检测全部失败，降级标准 resetprop All rs detection failed, fallback to standard */
     g_prop_tool = PROP_TOOL_STANDARD;
-    const char *std_paths[] = {
-        "/data/adb/ksu/bin/resetprop",
-        "/data/adb/ap/bin/resetprop",
-        "/data/adb/magisk/resetprop",
-        NULL
-    };
-    for (int i = 0; std_paths[i] != NULL; i++) {
-        if (file_exists(std_paths[i]) && is_executable(std_paths[i])) {
-            g_resetprop_cmd = std_paths[i];
-            log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 [rs not found, fallback]: %s", std_paths[i]);
-            return;
-        }
+    const char *found = find_std_resetprop();
+    if (found) {
+        g_resetprop_cmd = found;
+    } else {
+        g_resetprop_cmd = "resetprop";
     }
-    g_resetprop_cmd = "resetprop";
-    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 PATH resetprop [rs not found, fallback to PATH]");
+    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 [rs not found, fallback]: %s", g_resetprop_cmd);
 }
 
 /* 获取 resetprop 命令路径（已缓存）Get resetprop command path (cached) */

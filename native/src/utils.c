@@ -73,6 +73,7 @@ static void config_parse_file(const char *path) {
             g_config.blhide_compact = atoi(val);
         } else if (strcmp(key, "prop_tool") == 0) {
             strncpy(g_config.prop_tool, val, 15);
+            g_config.prop_tool[15] = '\0';
         }
     }
 

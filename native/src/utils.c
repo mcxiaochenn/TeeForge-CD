@@ -31,18 +31,25 @@ static void config_parse_file(const char *path) {
 
         if (strcmp(key, "packages_xml") == 0) {
             strncpy(g_config.packages_xml, val, MAX_PATH_LEN - 1);
+            g_config.packages_xml[MAX_PATH_LEN - 1] = '\0';
         } else if (strcmp(key, "target_txt") == 0) {
             strncpy(g_config.target_txt, val, MAX_PATH_LEN - 1);
+            g_config.target_txt[MAX_PATH_LEN - 1] = '\0';
         } else if (strcmp(key, "keybox_dir") == 0) {
             strncpy(g_config.keybox_dir, val, MAX_PATH_LEN - 1);
+            g_config.keybox_dir[MAX_PATH_LEN - 1] = '\0';
         } else if (strcmp(key, "sources_conf") == 0) {
             strncpy(g_config.sources_conf, val, MAX_PATH_LEN - 1);
+            g_config.sources_conf[MAX_PATH_LEN - 1] = '\0';
         } else if (strcmp(key, "log_dir") == 0) {
             strncpy(g_config.log_dir, val, MAX_PATH_LEN - 1);
+            g_config.log_dir[MAX_PATH_LEN - 1] = '\0';
         } else if (strcmp(key, "root_method") == 0) {
             strncpy(g_config.root_method, val, 63);
+            g_config.root_method[63] = '\0';
         } else if (strcmp(key, "root_version") == 0) {
             strncpy(g_config.root_version, val, 31);
+            g_config.root_version[31] = '\0';
         } else if (strcmp(key, "debug") == 0) {
             g_config.debug = atoi(val);
         } else if (strcmp(key, "blhide") == 0) {
@@ -158,6 +165,7 @@ static void log_open_file(void) {
     /* Filename by date, not time (reuse same file per boot session) */
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
+    if (!tm) return;
 
     snprintf(log_file_path, sizeof(log_file_path),
              "%s/teeforge_%04d%02d%02d.log",
@@ -186,7 +194,11 @@ void log_msg(log_level_t level, const char *fmt, ...) {
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
     char timebuf[32];
-    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
+    if (tm) {
+        strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
+    } else {
+        snprintf(timebuf, sizeof(timebuf), "0000-00-00 00:00:00");
+    }
 
     /* 输出到 stderr Output to stderr */
     fprintf(stderr, "[%s] [%s] ", timebuf, level_str[level]);
@@ -335,6 +347,10 @@ char *file_mtime_str(const char *path, char *buf, size_t len) {
         return buf;
     }
     struct tm *tm = localtime(&st.st_mtime);
+    if (!tm) {
+        snprintf(buf, len, "N/A");
+        return buf;
+    }
     strftime(buf, len, "%Y-%m-%d %H:%M", tm);
     return buf;
 }

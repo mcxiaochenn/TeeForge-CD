@@ -76,8 +76,13 @@ fi
 echo -e "${GREEN}版本 [Version]: $VERSION (code: $VERSION_CODE)${NC}"
 
 # 动态写入 module.prop Dynamically write module.prop
-sed -i "s/^version=.*/version=$VERSION/" module/module.prop
-sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+if [ "$HOST_OS" = "darwin" ]; then
+    sed -i '' "s/^version=.*/version=$VERSION/" module/module.prop
+    sed -i '' "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+else
+    sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+    sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+fi
 
 # Source files 源文件
 SOURCES="$SRC_DIR/main.c $SRC_DIR/target.c $SRC_DIR/utils.c $SRC_DIR/blhide.c $SRC_DIR/keybox.c $SRC_DIR/volume.c $SRC_DIR/rootdetect.c"

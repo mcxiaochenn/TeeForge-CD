@@ -20,6 +20,9 @@ export NDK="/path/to/android-ndk"
 # 仅构建二进制 [Build binary only]
 ./build.sh
 
+# 构建并推送到设备 [Build and push to device via adb]
+./build.sh --push
+
 # 构建并打包 Magisk 模块 .zip [Build and package Magisk module]
 ./package.sh
 
@@ -133,6 +136,23 @@ prop_tool=standard              # 安装时选择 install-time choice
 - 错误处理：记录日志，永不崩溃，优雅降级
 - 二进制体积优先：静态链接，避免大依赖
 - **连接设备是用户主力机，调试前必须获得用户同意**
+
+## Gotchas
+
+- **`system()` 返回值是 `waitpid` 格式**：`(exit_code << 8) | signal`。32256 = 126 << 8 表示 "命令存在但不可执行"（权限问题），不是 resetprop 本身的错误。遇到非零返回值时先右移 8 位取真实 exit code。
+- **`set_perm_recursive` 会重置权限**：Magisk 的 `set_perm_recursive` 必须在所有 `chmod` 之后调用，可执行二进制需要单独 `set_perm` 再次设置 755。
+- **Android 设备没有 openssl**：涉及哈希的 shell 命令只能用 `sha256sum`（toybox 自带），不能用 `openssl`。
+- **`temp/Integrity-Box/`** 是上游参考项目的本地克隆（gitignored），用于对照解密实现和属性列表，不要提交。
+
+## Project Directories
+
+- `native/` — C 源码和头文件
+- `module/` — Magisk 模块框架（shell 脚本、module.prop、resetprop-rs 二进制）
+- `config/` — 默认 sources.conf
+- `keybox/` — 上游同步状态文件（upstream_hash、month、key-status 等）
+- `docs/` — 架构文档、反思小结、任务清单
+- `out/` — 构建产物（gitignored）
+- `temp/` — 本地参考项目（gitignored）
 
 ## Source Files
 

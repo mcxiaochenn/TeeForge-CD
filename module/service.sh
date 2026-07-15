@@ -13,10 +13,10 @@ done
 sleep 5
 
 # 更新模块描述 Update module description
-$MODDIR/teeforge --update-desc
+"$MODDIR/teeforge" --update-desc
 
 # 执行弱隐 BL Execute weak bootloader hiding
-$MODDIR/teeforge --hide-bl
+"$MODDIR/teeforge" --hide-bl
 
 # 生成 target.txt Generate target.txt
-$MODDIR/teeforge --generate
+"$MODDIR/teeforge" --generate

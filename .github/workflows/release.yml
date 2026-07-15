@@ -29,6 +29,11 @@ jobs:
           unzip -q /tmp/ndk.zip -d /tmp/
           echo "NDK=/tmp/android-ndk-r27d" >> $GITHUB_ENV
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Determine version
         id: version
         run: |

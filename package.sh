@@ -35,22 +35,38 @@ if [ $CLEAN -eq 1 ]; then
 fi
 
 # Step 1: Build binary 构建二进制
-echo -e "${GREEN}步骤 1/4: 构建二进制 [Step 1/4: Building binary]...${NC}"
+echo -e "${GREEN}步骤 1/5: 构建二进制 [Step 1/5: Building binary]...${NC}"
 "$SCRIPT_DIR/build.sh"
 if [ ! -f "$OUT_DIR/teeforge" ]; then
     echo -e "${RED}错误: 构建失败 [Error: Build failed]${NC}"
     exit 1
 fi
 
-# Step 2: Read version 读取版本
-echo -e "${GREEN}步骤 2/4: 读取版本信息 [Step 2/4: Reading version]...${NC}"
+# Step 2: Build WebUI 构建 WebUI
+echo -e "${GREEN}步骤 2/5: 构建 WebUI [Step 2/5: Building WebUI]...${NC}"
+WEBROOT_SRC="$SCRIPT_DIR/webroot"
+if [ -f "$WEBROOT_SRC/package.json" ] && command -v node &> /dev/null; then
+    echo -e "  Node.js 版本 [Node.js version]: $(node -v)"
+    (cd "$WEBROOT_SRC" && npm ci --ignore-scripts 2>&1 | tail -1 && npm run build 2>&1)
+    if [ -d "$MODULE_SRC/webroot" ]; then
+        WEBUI_SIZE=$(du -sh "$MODULE_SRC/webroot" | cut -f1)
+        echo -e "  WebUI 构建完成 [WebUI built]: ${WEBUI_SIZE}"
+    else
+        echo -e "${YELLOW}  警告: WebUI 构建产物未找到 [Warning: WebUI build output not found]${NC}"
+    fi
+else
+    echo -e "${YELLOW}  跳过 WebUI 构建（node 或 package.json 不可用）[Skipping WebUI build (node or package.json unavailable)]${NC}"
+fi
+
+# Step 3: Read version 读取版本
+echo -e "${GREEN}步骤 3/5: 读取版本信息 [Step 3/5: Reading version]...${NC}"
 VERSION=$(grep "^version=" "$MODULE_SRC/module.prop" | cut -d'=' -f2)
 VERSION_CODE=$(grep "^versionCode=" "$MODULE_SRC/module.prop" | cut -d'=' -f2)
 MODULE_ID=$(grep "^id=" "$MODULE_SRC/module.prop" | cut -d'=' -f2)
 echo -e "  版本 [Version]: ${VERSION} (${VERSION_CODE})"
 
-# Step 3: Prepare module directory 准备模块目录
-echo -e "${GREEN}步骤 3/4: 准备模块目录 [Step 3/4: Preparing module directory]...${NC}"
+# Step 4: Prepare module directory 准备模块目录
+echo -e "${GREEN}步骤 4/5: 准备模块目录 [Step 4/5: Preparing module directory]...${NC}"
 rm -rf "$MODULE_DIR"
 mkdir -p "$MODULE_DIR"
 
@@ -68,8 +84,8 @@ chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
 echo -e "  模块目录 [Module directory]: $MODULE_DIR"
 
-# Step 4: Create zip 创建压缩包
-echo -e "${GREEN}步骤 4/4: 创建安装包 [Step 4/4: Creating zip]...${NC}"
+# Step 5: Create zip 创建压缩包
+echo -e "${GREEN}步骤 5/5: 创建安装包 [Step 5/5: Creating zip]...${NC}"
 ZIP_NAME="${MODULE_ID}-${VERSION}.zip"
 ZIP_PATH="$OUT_DIR/$ZIP_NAME"
 

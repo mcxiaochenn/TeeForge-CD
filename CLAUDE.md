@@ -106,12 +106,15 @@ prop_tool=standard              # 安装时选择 install-time choice
 
 - **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（G/M/T/A/P 等），运行时拼合解密。源码备份在 `backup/`（gitignored）
   - 解密流程：下载 → base64 解码 → XOR(SHA256(pubkey)) → 10x base64 → hex decode → ROT13 → XML
-  - 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
-  - 下载降级策略：`curl -sL` → `wget -qO-` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
+  - base64/hex 解码为纯 C 实现（`base64_decode()`/`hex_decode()`），无临时文件无 fork
+  - SHA256 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
+  - 下载降级策略：`wget -qO-` → `curl -sL` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
+  - 函数拆分：`keybox_build_urls()`、`keybox_decrypt()`、`keybox_compute_sha256()`、`keybox_write()`
   - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
 - **blhide.c**: 安装时选择 resetprop 工具（传统 / resetprop-rs），选择保存到 sys.conf `prop_tool=standard|rs`
   - 传统方式降级策略：`resetprop`（PATH）→ `/data/adb/ksu/bin/resetprop` → `/data/adb/ap/bin/resetprop` → `/data/adb/magisk/resetprop`
   - resetprop-rs：环境变量 → 模块目录 → 系统 PATH，使用 `--stealth`、`--compact`、`--delete` 参数
+  - 批量执行：`bl_build_script()` 将所有属性命令拼成一个 shell 脚本，单次 `system()` 执行（非逐条 fork）
   - 功能开关：`blhide`（总开关）+ 10 个类别开关（boot/security/vendor/oem/secureboot/recovery/realme/developer/selinux/virtual）+ delete + compact，用户配置文件控制，默认全开
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）

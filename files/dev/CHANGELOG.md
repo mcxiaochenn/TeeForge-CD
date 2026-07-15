@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.4.1-f661b39
+## TeeForge-CD Dev v0.4.1-eaad5c7
 
 ### 构建信息 Build Info
-- Version: `v0.4.1-f661b39`
-- Version Code: `112`
-- Commit: `f661b39`
+- Version: `v0.4.1-eaad5c7`
+- Version Code: `113`
+- Commit: `eaad5c7`
 
 ### 最近提交 Recent Commits
+- eaad5c7 fix(webui): set cwd for ksu.exec so teeforge finds ./sys.conf
 - f661b39 fix(webui): spawn→exec, lang sync, glassmorphism theme overhaul
 - c99311f ci: integrate WebUI build into package.sh and CI workflows
 - a02a932 feat(webui): add KernelSU WebUI with Astro, i18n, dual themes
@@ -25,4 +26,3 @@
 - 3c38e1d docs: fix CLAUDE.md and README.md review findings
 - f5e8b5e fix: medium C code issues from review
 - b7ef71b fix(ci): keybox-sync critical issues
-- cdd225f fix: description retry root detection, fix keybox path, add kaomoji

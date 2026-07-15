@@ -29,64 +29,79 @@ typedef enum {
 
 static prop_tool_t g_prop_tool = PROP_TOOL_STANDARD;
 
+/* 弱隐 BL 属性类别 Weak BL hiding property categories */
+typedef enum {
+    BLCAT_BOOT       = 0,
+    BLCAT_SECURITY   = 1,
+    BLCAT_VENDOR     = 2,
+    BLCAT_OEM        = 3,
+    BLCAT_SECUREBOOT = 4,
+    BLCAT_REALME     = 5,
+    BLCAT_RECOVERY   = 6,
+    BLCAT_DEVELOPER  = 7,
+    BLCAT_SELINUX    = 8,
+    BLCAT_VIRTUAL    = 9,
+} bl_category_t;
+
 /* resetprop 属性列表 Property list for resetprop */
 typedef struct {
     const char *key;
     const char *value;
+    bl_category_t category;
 } prop_entry_t;
 
 static const prop_entry_t bl_props[] = {
     /* Boot 状态 Boot state */
-    {"ro.boot.vbmeta.device_state",     "locked"},
-    {"ro.boot.verifiedbootstate",       "green"},
-    {"ro.boot.flash.locked",            "1"},
-    {"ro.boot.veritymode",              "enforcing"},
-    {"ro.boot.warranty_bit",            "0"},
-    {"ro.warranty_bit",                 "0"},
+    {"ro.boot.vbmeta.device_state",     "locked",           BLCAT_BOOT},
+    {"ro.boot.verifiedbootstate",       "green",            BLCAT_BOOT},
+    {"ro.boot.flash.locked",            "1",                BLCAT_BOOT},
+    {"ro.boot.veritymode",              "enforcing",        BLCAT_BOOT},
+    {"ro.boot.warranty_bit",            "0",                BLCAT_BOOT},
+    {"ro.warranty_bit",                 "0",                BLCAT_BOOT},
 
     /* 安全属性 Security properties */
-    {"ro.debuggable",                   "0"},
-    {"ro.force.debuggable",             "0"},
-    {"ro.secure",                       "1"},
-    {"ro.adb.secure",                   "1"},
-    {"ro.build.type",                   "user"},
-    {"ro.build.tags",                   "release-keys"},
+    {"ro.debuggable",                   "0",                BLCAT_SECURITY},
+    {"ro.force.debuggable",             "0",                BLCAT_SECURITY},
+    {"ro.secure",                       "1",                BLCAT_SECURITY},
+    {"ro.adb.secure",                   "1",                BLCAT_SECURITY},
+    {"ro.build.type",                   "user",             BLCAT_SECURITY},
+    {"ro.build.tags",                   "release-keys",     BLCAT_SECURITY},
 
     /* Vendor 属性 Vendor properties */
-    {"ro.vendor.boot.warranty_bit",     "0"},
-    {"ro.vendor.warranty_bit",          "0"},
-    {"vendor.boot.vbmeta.device_state", "locked"},
-    {"vendor.boot.verifiedbootstate",   "green"},
+    {"ro.vendor.boot.warranty_bit",     "0",                BLCAT_VENDOR},
+    {"ro.vendor.warranty_bit",          "0",                BLCAT_VENDOR},
+    {"vendor.boot.vbmeta.device_state", "locked",           BLCAT_VENDOR},
+    {"vendor.boot.verifiedbootstate",   "green",            BLCAT_VENDOR},
 
     /* OEM 解锁 OEM unlock */
-    {"sys.oem_unlock_allowed",          "0"},
-    {"ro.oem_unlock_supported",         "0"},
+    {"sys.oem_unlock_allowed",          "0",                BLCAT_OEM},
+    {"ro.oem_unlock_supported",         "0",                BLCAT_OEM},
 
     /* 安全启动 Secure boot */
-    {"ro.secureboot.lockstate",         "locked"},
+    {"ro.secureboot.lockstate",         "locked",           BLCAT_SECUREBOOT},
 
     /* Realme 设备 Realme devices */
-    {"ro.boot.realmebootstate",         "green"},
-    {"ro.boot.realme.lockstate",        "1"},
+    {"ro.boot.realmebootstate",         "green",            BLCAT_REALME},
+    {"ro.boot.realme.lockstate",        "1",                BLCAT_REALME},
 
     /* Recovery 模式隐藏 Recovery mode hiding (from Integrity-Box) */
-    {"ro.bootmode",                     "unknown"},
-    {"ro.boot.bootmode",                "unknown"},
-    {"vendor.boot.bootmode",            "unknown"},
+    {"ro.bootmode",                     "unknown",          BLCAT_RECOVERY},
+    {"ro.boot.bootmode",                "unknown",          BLCAT_RECOVERY},
+    {"vendor.boot.bootmode",            "unknown",          BLCAT_RECOVERY},
 
     /* Developer 选项 Developer options (from Integrity-Box) */
-    {"persist.sys.developer_options",   "0"},
-    {"persist.sys.dev_mode",            "0"},
-    {"persist.sys.debuggable",          "0"},
+    {"persist.sys.developer_options",   "0",                BLCAT_DEVELOPER},
+    {"persist.sys.dev_mode",            "0",                BLCAT_DEVELOPER},
+    {"persist.sys.debuggable",          "0",                BLCAT_DEVELOPER},
 
     /* SELinux (from Integrity-Box) */
-    {"ro.boot.selinux",                 "enforcing"},
+    {"ro.boot.selinux",                 "enforcing",        BLCAT_SELINUX},
 
     /* 虚拟设备 Virtual device (from Integrity-Box) */
-    {"ro.hardware.virtual_device",      "0"},
+    {"ro.hardware.virtual_device",      "0",                BLCAT_VIRTUAL},
 
     /* 结束标记 End marker */
-    {NULL, NULL}
+    {NULL, NULL, 0}
 };
 
 /* 检查文件可执行 Check if file is executable */
@@ -237,6 +252,25 @@ static int run_prop_compact(void) {
     return ret;
 }
 
+/* 检查属性类别是否启用 Check if property category is enabled */
+static int is_category_enabled(bl_category_t cat) {
+    if (!g_config.blhide) return 0;  /* 总开关关闭 Master switch off */
+
+    switch (cat) {
+        case BLCAT_BOOT:       return g_config.blhide_boot;
+        case BLCAT_SECURITY:   return g_config.blhide_security;
+        case BLCAT_VENDOR:     return g_config.blhide_vendor;
+        case BLCAT_OEM:        return g_config.blhide_oem;
+        case BLCAT_SECUREBOOT: return g_config.blhide_secureboot;
+        case BLCAT_REALME:     return g_config.blhide_realme;
+        case BLCAT_RECOVERY:   return g_config.blhide_recovery;
+        case BLCAT_DEVELOPER:  return g_config.blhide_developer;
+        case BLCAT_SELINUX:    return g_config.blhide_selinux;
+        case BLCAT_VIRTUAL:    return g_config.blhide_virtual;
+        default:               return 1;
+    }
+}
+
 /* 需要删除的属性 Properties to delete (from Integrity-Box) */
 static const char *del_props[] = {
     "ro.build.selinux",  /* Integrity-Box: 删除而非覆盖 Delete instead of override */
@@ -263,9 +297,17 @@ int bl_hide(void) {
 
     int success = 0;
     int fail = 0;
+    int skipped = 0;
 
     /* 遍历属性列表 Iterate property list */
     for (int i = 0; bl_props[i].key != NULL; i++) {
+        /* 检查类别开关 Check category toggle */
+        if (!is_category_enabled(bl_props[i].category)) {
+            skipped++;
+            log_msg(LOG_DEBUG, "跳过属性 [Skipped property] (类别已禁用 [category disabled]): %s", bl_props[i].key);
+            continue;
+        }
+
         if (run_resetprop(bl_props[i].key, bl_props[i].value) == 0) {
             success++;
         } else {
@@ -273,16 +315,24 @@ int bl_hide(void) {
         }
     }
 
-    /* 删除敏感属性 Delete sensitive properties */
-    for (int i = 0; del_props[i] != NULL; i++) {
-        log_msg(LOG_DEBUG, "删除属性 [Delete property]: %s", del_props[i]);
-        run_prop_delete(del_props[i]);
+    /* 删除敏感属性 Delete sensitive properties (需 blhide_delete 开关) */
+    if (g_config.blhide && g_config.blhide_delete) {
+        for (int i = 0; del_props[i] != NULL; i++) {
+            log_msg(LOG_DEBUG, "删除属性 [Delete property]: %s", del_props[i]);
+            run_prop_delete(del_props[i]);
+        }
+    } else {
+        log_msg(LOG_DEBUG, "跳过属性删除 [Skipped property deletion]");
     }
 
-    /* 压缩属性内存 Compact property memory */
-    run_prop_compact();
+    /* 压缩属性内存 Compact property memory (需 blhide_compact 开关) */
+    if (g_config.blhide && g_config.blhide_compact) {
+        run_prop_compact();
+    } else {
+        log_msg(LOG_DEBUG, "跳过内存整理 [Skipped compact]");
+    }
 
-    log_msg(LOG_INFO, "弱隐 BL 完成 [Weak bootloader hiding done]: %d 成功 [success], %d 失败 [fail]", success, fail);
+    log_msg(LOG_INFO, "弱隐 BL 完成 [Weak bootloader hiding done]: %d 成功 [success], %d 失败 [fail], %d 跳过 [skipped]", success, fail, skipped);
 
     return (fail > 0) ? -1 : 0;
 }

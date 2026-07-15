@@ -45,10 +45,53 @@ static void config_parse_file(const char *path) {
             strncpy(g_config.root_version, val, 31);
         } else if (strcmp(key, "debug") == 0) {
             g_config.debug = atoi(val);
+        } else if (strcmp(key, "blhide") == 0) {
+            g_config.blhide = atoi(val);
+        } else if (strcmp(key, "blhide_boot") == 0) {
+            g_config.blhide_boot = atoi(val);
+        } else if (strcmp(key, "blhide_security") == 0) {
+            g_config.blhide_security = atoi(val);
+        } else if (strcmp(key, "blhide_vendor") == 0) {
+            g_config.blhide_vendor = atoi(val);
+        } else if (strcmp(key, "blhide_oem") == 0) {
+            g_config.blhide_oem = atoi(val);
+        } else if (strcmp(key, "blhide_secureboot") == 0) {
+            g_config.blhide_secureboot = atoi(val);
+        } else if (strcmp(key, "blhide_realme") == 0) {
+            g_config.blhide_realme = atoi(val);
+        } else if (strcmp(key, "blhide_recovery") == 0) {
+            g_config.blhide_recovery = atoi(val);
+        } else if (strcmp(key, "blhide_developer") == 0) {
+            g_config.blhide_developer = atoi(val);
+        } else if (strcmp(key, "blhide_selinux") == 0) {
+            g_config.blhide_selinux = atoi(val);
+        } else if (strcmp(key, "blhide_virtual") == 0) {
+            g_config.blhide_virtual = atoi(val);
+        } else if (strcmp(key, "blhide_delete") == 0) {
+            g_config.blhide_delete = atoi(val);
+        } else if (strcmp(key, "blhide_compact") == 0) {
+            g_config.blhide_compact = atoi(val);
         }
     }
 
     fclose(f);
+}
+
+/* 设置弱隐 BL 默认值（全开） Set BL hide defaults (all on) */
+static void blhide_set_defaults(config_t *cfg) {
+    cfg->blhide = 1;
+    cfg->blhide_boot = 1;
+    cfg->blhide_security = 1;
+    cfg->blhide_vendor = 1;
+    cfg->blhide_oem = 1;
+    cfg->blhide_secureboot = 1;
+    cfg->blhide_realme = 1;
+    cfg->blhide_recovery = 1;
+    cfg->blhide_developer = 1;
+    cfg->blhide_selinux = 1;
+    cfg->blhide_virtual = 1;
+    cfg->blhide_delete = 1;
+    cfg->blhide_compact = 1;
 }
 
 int config_load(const char *path) {
@@ -61,6 +104,7 @@ int config_load(const char *path) {
     strncpy(g_config.root_method, "Unknown", 63);
     strncpy(g_config.root_version, "unknown", 31);
     g_config.debug = 0;
+    blhide_set_defaults(&g_config);
 
     /* 加载 sys.conf（系统配置）Load sys.conf (system config) */
     config_parse_file(SYS_CONFIG_FILE);

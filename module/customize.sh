@@ -82,6 +82,22 @@ if [ ! -f "$CONFIG_FILE" ]; then
 # 0: 关闭 Off (默认 default)
 # 1: 开启 On（日志写入文件 Logs written to file）
 debug=$MODULE_DEBUG
+
+# 弱隐 BL 开关 Weak BL Hiding Switches
+# 0: 关闭 Off  1: 开启 On (默认 default)
+blhide=1
+blhide_boot=1
+blhide_security=1
+blhide_vendor=1
+blhide_oem=1
+blhide_secureboot=1
+blhide_realme=1
+blhide_recovery=1
+blhide_developer=1
+blhide_selinux=1
+blhide_virtual=1
+blhide_delete=1
+blhide_compact=1
 EOF
     ui_print "  config.conf 已创建 [config.conf created] (debug=$MODULE_DEBUG)"
 else

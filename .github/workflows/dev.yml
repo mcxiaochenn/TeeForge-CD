@@ -56,10 +56,23 @@ jobs:
           sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
           # config.conf 已从仓库移除，dev 构建动态生成（debug=1）
           # config.conf removed from repo, generate dynamically for dev (debug=1)
-          cat > module/config.conf << EOF
+          cat > module/config.conf << 'OUTER'
           # TeeForge-CD User Configuration (dev build)
           debug=1
-          EOF
+          blhide=1
+          blhide_boot=1
+          blhide_security=1
+          blhide_vendor=1
+          blhide_oem=1
+          blhide_secureboot=1
+          blhide_realme=1
+          blhide_recovery=1
+          blhide_developer=1
+          blhide_selinux=1
+          blhide_virtual=1
+          blhide_delete=1
+          blhide_compact=1
+          OUTER
 
           chmod +x build.sh
           ./build.sh

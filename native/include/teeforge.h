@@ -32,6 +32,21 @@ typedef struct {
     char root_method[64];              /* Root 方式 Root method */
     char root_version[32];             /* Root 版本 Root version */
     int debug;                         /* 调试开关 Debug switch */
+
+    /* 弱隐 BL 开关 Weak BL hiding switches */
+    int blhide;                        /* 总开关 Master switch (默认 1) */
+    int blhide_boot;                   /* Boot 状态 Boot state */
+    int blhide_security;               /* 安全属性 Security properties */
+    int blhide_vendor;                 /* Vendor 属性 Vendor properties */
+    int blhide_oem;                    /* OEM 解锁 OEM unlock */
+    int blhide_secureboot;             /* 安全启动 Secure boot */
+    int blhide_realme;                 /* Realme 设备 Realme devices */
+    int blhide_recovery;               /* Recovery 模式 Recovery mode */
+    int blhide_developer;              /* Developer 选项 Developer options */
+    int blhide_selinux;                /* SELinux 伪装 SELinux spoofing */
+    int blhide_virtual;                /* 虚拟设备 Virtual device */
+    int blhide_delete;                 /* 属性删除 Property deletion */
+    int blhide_compact;                /* 内存整理 Compact memory */
 } config_t;
 
 /* 全局配置实例 Global config instance */

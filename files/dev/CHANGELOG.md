@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.4.0-636c3cd
+## TeeForge-CD Dev v0.4.1-c99311f
 
 ### 构建信息 Build Info
-- Version: `v0.4.0-636c3cd`
-- Version Code: `108`
-- Commit: `636c3cd`
+- Version: `v0.4.1-c99311f`
+- Version Code: `111`
+- Commit: `c99311f`
 
 ### 最近提交 Recent Commits
+- c99311f ci: integrate WebUI build into package.sh and CI workflows
+- a02a932 feat(webui): add KernelSU WebUI with Astro, i18n, dual themes
+- c501752 docs: update CLAUDE.md with refactored keybox/blhide implementation details
 - 636c3cd fix(blhide): move is_category_enabled and del_props before bl_build_script
 - 441e03c fix(keybox): reorder download fallback wget→curl, add user-facing logs
 - e4e3451 fix: code review findings — security, correctness, performance
@@ -23,6 +26,3 @@
 - b7ef71b fix(ci): keybox-sync critical issues
 - cdd225f fix: description retry root detection, fix keybox path, add kaomoji
 - 39cfbd9 fix: download fallback now checks actual data, not popen return
-- 78032a2 refactor: remove shell description update from customize.sh, rely on C binary via service.sh
-- 5654f36 fix: show full ABI arch (arm64-v8a/armeabi-v7a) in description
-- b32bd1e feat: dynamic module description with status info

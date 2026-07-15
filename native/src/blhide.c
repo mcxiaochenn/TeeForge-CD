@@ -111,7 +111,15 @@ static int is_executable(const char *path) {
 
 /* 检测 resetprop 工具类型 Detect resetprop tool type */
 static void detect_prop_tool(void) {
-    log_msg(LOG_INFO, "检测 resetprop 工具 [Detecting resetprop tool]...");
+    /* 用户配置优先 User config takes priority */
+    if (strcmp(g_config.prop_tool, "standard") == 0) {
+        g_prop_tool = PROP_TOOL_STANDARD;
+        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]");
+        log_msg(LOG_INFO, "  模式 [Mode]: normal");
+        return;
+    }
+
+    log_msg(LOG_INFO, "检测 resetprop-rs [Detecting resetprop-rs]...");
 
     /* 1. 环境变量 Environment variable */
     const char *env_path = getenv("RESETPROP_RS");
@@ -166,9 +174,9 @@ static void detect_prop_tool(void) {
         return;
     }
 
+    /* rs 检测全部失败，降级标准 resetprop All rs detection failed, fallback to standard */
     g_prop_tool = PROP_TOOL_STANDARD;
-    log_msg(LOG_INFO, "  使用标准 resetprop [Using standard resetprop]");
-    log_msg(LOG_INFO, "  模式 [Mode]: normal");
+    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级标准 resetprop [rs not found, falling back to standard]");
 }
 
 /* 获取 resetprop 命令路径 Get resetprop command path */
@@ -192,6 +200,22 @@ static const char *get_resetprop_cmd(void) {
 
         return "resetprop-rs";
     }
+
+    /* 标准 resetprop 降级策略 Standard resetprop fallback */
+    /* 直接执行（PATH 中已有，root 管理器自动加载） */
+    if (system("resetprop --help > /dev/null 2>&1") == 0) return "resetprop";
+
+    /* 固定路径降级 Fixed path fallback */
+    const char *std_paths[] = {
+        "/data/adb/ksu/bin/resetprop",
+        "/data/adb/ap/bin/resetprop",
+        "/data/adb/magisk/resetprop",
+        NULL
+    };
+    for (int i = 0; std_paths[i] != NULL; i++) {
+        if (file_exists(std_paths[i])) return std_paths[i];
+    }
+
     return "resetprop";
 }
 

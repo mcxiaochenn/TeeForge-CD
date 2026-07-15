@@ -71,6 +71,8 @@ static void config_parse_file(const char *path) {
             g_config.blhide_delete = atoi(val);
         } else if (strcmp(key, "blhide_compact") == 0) {
             g_config.blhide_compact = atoi(val);
+        } else if (strcmp(key, "prop_tool") == 0) {
+            strncpy(g_config.prop_tool, val, 15);
         }
     }
 
@@ -104,6 +106,7 @@ int config_load(const char *path) {
     strncpy(g_config.root_method, "Unknown", 63);
     strncpy(g_config.root_version, "unknown", 31);
     g_config.debug = 0;
+    strncpy(g_config.prop_tool, "standard", 15);
     blhide_set_defaults(&g_config);
 
     /* 加载 sys.conf（系统配置）Load sys.conf (system config) */

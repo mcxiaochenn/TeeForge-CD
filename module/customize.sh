@@ -53,6 +53,53 @@ ui_print "  创建目录 [Creating dirs]..."
 mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
 
+# 选择 resetprop 工具 Select resetprop tool
+ui_print "  选择属性修改工具 [Select prop tool]"
+ui_print "  音量+ = 传统 resetprop（推荐）"
+ui_print "  [Volume+ = Traditional resetprop (Recommended)]"
+ui_print "  音量- = resetprop-rs"
+ui_print "  [Volume- = resetprop-rs]"
+ui_print "  隐蔽性更佳，但可能被环境检测软件识别"
+ui_print "  [Better stealth, but may be detected]"
+ui_print "  10秒超时默认传统方式 [10s timeout, default traditional]"
+ui_print ""
+
+PROP_TOOL="standard"
+PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
+if [ "$PROP_RESULT" = "1" ]; then
+    PROP_TOOL="standard"
+    ui_print "  已选择传统 resetprop [Selected traditional resetprop]"
+    # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
+    rm -rf "$MODPATH/resetprop-rs"
+else
+    PROP_TOOL="rs"
+    ui_print "  已选择 resetprop-rs [Selected resetprop-rs]"
+
+    # 检测架构，只保留对应二进制 Detect arch, keep matching binary only
+    ARCH=$(getprop ro.product.cpu.abi)
+    case "$ARCH" in
+        arm64-v8a)
+            ui_print "  架构 [Arch]: arm64-v8a"
+            rm -f "$MODPATH/resetprop-rs/resetprop-armeabi-v7a"
+            ;;
+        armeabi-v7a)
+            ui_print "  架构 [Arch]: armeabi-v7a"
+            rm -f "$MODPATH/resetprop-rs/resetprop-arm64-v8a"
+            ;;
+        x86|x86_64)
+            ui_print "  !! 设备架构不支持 resetprop-rs !!"
+            ui_print "  !! Arch not supported for resetprop-rs !!"
+            ui_print "  $ARCH"
+            ui_print "  请重新安装并选择传统方式"
+            ui_print "  [Please reinstall and select traditional]"
+            abort "  Installation aborted: resetprop-rs not available for $ARCH"
+            ;;
+        *)
+            ui_print "  未知架构，保留全部 [Unknown arch, keeping all]: $ARCH"
+            ;;
+    esac
+fi
+
 # 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)
 cat > "$TEEFORGE_DIR/sys.conf" << EOF
 # TeeForge-CD System Configuration (auto-generated, don't edit)
@@ -63,6 +110,7 @@ target_txt=/data/adb/tricky_store/target.txt
 keybox_dir=/data/adb/teeforge/keybox/
 sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
+prop_tool=$PROP_TOOL
 EOF
 ui_print "  sys.conf 已生成 [sys.conf generated]"
 
@@ -110,6 +158,7 @@ set_perm $MODPATH/teeforge 0 0 0755
 
 # resetprop-rs 需要执行权限（set_perm_recursive 会重置为 0644）
 # resetprop-rs needs execute permission (set_perm_recursive resets to 0644)
+# 传统方式已删除此目录，循环安全跳过 Dir removed for standard, loop safely skips
 for f in "$MODPATH/resetprop-rs"/resetprop-*; do
     [ -f "$f" ] && set_perm "$f" 0 0 0755
 done

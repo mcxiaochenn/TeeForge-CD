@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 /* ===== 弱隐 BL Weak Bootloader Hiding ===== */
 /*
@@ -149,9 +150,7 @@ static void detect_prop_tool(void) {
     if (env_path && file_exists(env_path)) {
         if (!is_executable(env_path)) {
             log_msg(LOG_WARN, "  resetprop-rs 无执行权限，尝试修复 [No execute permission, attempting fix]: %s", env_path);
-            char cmd[512];
-            snprintf(cmd, sizeof(cmd), "chmod 755 '%s'", env_path);
-            system(cmd);
+            chmod(env_path, 0755);
         }
         if (is_executable(env_path)) {
             g_prop_tool = PROP_TOOL_RS;
@@ -175,9 +174,7 @@ static void detect_prop_tool(void) {
         if (file_exists(mod_paths[i])) {
             if (!is_executable(mod_paths[i])) {
                 log_msg(LOG_WARN, "  无执行权限，尝试修复 [No execute permission, attempting fix]: %s", mod_paths[i]);
-                char cmd[512];
-                snprintf(cmd, sizeof(cmd), "chmod 755 '%s'", mod_paths[i]);
-                system(cmd);
+                chmod(mod_paths[i], 0755);
             }
             if (is_executable(mod_paths[i])) {
                 g_prop_tool = PROP_TOOL_RS;
@@ -213,58 +210,60 @@ static const char *get_resetprop_cmd(void) {
     return g_resetprop_cmd ? g_resetprop_cmd : "resetprop";
 }
 
-/* 执行 resetprop 命令 Execute resetprop command */
-static int run_resetprop(const char *key, const char *value) {
-    char cmd[512];
+/*
+ * bl_build_script — 构建批量 resetprop 脚本 Build batch resetprop script
+ * 将所有属性设置命令拼成一个 shell 脚本，一次 system() 执行
+ * Concatenates all property commands into one shell script, single system() call
+ * 返回脚本字符串（调用方 free），失败返回 NULL
+ * Returns script string (caller frees), NULL on failure
+ */
+static char *bl_build_script(void) {
     const char *cmd_path = get_resetprop_cmd();
+    const char *stealth = (g_prop_tool == PROP_TOOL_RS) ? " --stealth" : "";
 
-    if (g_prop_tool == PROP_TOOL_RS) {
-        /* resetprop-rs 支持 --stealth 模式 */
-        snprintf(cmd, sizeof(cmd), "%s --stealth %s %s", cmd_path, key, value);
-    } else {
-        snprintf(cmd, sizeof(cmd), "%s %s %s", cmd_path, key, value);
+    /* 估算大小：每行约 100 字节，最多 30 属性 + 删除 + compact */
+    /* Estimate: ~100 bytes per line, max 30 props + delete + compact */
+    size_t buf_sz = 4096;
+    char *script = malloc(buf_sz);
+    if (!script) return NULL;
+
+    size_t pos = 0;
+    pos += snprintf(script + pos, buf_sz - pos, "#!/bin/sh\n");
+
+    /* 属性设置 Property sets */
+    for (int i = 0; bl_props[i].key != NULL; i++) {
+        if (!is_category_enabled(bl_props[i].category)) continue;
+
+        log_msg(LOG_DEBUG, "  %s%s %s %s", cmd_path, stealth, bl_props[i].key, bl_props[i].value);
+
+        if (pos < buf_sz - 200) {
+            pos += snprintf(script + pos, buf_sz - pos,
+                "%s%s %s %s\n", cmd_path, stealth, bl_props[i].key, bl_props[i].value);
+        }
     }
 
-    log_msg(LOG_DEBUG, "  %s", cmd);
-
-    int ret = system(cmd);
-    if (ret != 0) {
-        log_msg(LOG_WARN, "resetprop 失败 [failed]: %s %s (code %d)", key, value, ret);
+    /* 属性删除 Property deletes */
+    if (g_config.blhide && g_config.blhide_delete) {
+        for (int i = 0; del_props[i] != NULL; i++) {
+            log_msg(LOG_DEBUG, "删除属性 [Delete property]: %s", del_props[i]);
+            if (pos < buf_sz - 100) {
+                pos += snprintf(script + pos, buf_sz - pos,
+                    "%s --delete %s\n", cmd_path, del_props[i]);
+            }
+        }
     }
-    return ret;
+
+    /* compact（仅 resetprop-rs） */
+    if (g_config.blhide && g_config.blhide_compact && g_prop_tool == PROP_TOOL_RS) {
+        if (pos < buf_sz - 100) {
+            pos += snprintf(script + pos, buf_sz - pos,
+                "%s --compact\n", cmd_path);
+        }
+    }
+
+    return script;
 }
 
-/* 删除属性 Delete property */
-static int run_prop_delete(const char *key) {
-    char cmd[512];
-    const char *cmd_path = get_resetprop_cmd();
-
-    snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
-
-    log_msg(LOG_DEBUG, "  %s", cmd);
-
-    int ret = system(cmd);
-    return ret;
-}
-
-/* 压缩属性内存 Compact property memory */
-static int run_prop_compact(void) {
-    if (g_prop_tool != PROP_TOOL_RS) {
-        log_msg(LOG_DEBUG, "跳过 compact（仅支持 resetprop-rs）[Skip compact (resetprop-rs only)]");
-        return 0;
-    }
-
-    const char *cmd_path = get_resetprop_cmd();
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "%s --compact", cmd_path);
-
-    log_msg(LOG_DEBUG, "压缩属性内存 [Compacting property memory]...");
-    int ret = system(cmd);
-    if (ret != 0) {
-        log_msg(LOG_WARN, "compact 失败 [compact failed] (code %d)", ret);
-    }
-    return ret;
-}
 
 /* 检查属性类别是否启用 Check if property category is enabled */
 static int is_category_enabled(bl_category_t cat) {
@@ -301,52 +300,41 @@ int bl_hide(void) {
     /* Confirm boot completed (service.sh already waited, double-check here) */
     log_msg(LOG_DEBUG, "确认 boot 完成 [Confirming boot completed]...");
     int boot_wait = 0;
-    while (system("getprop sys.boot_completed | grep -q 1") != 0) {
-        if (++boot_wait > 30) {
-            log_msg(LOG_WARN, "等待 boot 超时 [Boot wait timeout]");
-            break;
+    while (boot_wait < 30) {
+        /* 用 popen 替代 system("getprop | grep")，减少 fork */
+        /* Use popen instead of system("getprop | grep"), fewer forks */
+        FILE *fp = popen("getprop sys.boot_completed", "r");
+        if (fp) {
+            char val[8] = {0};
+            if (fgets(val, sizeof(val), fp) && val[0] == '1') {
+                pclose(fp);
+                break;
+            }
+            pclose(fp);
         }
+        boot_wait++;
         sleep(1);
     }
-
-    int success = 0;
-    int fail = 0;
-    int skipped = 0;
-
-    /* 遍历属性列表 Iterate property list */
-    for (int i = 0; bl_props[i].key != NULL; i++) {
-        /* 检查类别开关 Check category toggle */
-        if (!is_category_enabled(bl_props[i].category)) {
-            skipped++;
-            log_msg(LOG_DEBUG, "跳过属性 [Skipped property] (类别已禁用 [category disabled]): %s", bl_props[i].key);
-            continue;
-        }
-
-        if (run_resetprop(bl_props[i].key, bl_props[i].value) == 0) {
-            success++;
-        } else {
-            fail++;
-        }
+    if (boot_wait >= 30) {
+        log_msg(LOG_WARN, "等待 boot 超时 [Boot wait timeout]");
     }
 
-    /* 删除敏感属性 Delete sensitive properties (需 blhide_delete 开关) */
-    if (g_config.blhide && g_config.blhide_delete) {
-        for (int i = 0; del_props[i] != NULL; i++) {
-            log_msg(LOG_DEBUG, "删除属性 [Delete property]: %s", del_props[i]);
-            run_prop_delete(del_props[i]);
-        }
-    } else {
-        log_msg(LOG_DEBUG, "跳过属性删除 [Skipped property deletion]");
+    /* 构建批量脚本并一次性执行 Build batch script and execute in one call */
+    char *script = bl_build_script();
+    if (!script) {
+        log_msg(LOG_ERROR, "无法构建属性脚本 [Failed to build property script]");
+        return -1;
     }
 
-    /* 压缩属性内存 Compact property memory (需 blhide_compact 开关) */
-    if (g_config.blhide && g_config.blhide_compact) {
-        run_prop_compact();
-    } else {
-        log_msg(LOG_DEBUG, "跳过内存整理 [Skipped compact]");
+    log_msg(LOG_INFO, "执行批量属性设置 [Executing batch property set]...");
+    int ret = system(script);
+    free(script);
+
+    if (ret != 0) {
+        log_msg(LOG_WARN, "批量属性执行返回 %d [Batch property execution returned %d]", ret, ret);
     }
 
-    log_msg(LOG_INFO, "弱隐 BL 完成 [Weak bootloader hiding done]: %d 成功 [success], %d 失败 [fail], %d 跳过 [skipped]", success, fail, skipped);
+    log_msg(LOG_INFO, "弱隐 BL 完成 [Weak bootloader hiding done]");
 
-    return (fail > 0) ? -1 : 0;
+    return (ret != 0) ? -1 : 0;
 }

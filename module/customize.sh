@@ -11,15 +11,10 @@ CONFIG_FILE="$TEEFORGE_DIR/config.conf"
 
 # 先设置权限（音量键检测需要执行二进制）
 # Set permissions first (volume key detection needs binary to be executable)
-chmod 755 $MODPATH/teeforge
-
-# 设置 resetprop-rs 权限
-for f in "$MODPATH/resetprop-rs"/resetprop-*; do
-    [ -f "$f" ] && chmod 755 "$f"
-done
+chmod 755 "$MODPATH/teeforge"
 
 # 检测 root 方式 Detect root method (安装时安装前，环境变量可用)
-ROOT_RESULT=$($MODPATH/teeforge --rootdetect 2>/dev/null)
+ROOT_RESULT=$("$MODPATH/teeforge" --rootdetect 2>/dev/null)
 ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
 ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
 [ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
@@ -34,7 +29,7 @@ if [ -d "$TEEFORGE_DIR" ]; then
         ui_print "  音量+ = 保留配置 [Volume+ = Keep config]"
         ui_print "  音量- = 全部清除 [Volume- = Clean all]"
 
-        RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
+        RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect)
         ui_print " "
         if [ "$RESULT" = "0" ]; then
             ui_print "  清除所有数据 [Cleaning all data]"
@@ -67,7 +62,7 @@ ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetpr
 ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
 
 PROP_TOOL="standard"
-PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect 2>/dev/null)
+PROP_RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect 2>/dev/null)
 ui_print " "
 if [ "$PROP_RESULT" = "0" ]; then
     PROP_TOOL="rs"
@@ -157,8 +152,8 @@ else
 fi
 
 # Set permissions
-set_perm_recursive $MODPATH 0 0 0755 0644
-set_perm $MODPATH/teeforge 0 0 0755
+set_perm_recursive "$MODPATH" 0 0 0755 0644
+set_perm "$MODPATH/teeforge" 0 0 0755
 
 # resetprop-rs 需要执行权限（set_perm_recursive 会重置为 0644）
 # resetprop-rs needs execute permission (set_perm_recursive resets to 0644)

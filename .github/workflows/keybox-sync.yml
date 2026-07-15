@@ -89,26 +89,30 @@ jobs:
             echo "error=Failed to fetch pubkey" >> $GITHUB_OUTPUT
             exit 1
           fi
+          echo "$PUBKEY" > /tmp/pubkey.txt
 
-          python3 << PYEOF
+          REAL_FILE="$REAL_FILE" MONTH="$MONTH" python3 << 'PYEOF'
           import base64, hashlib, os
 
-          pubkey = """$PUBKEY""".strip().encode()
+          with open('/tmp/pubkey.txt', 'r') as f:
+              pubkey = f.read().strip().encode()
           noise_key = hashlib.sha256(pubkey).digest()
 
           with open('/tmp/megatron_raw', 'rb') as f:
               data = f.read()
 
+          real_file = os.environ['REAL_FILE']
           encrypted = bytearray()
           for i, byte in enumerate(data):
               encrypted.append(byte ^ noise_key[i % len(noise_key)])
 
-          with open('$REAL_FILE', 'wb') as f:
+          with open(real_file, 'wb') as f:
               f.write(base64.b64encode(encrypted))
 
+          month = os.environ['MONTH']
           data_len = len(data)
           for i in range(1, 15):
-              fake_seed = hashlib.sha256(f"${MONTH}_fake_{i}".encode()).hexdigest()[:12]
+              fake_seed = hashlib.sha256(f"{month}_fake_{i}".encode()).hexdigest()[:12]
               fake_file = f"/tmp/omg_push/keybox/{fake_seed}"
               fake_data = os.urandom(data_len)
               fake_encrypted = bytearray()

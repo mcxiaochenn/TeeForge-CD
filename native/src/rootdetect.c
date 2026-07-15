@@ -100,7 +100,11 @@ int config_update_key(const char *config_path, const char *key, const char *valu
     /* 构建搜索模式 Build search pattern */
     char pattern[128];
     snprintf(pattern, sizeof(pattern), "%s=", key);
-    char *pos = strstr(data, pattern);
+    char *pos = data;
+    while ((pos = strstr(pos, pattern)) != NULL) {
+        if (pos == data || *(pos - 1) == '\n') break;
+        pos += strlen(pattern);
+    }
 
     /* 构建新内容 Build new content */
     size_t new_len = strlen(data) + strlen(key) + strlen(value) + 8;

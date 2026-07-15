@@ -1,7 +1,7 @@
 #ifndef TEEFORGE_H
 #define TEEFORGE_H
 
-#include <stdint.h>
+#include <stddef.h>
 
 /* ===== 版本 Version ===== */
 #define TEEFORGE_VERSION "0.1.0"

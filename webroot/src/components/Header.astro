@@ -15,16 +15,16 @@
 
   <div class="header-right">
     <select class="header-select" id="lang-select" aria-label="Language">
+      <option value="auto">Auto</option>
       <option value="en">EN</option>
       <option value="zh">中文</option>
       <option value="ja">日本語</option>
     </select>
 
     <select class="header-select" id="theme-select" aria-label="Theme">
-      <option value="material:auto">M3 Auto</option>
-      <option value="material:light">M3 Light</option>
-      <option value="material:dark">M3 Dark</option>
-      <option value="cyber:dark">Cyber</option>
+      <option value="material:auto">Auto</option>
+      <option value="material:light">Light</option>
+      <option value="material:dark">Dark</option>
     </select>
   </div>
 </header>
@@ -95,21 +95,52 @@
 </style>
 
 <script>
-  const langSelect = document.getElementById('lang-select') as HTMLSelectElement;
-  if (langSelect) {
-    langSelect.value = window.__tf.getLang();
-    langSelect.addEventListener('change', () => {
-      window.__tf.setLang(langSelect.value);
-    });
+  function initHeader() {
+    const langSelect = document.getElementById('lang-select') as HTMLSelectElement;
+    const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
+
+    // Sync language selector with current state
+    if (langSelect) {
+      const savedLang = localStorage.getItem('tf-lang');
+      langSelect.value = savedLang || 'auto';
+
+      langSelect.addEventListener('change', () => {
+        if (langSelect.value === 'auto') {
+          localStorage.removeItem('tf-lang');
+        } else {
+          localStorage.setItem('tf-lang', langSelect.value);
+        }
+        // Re-init i18n to pick up change
+        window.__tf.refreshI18n();
+      });
+
+      // Listen for i18n updates to sync selector label
+      // (e.g., after refreshI18n completes, update the "Auto" label to show detected lang)
+      const observer = new MutationObserver(() => {
+        const detected = window.__tf.getLang();
+        const autoOpt = langSelect.querySelector('option[value="auto"]');
+        if (autoOpt && !savedLang) {
+          autoOpt.textContent = 'Auto (' + detected.toUpperCase() + ')';
+        }
+      });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+    }
+
+    // Sync theme selector
+    if (themeSelect) {
+      const current = window.__tf.getTheme() + ':' + window.__tf.getMode();
+      themeSelect.value = current;
+      themeSelect.addEventListener('change', () => {
+        const [theme, mode] = themeSelect.value.split(':');
+        window.__tf.setTheme(theme, mode);
+      });
+    }
   }
 
-  const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
-  if (themeSelect) {
-    const current = window.__tf.getTheme() + ':' + window.__tf.getMode();
-    themeSelect.value = current;
-    themeSelect.addEventListener('change', () => {
-      const [theme, mode] = themeSelect.value.split(':');
-      window.__tf.setTheme(theme, mode);
-    });
+  // Run after i18n has initialized
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(initHeader, 150));
+  } else {
+    setTimeout(initHeader, 150);
   }
 </script>

@@ -1,84 +1,240 @@
 /* ============================================================
- * TeeForge WebUI — Material 3 Theme
+ * TeeForge WebUI — Material 3 Theme (Frosted Glass Style)
+ * Inspired by mcxiaochen.top — teal accent, glassmorphism, glow blobs
  * Applied when data-theme="material" on <html>
- * Supports light (data-mode="light") and dark (data-mode="dark")
  * ============================================================ */
 
 @import url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@latest/index.css');
 
-/* --- Material 3 Light --- */
+/* --- Light Mode --- */
 [data-theme="material"][data-mode="light"],
 [data-theme="material"][data-mode="auto"] {
   --font-body: 'Inter Variable', -apple-system, 'Noto Sans SC', 'Noto Sans JP', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'Fira Code', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
-  --color-bg: #f8f9fa;
-  --color-fg: #1a1c1e;
-  --color-fg-muted: #5f6368;
-  --color-surface: #ffffff;
-  --color-surface-hover: #f1f3f4;
+  /* Teal-cyan hue system (hue 170) */
+  --color-bg: #e8f5f2;
+  --color-fg: #1a3a35;
+  --color-fg-muted: #3a5a55;
+  --color-surface: rgba(255, 255, 255, 0.55);
+  --color-surface-hover: rgba(255, 255, 255, 0.72);
+  --color-surface-solid: #ffffff;
   --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-hover: rgba(0, 0, 0, 0.15);
-  --color-scrim: rgba(0, 0, 0, 0.32);
-  --color-accent: #0b57d0;
-  --color-accent-hover: #0842a0;
+  --color-border-hover: rgba(0, 0, 0, 0.14);
+  --color-scrim: rgba(0, 0, 0, 0.25);
+  --color-accent: #2cb5a0;
+  --color-accent-hover: #239a88;
   --color-on-accent: #ffffff;
-  --color-success: #1e8e3e;
-  --color-warning: #e8710a;
-  --color-error: #d93025;
-  --color-info: #0b57d0;
+  --color-success: #2cb5a0;
+  --color-warning: #d4940a;
+  --color-error: #d44a3a;
+  --color-info: #2cb5a0;
 
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --radius-xs: 10px;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
 
-  --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
-  --shadow-btn: 0 2px 8px rgba(11,87,208,0.25);
+  --shadow-card-hover:
+    0 0 0 1px rgba(0,0,0,0.06),
+    0 0 20px -5px rgba(44,181,160,0.12);
+  --shadow-btn: 0 2px 12px rgba(44,181,160,0.25);
+
+  /* Glassmorphism */
+  --glass-blur: 20px;
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  --glass-bg-hover: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-highlight: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.1) 40%, transparent 60%, rgba(255,255,255,0.12) 100%);
+
+  /* Glow blobs */
+  --glow-color: rgba(44, 181, 160, 0.25);
+  --glow-color-2: rgba(44, 181, 160, 0.15);
 }
 
-/* --- Material 3 Dark --- */
+/* --- Dark Mode --- */
 [data-theme="material"][data-mode="dark"] {
-  --color-bg: #111318;
-  --color-fg: #e2e2e6;
-  --color-fg-muted: #9aa0a8;
-  --color-surface: #1d1f24;
-  --color-surface-hover: #262830;
+  --color-bg: #14201e;
+  --color-fg: #ddeeed;
+  --color-fg-muted: #a8c5c0;
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-surface-solid: #1e2e2c;
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.15);
-  --color-scrim: rgba(0, 0, 0, 0.6);
-  --color-accent: #a8c7fa;
-  --color-accent-hover: #c2d7fc;
-  --color-on-accent: #062e6f;
-  --color-success: #81c995;
-  --color-warning: #fcad70;
-  --color-error: #f28b82;
-  --color-info: #a8c7fa;
+  --color-scrim: rgba(0, 0, 0, 0.55);
+  --color-accent: #3ec9b3;
+  --color-accent-hover: #5ed8c5;
+  --color-on-accent: #0a1f1c;
+  --color-success: #3ec9b3;
+  --color-warning: #f0b040;
+  --color-error: #f07068;
+  --color-info: #3ec9b3;
 
-  --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
-  --shadow-btn: 0 2px 8px rgba(168,199,250,0.2);
+  --shadow-card-hover:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 0 20px -5px rgba(62,201,179,0.12);
+  --shadow-btn: 0 2px 12px rgba(62,201,179,0.2);
+
+  --glass-blur: 20px;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-highlight: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 40%, transparent 60%, rgba(255,255,255,0.03) 100%);
+
+  --glow-color: rgba(62, 201, 179, 0.08);
+  --glow-color-2: rgba(62, 201, 179, 0.05);
 }
 
-/* --- System auto --- */
+/* --- System auto dark --- */
 @media (prefers-color-scheme: dark) {
   [data-theme="material"][data-mode="auto"] {
-    --color-bg: #111318;
-    --color-fg: #e2e2e6;
-    --color-fg-muted: #9aa0a8;
-    --color-surface: #1d1f24;
-    --color-surface-hover: #262830;
+    --color-bg: #14201e;
+    --color-fg: #ddeeed;
+    --color-fg-muted: #a8c5c0;
+    --color-surface: rgba(255, 255, 255, 0.06);
+    --color-surface-hover: rgba(255, 255, 255, 0.1);
+    --color-surface-solid: #1e2e2c;
     --color-border: rgba(255, 255, 255, 0.08);
     --color-border-hover: rgba(255, 255, 255, 0.15);
-    --color-scrim: rgba(0, 0, 0, 0.6);
-    --color-accent: #a8c7fa;
-    --color-accent-hover: #c2d7fc;
-    --color-on-accent: #062e6f;
-    --color-success: #81c995;
-    --color-warning: #fcad70;
-    --color-error: #f28b82;
-    --color-info: #a8c7fa;
+    --color-scrim: rgba(0, 0, 0, 0.55);
+    --color-accent: #3ec9b3;
+    --color-accent-hover: #5ed8c5;
+    --color-on-accent: #0a1f1c;
+    --color-success: #3ec9b3;
+    --color-warning: #f0b040;
+    --color-error: #f07068;
+    --color-info: #3ec9b3;
 
-    --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
-    --shadow-btn: 0 2px 8px rgba(168,199,250,0.2);
+    --shadow-card-hover:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 0 20px -5px rgba(62,201,179,0.12);
+    --shadow-btn: 0 2px 12px rgba(62,201,179,0.2);
+
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-bg-hover: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-highlight: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 40%, transparent 60%, rgba(255,255,255,0.03) 100%);
+
+    --glow-color: rgba(62, 201, 179, 0.08);
+    --glow-color-2: rgba(62, 201, 179, 0.05);
   }
+}
+
+/* --- Glass card effect --- */
+.card {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-color: var(--glass-border) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.card:hover {
+  background: var(--glass-bg-hover) !important;
+  transform: translateY(-1px);
+}
+
+/* --- Background glow blobs --- */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  background: var(--glow-color);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+body::before {
+  width: 60%;
+  height: 14rem;
+  top: 3%;
+  left: -10%;
+}
+
+body::after {
+  width: 12rem;
+  height: 40%;
+  top: 35%;
+  right: -5%;
+}
+
+/* Third glow via app-shell pseudo */
+.app-shell::before {
+  content: '';
+  position: fixed;
+  width: 55%;
+  height: 14rem;
+  top: 58%;
+  left: -3%;
+  border-radius: 50%;
+  background: var(--glow-color-2);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* --- Dashed border accent on status card --- */
+.status-card {
+  border-style: dashed !important;
+}
+
+/* --- Entrance animation --- */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card {
+  animation: fade-in-up 0.45s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.card:nth-child(1) { animation-delay: 0.05s; }
+.card:nth-child(2) { animation-delay: 0.1s; }
+.card:nth-child(3) { animation-delay: 0.15s; }
+.card:nth-child(4) { animation-delay: 0.2s; }
+
+/* --- Press feedback --- */
+.action-card:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* --- Button pill shape --- */
+.btn-primary {
+  border-radius: 999px;
+}
+
+/* --- Dialog glass --- */
+.dialog {
+  background: var(--color-surface-solid) !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }

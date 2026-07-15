@@ -79,6 +79,7 @@ sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
 root_method=KernelSU            # 自动检测 auto-detected
 root_version=1234               # 自动检测 auto-detected
+prop_tool=standard              # 安装时选择 install-time choice
 ```
 
 ### 关键实现细节 Key Implementation Details
@@ -88,7 +89,9 @@ root_version=1234               # 自动检测 auto-detected
   - 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
   - 下载降级策略：`curl -sL` → `wget -qO-` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
   - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
-- **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），内部调用 resetprop-rs 时使用 `--stealth`、`--compact`、`--delete` 参数。检测到无执行权限时自动 `chmod 755`
+- **blhide.c**: 安装时选择 resetprop 工具（传统 / resetprop-rs），选择保存到 sys.conf `prop_tool=standard|rs`
+  - 传统方式降级策略：`resetprop`（PATH）→ `/data/adb/ksu/bin/resetprop` → `/data/adb/ap/bin/resetprop` → `/data/adb/magisk/resetprop`
+  - resetprop-rs：环境变量 → 模块目录 → 系统 PATH，使用 `--stealth`、`--compact`、`--delete` 参数
   - 功能开关：`blhide`（总开关）+ 10 个类别开关（boot/security/vendor/oem/secureboot/recovery/realme/developer/selinux/virtual）+ delete + compact，用户配置文件控制，默认全开
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）

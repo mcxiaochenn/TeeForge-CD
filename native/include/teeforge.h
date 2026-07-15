@@ -47,6 +47,7 @@ typedef struct {
     int blhide_virtual;                /* 虚拟设备 Virtual device */
     int blhide_delete;                 /* 属性删除 Property deletion */
     int blhide_compact;                /* 内存整理 Compact memory */
+    char prop_tool[16];                /* resetprop 工具 standard/rs */
 } config_t;
 
 /* 全局配置实例 Global config instance */

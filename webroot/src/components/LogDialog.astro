@@ -1,0 +1,105 @@
+---
+/**
+ * LogDialog — Modal dialog for streaming command output
+ * Controlled via window.__tfDialog.open(title) / .appendLog(text) / .close(status)
+ */
+---
+
+<div class="dialog-backdrop" id="log-backdrop">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <div class="dialog-header">
+      <h3 id="dialog-title">—</h3>
+      <button class="dialog-close" id="dialog-close-btn" aria-label="Close">
+        ✕
+      </button>
+    </div>
+    <div class="dialog-body">
+      <pre id="dialog-log"></pre>
+    </div>
+    <div class="dialog-footer">
+      <div class="status-indicator">
+        <span class="status-dot" id="dialog-dot"></span>
+        <span id="dialog-status">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .dialog-close {
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--color-fg-muted);
+  }
+
+  .dialog-close:hover {
+    color: var(--color-fg);
+  }
+
+  #dialog-log {
+    min-height: 60px;
+  }
+</style>
+
+<script>
+  const backdrop = document.getElementById('log-backdrop')!;
+  const titleEl = document.getElementById('dialog-title')!;
+  const logEl = document.getElementById('dialog-log')!;
+  const dotEl = document.getElementById('dialog-dot')!;
+  const statusEl = document.getElementById('dialog-status')!;
+  const closeBtn = document.getElementById('dialog-close-btn')!;
+
+  let canClose = false;
+
+  function setDotState(state: string) {
+    dotEl.className = 'status-dot ' + state;
+  }
+
+  (window as any).__tfDialog = {
+    open(title: string) {
+      titleEl.textContent = title;
+      logEl.textContent = '';
+      setDotState('running');
+      statusEl.textContent = (window as any).__tf.t('dialog.running');
+      canClose = false;
+      closeBtn.style.opacity = '0.3';
+      closeBtn.style.pointerEvents = 'none';
+      backdrop.classList.add('open');
+    },
+
+    appendLog(text: string) {
+      logEl.textContent += text;
+      // Auto-scroll
+      const body = logEl.parentElement;
+      if (body) body.scrollTop = body.scrollHeight;
+    },
+
+    done(success: boolean, exitCode?: number) {
+      if (success) {
+        setDotState('success');
+        statusEl.textContent = (window as any).__tf.t('dialog.success');
+      } else {
+        setDotState('error');
+        const tpl = (window as any).__tf.t('dialog.failed');
+        statusEl.textContent = tpl.replace('{code}', exitCode ?? '?');
+      }
+      canClose = true;
+      closeBtn.style.opacity = '1';
+      closeBtn.style.pointerEvents = 'auto';
+    },
+
+    close() {
+      backdrop.classList.remove('open');
+    },
+  };
+
+  // Close on button click
+  closeBtn.addEventListener('click', () => {
+    if (canClose) (window as any).__tfDialog.close();
+  });
+
+  // Close on backdrop click
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop && canClose) (window as any).__tfDialog.close();
+  });
+</script>

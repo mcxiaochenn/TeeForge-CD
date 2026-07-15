@@ -1,0 +1,33 @@
+{
+  "app.title": "TeeForge",
+  "app.subtitle": "Integrity Toolkit",
+
+  "status.root": "Root",
+  "status.version": "Version",
+  "status.arch": "Arch",
+  "status.keybox": "Keybox",
+  "status.loading": "Loading...",
+  "status.na": "N/A",
+  "status.valid": "Valid",
+  "status.expired": "Expired",
+  "status.unknown": "Unknown",
+
+  "action.keybox.title": "Update Keybox",
+  "action.keybox.desc": "Fetch latest keybox from CDN and apply",
+  "action.target.title": "Update Target",
+  "action.target.desc": "Generate target.txt with installed apps",
+  "action.execute": "Execute",
+
+  "dialog.running": "Running...",
+  "dialog.success": "Done",
+  "dialog.failed": "Failed (exit {code})",
+  "dialog.close": "Close",
+
+  "lang.label": "Language",
+  "theme.label": "Theme",
+  "theme.material": "Material",
+  "theme.cyber": "Cyberpunk",
+  "theme.auto": "Auto",
+  "theme.light": "Light",
+  "theme.dark": "Dark"
+}

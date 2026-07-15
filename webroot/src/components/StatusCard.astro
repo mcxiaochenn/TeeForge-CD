@@ -1,0 +1,119 @@
+---
+/**
+ * StatusCard — Device info: root method, version, arch, keybox status
+ */
+---
+
+<div class="card status-card" id="status-card">
+  <div class="status-grid">
+    <div class="status-item">
+      <span class="status-label" data-i18n="status.root">Root</span>
+      <span class="status-value" id="val-root">
+        <span class="status-dot"></span>
+        <span data-i18n="status.loading">Loading...</span>
+      </span>
+    </div>
+    <div class="status-item">
+      <span class="status-label" data-i18n="status.version">Version</span>
+      <span class="status-value" id="val-version">—</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label" data-i18n="status.arch">Arch</span>
+      <span class="status-value" id="val-arch">—</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label" data-i18n="status.keybox">Keybox</span>
+      <span class="status-value" id="val-keybox">—</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .status-card { padding: 16px 20px; }
+  .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .status-item { display: flex; flex-direction: column; gap: 2px; }
+  .status-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-fg-muted);
+    font-weight: 600;
+  }
+  .status-value {
+    font-size: 0.88rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .status-value .status-dot { width: 6px; height: 6px; flex-shrink: 0; }
+</style>
+
+<script>
+  const MODDIR = '/data/adb/modules/teeforge_cd';
+
+  async function runCmd(cmd: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const cb = 'cb_' + Date.now() + '_' + (Math.random() * 10000 | 0);
+      (window as any)[cb] = (code: number, stdout: string, stderr: string) => {
+        delete (window as any)[cb];
+        code === 0 ? resolve(stdout || '') : reject(new Error(stderr || stdout));
+      };
+      ksu.exec(cmd, '{}', cb);
+    });
+  }
+
+  async function loadStatus() {
+    const rootEl = document.getElementById('val-root');
+    const verEl = document.getElementById('val-version');
+    const archEl = document.getElementById('val-arch');
+    const keyboxEl = document.getElementById('val-keybox');
+
+    // Architecture
+    try {
+      const arch = await runCmd('getprop ro.product.cpu.abi');
+      if (archEl) archEl.textContent = arch.trim() || '—';
+    } catch (_) {}
+
+    // module.prop — version + keybox from description
+    try {
+      const prop = await runCmd('cat ' + MODDIR + '/module.prop');
+      const ver = prop.match(/version=(.*)/)?.[1]?.trim();
+      const desc = prop.match(/description=(.*)/)?.[1]?.trim() || '';
+      if (verEl) verEl.textContent = ver || '—';
+
+      const kbMatch = desc.match(/Keybox:\s*([^\|]+)/i);
+      if (keyboxEl) {
+        if (kbMatch) {
+          keyboxEl.textContent = kbMatch[1].trim();
+        } else {
+          try {
+            const mtime = await runCmd("stat -c %Y " + MODDIR + "/keybox/ 2>/dev/null || echo 0");
+            const ts = parseInt(mtime.trim());
+            keyboxEl.textContent = ts ? new Date(ts * 1000).toLocaleDateString() : (window as any).__tf.t('status.na');
+          } catch (_) { keyboxEl.textContent = (window as any).__tf.t('status.na'); }
+        }
+      }
+    } catch (_) {}
+
+    // Root method from sys.conf
+    try {
+      const sysconf = await runCmd('cat ' + MODDIR + '/sys.conf');
+      const rm = sysconf.match(/root_method=(.*)/);
+      if (rootEl && rm) {
+        const dot = rootEl.querySelector('.status-dot');
+        const text = rootEl.querySelectorAll('span')[1];
+        if (text) { text.textContent = rm[1].trim(); text.removeAttribute('data-i18n'); }
+        if (dot) dot.classList.add('success');
+      }
+    } catch (_) {
+      if (rootEl) { const dot = rootEl.querySelector('.status-dot'); if (dot) dot.classList.add('error'); }
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(loadStatus, 100));
+  } else {
+    setTimeout(loadStatus, 100);
+  }
+</script>

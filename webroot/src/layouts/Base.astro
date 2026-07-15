@@ -1,0 +1,112 @@
+---
+/**
+ * Base layout — TeeForge WebUI
+ * Handles theme initialization (runs before paint), i18n init, and CSS imports
+ */
+import '../styles/global.css';
+import '../styles/theme-material.css';
+import '../styles/theme-cyber.css';
+---
+
+<!doctype html>
+<html lang="en" data-theme="material" data-mode="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>TeeForge</title>
+
+  <!-- Theme init — runs before first paint to prevent flash -->
+  <script is:inline>
+    (function () {
+      var saved = localStorage.getItem('tf-theme');
+      var theme = 'material';
+      var mode = 'auto';
+      if (saved) {
+        try {
+          var t = JSON.parse(saved);
+          theme = t.theme || 'material';
+          mode = t.mode || 'auto';
+        } catch (_) {}
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.setAttribute('data-mode', mode);
+    })();
+  </script>
+
+  <!-- i18n + theme API — in head so window.__tf is ready before module scripts -->
+  <script is:inline>
+    (function () {
+      var DICT = {};
+      var currentLang = 'en';
+
+      function detectLang() {
+        var saved = localStorage.getItem('tf-lang');
+        if (saved) return saved;
+        var nav = (navigator.language || 'en').toLowerCase();
+        if (nav.startsWith('zh')) return 'zh';
+        if (nav.startsWith('ja')) return 'ja';
+        return 'en';
+      }
+
+      function t(key) {
+        return (DICT && DICT[key]) || key;
+      }
+
+      function applyI18n() {
+        var els = document.querySelectorAll('[data-i18n]');
+        for (var i = 0; i < els.length; i++) {
+          var el = els[i];
+          var key = el.getAttribute('data-i18n');
+          var text = t(key);
+          var code = el.getAttribute('data-i18n-code');
+          if (code) text = text.replace('{code}', code);
+          el.textContent = text;
+        }
+      }
+
+      function initI18n() {
+        currentLang = detectLang();
+        fetch('./i18n/' + currentLang + '.json')
+          .then(function (r) { return r.json(); })
+          .then(function (d) { DICT = d; applyI18n(); })
+          .catch(function () { DICT = {}; applyI18n(); });
+      }
+
+      window.__tf = {
+        t: t,
+        applyI18n: applyI18n,
+        getLang: function () { return currentLang; },
+        setLang: function (lang) {
+          localStorage.setItem('tf-lang', lang);
+          currentLang = lang;
+          initI18n();
+        },
+        getTheme: function () {
+          return document.documentElement.getAttribute('data-theme');
+        },
+        getMode: function () {
+          return document.documentElement.getAttribute('data-mode');
+        },
+        setTheme: function (theme, mode) {
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-mode', mode || 'auto');
+          localStorage.setItem('tf-theme', JSON.stringify({ theme: theme, mode: mode || 'auto' }));
+        },
+        refreshI18n: initI18n,
+      };
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initI18n);
+      } else {
+        initI18n();
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <slot />
+  </div>
+</body>
+</html>

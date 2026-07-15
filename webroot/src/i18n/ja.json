@@ -1,0 +1,33 @@
+{
+  "app.title": "TeeForge",
+  "app.subtitle": "インテグリティツールキット",
+
+  "status.root": "Root 方式",
+  "status.version": "バージョン",
+  "status.arch": "アーキテクチャ",
+  "status.keybox": "Keybox",
+  "status.loading": "読み込み中...",
+  "status.na": "データなし",
+  "status.valid": "有効",
+  "status.expired": "期限切れ",
+  "status.unknown": "不明",
+
+  "action.keybox.title": "Keybox 更新",
+  "action.keybox.desc": "CDN から最新 keybox を取得して適用",
+  "action.target.title": "Target 更新",
+  "action.target.desc": "インストール済みアプリから target.txt を生成",
+  "action.execute": "実行",
+
+  "dialog.running": "実行中...",
+  "dialog.success": "完了",
+  "dialog.failed": "失敗（終了コード {code}）",
+  "dialog.close": "閉じる",
+
+  "lang.label": "言語",
+  "theme.label": "テーマ",
+  "theme.material": "Material",
+  "theme.cyber": "サイバーパンク",
+  "theme.auto": "自動",
+  "theme.light": "ライト",
+  "theme.dark": "ダーク"
+}

@@ -1,0 +1,33 @@
+{
+  "app.title": "TeeForge",
+  "app.subtitle": "完整性工具箱",
+
+  "status.root": "Root 方式",
+  "status.version": "版本",
+  "status.arch": "架构",
+  "status.keybox": "Keybox",
+  "status.loading": "加载中...",
+  "status.na": "无数据",
+  "status.valid": "有效",
+  "status.expired": "已过期",
+  "status.unknown": "未知",
+
+  "action.keybox.title": "更新 Keybox",
+  "action.keybox.desc": "从 CDN 获取最新 keybox 并应用",
+  "action.target.title": "更新 Target",
+  "action.target.desc": "根据已安装应用生成 target.txt",
+  "action.execute": "执行",
+
+  "dialog.running": "执行中...",
+  "dialog.success": "完成",
+  "dialog.failed": "失败（退出码 {code}）",
+  "dialog.close": "关闭",
+
+  "lang.label": "语言",
+  "theme.label": "主题",
+  "theme.material": "Material",
+  "theme.cyber": "赛博朋克",
+  "theme.auto": "跟随系统",
+  "theme.light": "浅色",
+  "theme.dark": "深色"
+}

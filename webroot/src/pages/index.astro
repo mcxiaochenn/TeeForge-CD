@@ -2,7 +2,7 @@
 /**
  * TeeForge WebUI — Main Page
  * Composes Header, StatusCard, ActionCards, LogDialog
- * Handles command execution via ksu.spawn()
+ * Handles command execution via ksu.exec()
  */
 import Base from '../layouts/Base.astro';
 import Header from '../components/Header.astro';
@@ -37,11 +37,22 @@ import LogDialog from '../components/LogDialog.astro';
 <script>
   const TEEFORGE = '/data/adb/modules/teeforge_cd/teeforge';
 
-  function runSpawn(teeforgeArgs: string, titleKey: string) {
-    const dialog = (window as any).__tfDialog;
-    const t = (window as any).__tf.t;
-    const title = t(titleKey);
+  /**
+   * Execute command via ksu.exec (callback pattern)
+   * ksu.exec(cmd, argsJson, callbackName) — callback receives (exitCode, stdout, stderr)
+   */
+  function execCmd(cmd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+    return new Promise((resolve) => {
+      const cb = 'cb_' + Date.now() + '_' + (Math.random() * 10000 | 0);
+      (window as any)[cb] = (code: number, stdout: string, stderr: string) => {
+        delete (window as any)[cb];
+        resolve({ code, stdout: stdout || '', stderr: stderr || '' });
+      };
+      ksu.exec(cmd, '{}', cb);
+    });
+  }
 
+  function disableButtons() {
     const buttons = document.querySelectorAll('.action-btn') as NodeListOf<HTMLButtonElement>;
     buttons.forEach((b) => {
       b.disabled = true;
@@ -50,35 +61,6 @@ import LogDialog from '../components/LogDialog.astro';
       if (spinner) spinner.style.display = 'inline-block';
       if (text) text.style.opacity = '0.6';
     });
-
-    dialog.open(title);
-
-    try {
-      const child = ksu.spawn(TEEFORGE, [teeforgeArgs]);
-
-      child.stdout.on('data', (chunk: string) => {
-        dialog.appendLog(chunk);
-      });
-
-      child.stderr.on('data', (chunk: string) => {
-        dialog.appendLog(chunk);
-      });
-
-      child.on('exit', (code: number) => {
-        dialog.done(code === 0, code);
-        reenableButtons();
-      });
-
-      child.on('error', (err: any) => {
-        dialog.appendLog('\n[spawn error] ' + String(err));
-        dialog.done(false, -1);
-        reenableButtons();
-      });
-    } catch (err) {
-      dialog.appendLog('\n[error] ' + String(err));
-      dialog.done(false, -1);
-      reenableButtons();
-    }
   }
 
   function reenableButtons() {
@@ -92,11 +74,34 @@ import LogDialog from '../components/LogDialog.astro';
     });
   }
 
+  async function runAction(teeforgeArgs: string, titleKey: string) {
+    const dialog = (window as any).__tfDialog;
+    const t = (window as any).__tf.t;
+
+    disableButtons();
+    dialog.open(t(titleKey));
+
+    try {
+      // ksu.exec runs with root, returns all output at once
+      const result = await execCmd(TEEFORGE + ' ' + teeforgeArgs);
+
+      if (result.stdout) dialog.appendLog(result.stdout);
+      if (result.stderr) dialog.appendLog(result.stderr);
+
+      dialog.done(result.code === 0, result.code);
+    } catch (err) {
+      dialog.appendLog('\n[error] ' + String(err));
+      dialog.done(false, -1);
+    }
+
+    reenableButtons();
+  }
+
   document.getElementById('btn-keybox')?.addEventListener('click', () => {
-    runSpawn('--keybox', 'action.keybox.title');
+    runAction('--keybox', 'action.keybox.title');
   });
 
   document.getElementById('btn-target')?.addEventListener('click', () => {
-    runSpawn('--generate', 'action.target.title');
+    runAction('--generate', 'action.target.title');
   });
 </script>

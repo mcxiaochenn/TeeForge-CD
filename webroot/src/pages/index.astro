@@ -1,0 +1,102 @@
+---
+/**
+ * TeeForge WebUI — Main Page
+ * Composes Header, StatusCard, ActionCards, LogDialog
+ * Handles command execution via ksu.spawn()
+ */
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import StatusCard from '../components/StatusCard.astro';
+import ActionCard from '../components/ActionCard.astro';
+import LogDialog from '../components/LogDialog.astro';
+---
+
+<Base>
+  <Header />
+  <StatusCard />
+
+  <ActionCard
+    id="btn-keybox"
+    icon="🔑"
+    titleKey="action.keybox.title"
+    descKey="action.keybox.desc"
+    action="keybox"
+  />
+
+  <ActionCard
+    id="btn-target"
+    icon="📋"
+    titleKey="action.target.title"
+    descKey="action.target.desc"
+    action="target"
+  />
+
+  <LogDialog />
+</Base>
+
+<script>
+  const TEEFORGE = '/data/adb/modules/teeforge_cd/teeforge';
+
+  function runSpawn(teeforgeArgs: string, titleKey: string) {
+    const dialog = (window as any).__tfDialog;
+    const t = (window as any).__tf.t;
+    const title = t(titleKey);
+
+    const buttons = document.querySelectorAll('.action-btn') as NodeListOf<HTMLButtonElement>;
+    buttons.forEach((b) => {
+      b.disabled = true;
+      const spinner = b.querySelector('.spinner') as HTMLElement;
+      const text = b.querySelector('.btn-text') as HTMLElement;
+      if (spinner) spinner.style.display = 'inline-block';
+      if (text) text.style.opacity = '0.6';
+    });
+
+    dialog.open(title);
+
+    try {
+      const child = ksu.spawn(TEEFORGE, [teeforgeArgs]);
+
+      child.stdout.on('data', (chunk: string) => {
+        dialog.appendLog(chunk);
+      });
+
+      child.stderr.on('data', (chunk: string) => {
+        dialog.appendLog(chunk);
+      });
+
+      child.on('exit', (code: number) => {
+        dialog.done(code === 0, code);
+        reenableButtons();
+      });
+
+      child.on('error', (err: any) => {
+        dialog.appendLog('\n[spawn error] ' + String(err));
+        dialog.done(false, -1);
+        reenableButtons();
+      });
+    } catch (err) {
+      dialog.appendLog('\n[error] ' + String(err));
+      dialog.done(false, -1);
+      reenableButtons();
+    }
+  }
+
+  function reenableButtons() {
+    const buttons = document.querySelectorAll('.action-btn') as NodeListOf<HTMLButtonElement>;
+    buttons.forEach((b) => {
+      b.disabled = false;
+      const spinner = b.querySelector('.spinner') as HTMLElement;
+      const text = b.querySelector('.btn-text') as HTMLElement;
+      if (spinner) spinner.style.display = 'none';
+      if (text) text.style.opacity = '1';
+    });
+  }
+
+  document.getElementById('btn-keybox')?.addEventListener('click', () => {
+    runSpawn('--keybox', 'action.keybox.title');
+  });
+
+  document.getElementById('btn-target')?.addEventListener('click', () => {
+    runSpawn('--generate', 'action.target.title');
+  });
+</script>

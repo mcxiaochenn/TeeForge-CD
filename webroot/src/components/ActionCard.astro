@@ -1,0 +1,87 @@
+---
+/**
+ * ActionCard — Reusable action button card
+ * Props: id, icon, titleKey, descKey, action (teeforge flag)
+ */
+interface Props {
+  id: string;
+  icon: string;
+  titleKey: string;
+  descKey: string;
+  action: string;
+}
+
+const { id, icon, titleKey, descKey, action } = Astro.props;
+---
+
+<div class="card action-card">
+  <div class="action-icon">{icon}</div>
+  <div class="action-info">
+    <h3 class="action-title" data-i18n={titleKey}>{titleKey}</h3>
+    <p class="action-desc" data-i18n={descKey}>{descKey}</p>
+  </div>
+  <button
+    class="btn btn-primary action-btn"
+    id={id}
+    data-action={action}
+  >
+    <span class="btn-text" data-i18n="action.execute">Execute</span>
+    <span class="spinner" style="display:none"></span>
+  </button>
+</div>
+
+<style>
+  .action-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+  }
+
+  .action-icon {
+    font-size: 1.5rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+
+  .action-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .action-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .action-desc {
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+
+  .action-btn {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 400px) {
+    .action-card {
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      width: 100%;
+      margin-top: 4px;
+    }
+  }
+</style>

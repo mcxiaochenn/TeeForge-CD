@@ -1,0 +1,115 @@
+---
+/**
+ * Header component — Logo, language selector, theme switcher
+ */
+---
+
+<header class="header">
+  <div class="header-left">
+    <span class="logo-icon">◆</span>
+    <span class="logo-text">
+      <span class="logo-title" data-i18n="app.title">TeeForge</span>
+      <span class="logo-sub" data-i18n="app.subtitle">Integrity Toolkit</span>
+    </span>
+  </div>
+
+  <div class="header-right">
+    <select class="header-select" id="lang-select" aria-label="Language">
+      <option value="en">EN</option>
+      <option value="zh">中文</option>
+      <option value="ja">日本語</option>
+    </select>
+
+    <select class="header-select" id="theme-select" aria-label="Theme">
+      <option value="material:auto">M3 Auto</option>
+      <option value="material:light">M3 Light</option>
+      <option value="material:dark">M3 Dark</option>
+      <option value="cyber:dark">Cyber</option>
+    </select>
+  </div>
+</header>
+
+<style>
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0 8px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    font-size: 1.4rem;
+    color: var(--color-accent);
+    filter: drop-shadow(0 0 6px var(--color-accent));
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+  }
+
+  .logo-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  .logo-sub {
+    font-size: 0.7rem;
+    color: var(--color-fg-muted);
+    letter-spacing: 0.03em;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-select {
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-fg);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .header-select:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .header-select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+</style>
+
+<script>
+  const langSelect = document.getElementById('lang-select') as HTMLSelectElement;
+  if (langSelect) {
+    langSelect.value = window.__tf.getLang();
+    langSelect.addEventListener('change', () => {
+      window.__tf.setLang(langSelect.value);
+    });
+  }
+
+  const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
+  if (themeSelect) {
+    const current = window.__tf.getTheme() + ':' + window.__tf.getMode();
+    themeSelect.value = current;
+    themeSelect.addEventListener('change', () => {
+      const [theme, mode] = themeSelect.value.split(':');
+      window.__tf.setTheme(theme, mode);
+    });
+  }
+</script>

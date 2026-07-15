@@ -1,6 +1,7 @@
 # Build output
 out/
 temp/
+module/webroot/
 backup/
 
 # IDE

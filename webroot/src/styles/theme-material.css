@@ -1,0 +1,84 @@
+/* ============================================================
+ * TeeForge WebUI — Material 3 Theme
+ * Applied when data-theme="material" on <html>
+ * Supports light (data-mode="light") and dark (data-mode="dark")
+ * ============================================================ */
+
+@import url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@latest/index.css');
+
+/* --- Material 3 Light --- */
+[data-theme="material"][data-mode="light"],
+[data-theme="material"][data-mode="auto"] {
+  --font-body: 'Inter Variable', -apple-system, 'Noto Sans SC', 'Noto Sans JP', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Fira Code', ui-monospace, monospace;
+
+  --color-bg: #f8f9fa;
+  --color-fg: #1a1c1e;
+  --color-fg-muted: #5f6368;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f3f4;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-hover: rgba(0, 0, 0, 0.15);
+  --color-scrim: rgba(0, 0, 0, 0.32);
+  --color-accent: #0b57d0;
+  --color-accent-hover: #0842a0;
+  --color-on-accent: #ffffff;
+  --color-success: #1e8e3e;
+  --color-warning: #e8710a;
+  --color-error: #d93025;
+  --color-info: #0b57d0;
+
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+
+  --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-btn: 0 2px 8px rgba(11,87,208,0.25);
+}
+
+/* --- Material 3 Dark --- */
+[data-theme="material"][data-mode="dark"] {
+  --color-bg: #111318;
+  --color-fg: #e2e2e6;
+  --color-fg-muted: #9aa0a8;
+  --color-surface: #1d1f24;
+  --color-surface-hover: #262830;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.15);
+  --color-scrim: rgba(0, 0, 0, 0.6);
+  --color-accent: #a8c7fa;
+  --color-accent-hover: #c2d7fc;
+  --color-on-accent: #062e6f;
+  --color-success: #81c995;
+  --color-warning: #fcad70;
+  --color-error: #f28b82;
+  --color-info: #a8c7fa;
+
+  --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+  --shadow-btn: 0 2px 8px rgba(168,199,250,0.2);
+}
+
+/* --- System auto --- */
+@media (prefers-color-scheme: dark) {
+  [data-theme="material"][data-mode="auto"] {
+    --color-bg: #111318;
+    --color-fg: #e2e2e6;
+    --color-fg-muted: #9aa0a8;
+    --color-surface: #1d1f24;
+    --color-surface-hover: #262830;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.15);
+    --color-scrim: rgba(0, 0, 0, 0.6);
+    --color-accent: #a8c7fa;
+    --color-accent-hover: #c2d7fc;
+    --color-on-accent: #062e6f;
+    --color-success: #81c995;
+    --color-warning: #fcad70;
+    --color-error: #f28b82;
+    --color-info: #a8c7fa;
+
+    --shadow-card-hover: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+    --shadow-btn: 0 2px 8px rgba(168,199,250,0.2);
+  }
+}

@@ -210,6 +210,31 @@ static const char *get_resetprop_cmd(void) {
     return g_resetprop_cmd ? g_resetprop_cmd : "resetprop";
 }
 
+/* 检查属性类别是否启用 Check if property category is enabled */
+static int is_category_enabled(bl_category_t cat) {
+    if (!g_config.blhide) return 0;  /* 总开关关闭 Master switch off */
+
+    switch (cat) {
+        case BLCAT_BOOT:       return g_config.blhide_boot;
+        case BLCAT_SECURITY:   return g_config.blhide_security;
+        case BLCAT_VENDOR:     return g_config.blhide_vendor;
+        case BLCAT_OEM:        return g_config.blhide_oem;
+        case BLCAT_SECUREBOOT: return g_config.blhide_secureboot;
+        case BLCAT_REALME:     return g_config.blhide_realme;
+        case BLCAT_RECOVERY:   return g_config.blhide_recovery;
+        case BLCAT_DEVELOPER:  return g_config.blhide_developer;
+        case BLCAT_SELINUX:    return g_config.blhide_selinux;
+        case BLCAT_VIRTUAL:    return g_config.blhide_virtual;
+        default:               return 1;
+    }
+}
+
+/* 需要删除的属性 Properties to delete (from Integrity-Box) */
+static const char *del_props[] = {
+    "ro.build.selinux",  /* Integrity-Box: 删除而非覆盖 Delete instead of override */
+    NULL
+};
+
 /*
  * bl_build_script — 构建批量 resetprop 脚本 Build batch resetprop script
  * 将所有属性设置命令拼成一个 shell 脚本，一次 system() 执行
@@ -264,31 +289,6 @@ static char *bl_build_script(void) {
     return script;
 }
 
-
-/* 检查属性类别是否启用 Check if property category is enabled */
-static int is_category_enabled(bl_category_t cat) {
-    if (!g_config.blhide) return 0;  /* 总开关关闭 Master switch off */
-
-    switch (cat) {
-        case BLCAT_BOOT:       return g_config.blhide_boot;
-        case BLCAT_SECURITY:   return g_config.blhide_security;
-        case BLCAT_VENDOR:     return g_config.blhide_vendor;
-        case BLCAT_OEM:        return g_config.blhide_oem;
-        case BLCAT_SECUREBOOT: return g_config.blhide_secureboot;
-        case BLCAT_REALME:     return g_config.blhide_realme;
-        case BLCAT_RECOVERY:   return g_config.blhide_recovery;
-        case BLCAT_DEVELOPER:  return g_config.blhide_developer;
-        case BLCAT_SELINUX:    return g_config.blhide_selinux;
-        case BLCAT_VIRTUAL:    return g_config.blhide_virtual;
-        default:               return 1;
-    }
-}
-
-/* 需要删除的属性 Properties to delete (from Integrity-Box) */
-static const char *del_props[] = {
-    "ro.build.selinux",  /* Integrity-Box: 删除而非覆盖 Delete instead of override */
-    NULL
-};
 
 int bl_hide(void) {
     log_msg(LOG_INFO, "开始弱隐 BL [Starting weak bootloader hiding]...");

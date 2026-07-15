@@ -52,8 +52,14 @@ teeforge --config FILE        # 使用自定义配置
 ```
 - 无参数时展示 banner + 版本 + root 信息 + help，不执行任何任务
 - 每次运行自动检测 root 方式并写入 sys.conf（`--rootdetect` 或 `--no-rootdetect` 可覆盖）
+- root 检测优先级：环境变量 `$KSU` / `$APATCH` / `$MAGISK_VER_CODE` → 文件系统路径 `/data/adb/{ksu,ap,magisk}/`
 
 ### 配置文件 Configuration
+
+两个配置文件，安装时动态生成（不预打包），用户配置跨更新保留：
+- `config.conf` — 用户可编辑的开关（debug、blhide 系列）
+- `sys.conf` — 系统自动生成的路径和检测结果（勿手动编辑）
+
 ```ini
 # config.conf（用户配置，保留跨更新 User config, preserved across updates）
 debug=0                         # 0=关闭, 1=开启（日志写入文件）
@@ -81,6 +87,17 @@ root_method=KernelSU            # 自动检测 auto-detected
 root_version=1234               # 自动检测 auto-detected
 prop_tool=standard              # 安装时选择 install-time choice
 ```
+
+### 安装流程 Installation Flow
+
+`customize.sh` 执行顺序：
+1. 检测 root 方式（`teeforge --rootdetect`，环境变量可用）
+2. 音量键选择：保留/清除已有配置（10s 超时默认保留）
+3. 音量键选择 resetprop 工具（10s 超时默认传统方式）
+   - 传统 resetprop（推荐）→ 删除 resetprop-rs/ 目录减小体积
+   - resetprop-rs → 检测架构（arm64-v8a/armeabi-v7a），只保留对应二进制；x86/x86_64 中断安装
+4. 生成 sys.conf（含 `prop_tool=standard|rs`）
+5. 生成 config.conf（含 debug 和 blhide 开关）
 
 ### 关键实现细节 Key Implementation Details
 

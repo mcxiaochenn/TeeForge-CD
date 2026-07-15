@@ -57,6 +57,19 @@ teeforge --config FILE        # 使用自定义配置
 ```ini
 # config.conf（用户配置，保留跨更新 User config, preserved across updates）
 debug=0                         # 0=关闭, 1=开启（日志写入文件）
+blhide=1                        # 弱隐 BL 总开关 Master switch
+blhide_boot=1                   # Boot 状态
+blhide_security=1               # 安全属性
+blhide_vendor=1                 # Vendor 属性
+blhide_oem=1                    # OEM 解锁
+blhide_secureboot=1             # 安全启动
+blhide_realme=1                 # Realme 设备
+blhide_recovery=1               # Recovery 模式
+blhide_developer=1              # Developer 选项
+blhide_selinux=1                # SELinux 伪装
+blhide_virtual=1                # 虚拟设备
+blhide_delete=1                 # 属性删除
+blhide_compact=1                # 内存整理
 
 # sys.conf（系统配置，安装时自动生成 System config, auto-generated at install）
 packages_xml=/data/system/packages.xml
@@ -76,6 +89,7 @@ root_version=1234               # 自动检测 auto-detected
   - 下载降级策略：`curl -sL` → `wget -qO-` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
   - 参考实现：Integrity-Box `webroot/common_scripts/key.sh`
 - **blhide.c**: 检测 resetprop-rs 路径（环境变量 → 模块目录 → 系统 PATH），内部调用 resetprop-rs 时使用 `--stealth`、`--compact`、`--delete` 参数。检测到无执行权限时自动 `chmod 755`
+  - 功能开关：`blhide`（总开关）+ 10 个类别开关（boot/security/vendor/oem/secureboot/recovery/realme/developer/selinux/virtual）+ delete + compact，用户配置文件控制，默认全开
 - **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
 - **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志

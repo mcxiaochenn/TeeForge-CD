@@ -67,7 +67,7 @@ ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetpr
 ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
 
 PROP_TOOL="standard"
-PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
+PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect 2>/dev/null)
 ui_print " "
 if [ "$PROP_RESULT" = "0" ]; then
     PROP_TOOL="rs"
@@ -98,7 +98,6 @@ if [ "$PROP_RESULT" = "0" ]; then
             ;;
     esac
 else
-    PROP_TOOL="standard"
     ui_print "  已选择传统 resetprop [Selected traditional resetprop]"
     # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
     rm -rf "$MODPATH/resetprop-rs"

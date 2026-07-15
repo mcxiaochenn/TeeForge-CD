@@ -1,11 +1,16 @@
-## TeeForge-CD Dev v0.3.2-413cb92
+## TeeForge-CD Dev v0.3.8-b148220
 
 ### 构建信息 Build Info
-- Version: `v0.3.2-413cb92`
-- Version Code: `97`
-- Commit: `413cb92`
+- Version: `v0.3.8-b148220`
+- Version Code: `102`
+- Commit: `b148220`
 
 ### 最近提交 Recent Commits
+- b148220 fix: review findings — timeout logic, cached detection, dead code
+- 8d7f7b1 docs: update CLAUDE.md with resetprop tool selection and fallback
+- f5904b3 feat: add resetprop tool selection during installation
+- c2f87e4 docs: document blhide feature toggles in CLAUDE.md
+- 2cdc393 feat: add blhide feature toggles (master + per-category switches)
 - 413cb92 fix: move kaomoji before status icon in description
 - 3c38e1d docs: fix CLAUDE.md and README.md review findings
 - f5e8b5e fix: medium C code issues from review
@@ -21,8 +26,3 @@
 - c07fe4a fix: remove stale release.json write to master (update/ dir deleted)
 - 83ee3af Refactor README to eliminate redundant warnings
 - d117c56 fix: debug mode not enabled in dev builds; download fallback strategy
-- 9c68080 docs: update README and TODO
-- 653a665 docs: update CLAUDE.md with latest CLI, config, and CI changes
-- db4e160 fix: replace curl with wget for keybox download
-- 5024e0c fix: banner indentation
-- bf637a5 fix: remove duplicate 'v' in banner version display

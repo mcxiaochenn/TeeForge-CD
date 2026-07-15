@@ -2,7 +2,7 @@
 /**
  * TeeForge WebUI — Main Page
  * Composes Header, StatusCard, ActionCards, LogDialog
- * Handles command execution via ksu.exec()
+ * Handles command execution via ksu.exec() with cwd option
  */
 import Base from '../layouts/Base.astro';
 import Header from '../components/Header.astro';
@@ -35,11 +35,15 @@ import LogDialog from '../components/LogDialog.astro';
 </Base>
 
 <script>
-  const TEEFORGE = '/data/adb/modules/teeforge_cd/teeforge';
+  const MODDIR = '/data/adb/modules/teeforge_cd';
+  const TEEFORGE = MODDIR + '/teeforge';
+  // Pass cwd so teeforge finds ./sys.conf and ./config.conf in its module dir
+  const EXEC_OPTS = JSON.stringify({ cwd: MODDIR });
 
   /**
-   * Execute command via ksu.exec (callback pattern)
-   * ksu.exec(cmd, argsJson, callbackName) — callback receives (exitCode, stdout, stderr)
+   * ksu.exec with cwd — callback pattern
+   * ksu.exec(cmd, optionsJson, callbackName)
+   * callback receives (exitCode, stdout, stderr)
    */
   function execCmd(cmd: string): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
@@ -48,14 +52,13 @@ import LogDialog from '../components/LogDialog.astro';
         delete (window as any)[cb];
         resolve({ code, stdout: stdout || '', stderr: stderr || '' });
       };
-      ksu.exec(cmd, '{}', cb);
+      ksu.exec(cmd, EXEC_OPTS, cb);
     });
   }
 
   function disableButtons() {
-    const buttons = document.querySelectorAll('.action-btn') as NodeListOf<HTMLButtonElement>;
-    buttons.forEach((b) => {
-      b.disabled = true;
+    document.querySelectorAll('.action-btn').forEach((b) => {
+      (b as HTMLButtonElement).disabled = true;
       const spinner = b.querySelector('.spinner') as HTMLElement;
       const text = b.querySelector('.btn-text') as HTMLElement;
       if (spinner) spinner.style.display = 'inline-block';
@@ -64,9 +67,8 @@ import LogDialog from '../components/LogDialog.astro';
   }
 
   function reenableButtons() {
-    const buttons = document.querySelectorAll('.action-btn') as NodeListOf<HTMLButtonElement>;
-    buttons.forEach((b) => {
-      b.disabled = false;
+    document.querySelectorAll('.action-btn').forEach((b) => {
+      (b as HTMLButtonElement).disabled = false;
       const spinner = b.querySelector('.spinner') as HTMLElement;
       const text = b.querySelector('.btn-text') as HTMLElement;
       if (spinner) spinner.style.display = 'none';
@@ -74,20 +76,39 @@ import LogDialog from '../components/LogDialog.astro';
     });
   }
 
-  async function runAction(teeforgeArgs: string, titleKey: string) {
+  async function runAction(flag: string, titleKey: string) {
     const dialog = (window as any).__tfDialog;
     const t = (window as any).__tf.t;
 
     disableButtons();
     dialog.open(t(titleKey));
 
-    try {
-      // ksu.exec runs with root, returns all output at once
-      const result = await execCmd(TEEFORGE + ' ' + teeforgeArgs);
+    // Try spawn first for streaming output, fallback to exec
+    if (typeof ksu.spawn === 'function') {
+      try {
+        const child = ksu.spawn(TEEFORGE + ' ' + flag, { cwd: MODDIR });
+        child.stdout.on('data', (chunk: string) => dialog.appendLog(chunk));
+        child.stderr.on('data', (chunk: string) => dialog.appendLog(chunk));
+        child.on('exit', (code: number) => {
+          dialog.done(code === 0, code);
+          reenableButtons();
+        });
+        child.on('error', (err: any) => {
+          dialog.appendLog('\n[spawn error] ' + String(err));
+          dialog.done(false, -1);
+          reenableButtons();
+        });
+        return;
+      } catch (_) {
+        // spawn not available, fall through to exec
+      }
+    }
 
+    // Fallback: exec (output all at once after command finishes)
+    try {
+      const result = await execCmd(TEEFORGE + ' ' + flag);
       if (result.stdout) dialog.appendLog(result.stdout);
       if (result.stderr) dialog.appendLog(result.stderr);
-
       dialog.done(result.code === 0, result.code);
     } catch (err) {
       dialog.appendLog('\n[error] ' + String(err));

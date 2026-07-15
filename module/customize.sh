@@ -23,17 +23,19 @@ ROOT_RESULT=$($MODPATH/teeforge --rootdetect 2>/dev/null)
 ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
 ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
 [ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
+ui_print " "
 
 # 检查已有安装 Check existing installation
 if [ -d "$TEEFORGE_DIR" ]; then
     if [ -f "$CONFIG_FILE" ]; then
         ui_print "  检测到已有配置 [Existing config detected]"
+        ui_print "  10秒超时自动保留 [10s timeout, keep by default]"
+        ui_print " "
         ui_print "  音量+ = 保留配置 [Volume+ = Keep config]"
         ui_print "  音量- = 全部清除 [Volume- = Clean all]"
-        ui_print "  10秒超时自动保留 [10s timeout, keep by default]"
-        ui_print ""
 
         RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
+        ui_print " "
         if [ "$RESULT" = "0" ]; then
             ui_print "  清除所有数据 [Cleaning all data]"
             rm -rf "$TEEFORGE_DIR"
@@ -47,28 +49,30 @@ if [ -d "$TEEFORGE_DIR" ]; then
         rm -rf "$TEEFORGE_DIR"
     fi
 fi
+ui_print " "
 
 # 创建目录 Create directories
 ui_print "  创建目录 [Creating dirs]..."
 mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
+ui_print " "
 
 # 选择 resetprop 工具 Select resetprop tool
 ui_print "  选择属性修改工具 [Select prop tool]"
-ui_print "  音量+ = 传统 resetprop（推荐）"
-ui_print "  [Volume+ = Traditional resetprop (Recommended)]"
-ui_print "  音量- = resetprop-rs"
-ui_print "  [Volume- = resetprop-rs]"
-ui_print "  隐蔽性更佳，但可能被环境检测软件识别"
-ui_print "  [Better stealth, but may be detected]"
+ui_print "  传统方式兼容性好，resetprop-rs 隐蔽性更佳但可能被检测"
+ui_print "  [Traditional has better compat, rs has better stealth but may be detected]"
 ui_print "  10秒超时默认传统方式 [10s timeout, default traditional]"
-ui_print ""
+ui_print " "
+ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetprop (Recommended)]"
+ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
 
 PROP_TOOL="standard"
 PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
+ui_print " "
 if [ "$PROP_RESULT" = "0" ]; then
     PROP_TOOL="rs"
     ui_print "  已选择 resetprop-rs [Selected resetprop-rs]"
+    ui_print " "
 
     # 检测架构，只保留对应二进制 Detect arch, keep matching binary only
     ARCH=$(getprop ro.product.cpu.abi)
@@ -99,6 +103,7 @@ else
     # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
     rm -rf "$MODPATH/resetprop-rs"
 fi
+ui_print " "
 
 # 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)
 cat > "$TEEFORGE_DIR/sys.conf" << EOF

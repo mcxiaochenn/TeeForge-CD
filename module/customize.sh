@@ -66,12 +66,7 @@ ui_print ""
 
 PROP_TOOL="standard"
 PROP_RESULT=$($MODPATH/teeforge --volume 10 --no-rootdetect)
-if [ "$PROP_RESULT" = "1" ]; then
-    PROP_TOOL="standard"
-    ui_print "  已选择传统 resetprop [Selected traditional resetprop]"
-    # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
-    rm -rf "$MODPATH/resetprop-rs"
-else
+if [ "$PROP_RESULT" = "0" ]; then
     PROP_TOOL="rs"
     ui_print "  已选择 resetprop-rs [Selected resetprop-rs]"
 
@@ -98,6 +93,11 @@ else
             ui_print "  未知架构，保留全部 [Unknown arch, keeping all]: $ARCH"
             ;;
     esac
+else
+    PROP_TOOL="standard"
+    ui_print "  已选择传统 resetprop [Selected traditional resetprop]"
+    # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
+    rm -rf "$MODPATH/resetprop-rs"
 fi
 
 # 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)

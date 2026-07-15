@@ -28,6 +28,7 @@ typedef enum {
 } prop_tool_t;
 
 static prop_tool_t g_prop_tool = PROP_TOOL_STANDARD;
+static const char *g_resetprop_cmd = NULL;  /* 缓存检测结果 Cache detection result */
 
 /* 弱隐 BL 属性类别 Weak BL hiding property categories */
 typedef enum {
@@ -109,16 +110,33 @@ static int is_executable(const char *path) {
     return access(path, X_OK) == 0;
 }
 
-/* 检测 resetprop 工具类型 Detect resetprop tool type */
+/* 检测 resetprop 工具类型并缓存命令路径 Detect and cache resetprop command */
 static void detect_prop_tool(void) {
     /* 用户配置优先 User config takes priority */
     if (strcmp(g_config.prop_tool, "standard") == 0) {
         g_prop_tool = PROP_TOOL_STANDARD;
-        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]");
-        log_msg(LOG_INFO, "  模式 [Mode]: normal");
+        /* 标准 resetprop 降级策略 Standard resetprop fallback */
+        const char *std_paths[] = {
+            "/data/adb/ksu/bin/resetprop",
+            "/data/adb/ap/bin/resetprop",
+            "/data/adb/magisk/resetprop",
+            NULL
+        };
+        /* 尝试固定路径（PATH 在 popen/system 中不一定可用） */
+        for (int i = 0; std_paths[i] != NULL; i++) {
+            if (file_exists(std_paths[i]) && is_executable(std_paths[i])) {
+                g_resetprop_cmd = std_paths[i];
+                log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: %s", g_resetprop_cmd);
+                return;
+            }
+        }
+        /* 回退 PATH 中的 resetprop */
+        g_resetprop_cmd = "resetprop";
+        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: PATH");
         return;
     }
 
+    /* --- resetprop-rs 检测 --- */
     log_msg(LOG_INFO, "检测 resetprop-rs [Detecting resetprop-rs]...");
 
     /* 1. 环境变量 Environment variable */
@@ -132,8 +150,8 @@ static void detect_prop_tool(void) {
         }
         if (is_executable(env_path)) {
             g_prop_tool = PROP_TOOL_RS;
+            g_resetprop_cmd = env_path;
             log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", env_path);
-            log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
             return;
         }
         log_msg(LOG_WARN, "  resetprop-rs 无法执行，回退标准 resetprop [Cannot execute, falling back]");
@@ -158,54 +176,24 @@ static void detect_prop_tool(void) {
             }
             if (is_executable(mod_paths[i])) {
                 g_prop_tool = PROP_TOOL_RS;
+                g_resetprop_cmd = mod_paths[i];
                 log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", mod_paths[i]);
-                log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
                 return;
             }
         }
     }
 
     /* 3. 系统 PATH */
-    int ret = system("which resetprop-rs > /dev/null 2>&1");
+    int ret = system("command -v resetprop-rs > /dev/null 2>&1");
     if (ret == 0) {
         g_prop_tool = PROP_TOOL_RS;
+        g_resetprop_cmd = "resetprop-rs";
         log_msg(LOG_INFO, "  使用系统 resetprop-rs [Using system resetprop-rs]");
-        log_msg(LOG_INFO, "  模式 [Mode]: --stealth");
         return;
     }
 
     /* rs 检测全部失败，降级标准 resetprop All rs detection failed, fallback to standard */
     g_prop_tool = PROP_TOOL_STANDARD;
-    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级标准 resetprop [rs not found, falling back to standard]");
-}
-
-/* 获取 resetprop 命令路径 Get resetprop command path */
-static const char *get_resetprop_cmd(void) {
-    if (g_prop_tool == PROP_TOOL_RS) {
-        /* 1. 环境变量 */
-        const char *env_path = getenv("RESETPROP_RS");
-        if (env_path && file_exists(env_path)) return env_path;
-
-        /* 2. 模块目录 */
-        const char *mod_paths[] = {
-            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-            NULL
-        };
-        for (int i = 0; mod_paths[i] != NULL; i++) {
-            if (file_exists(mod_paths[i])) return mod_paths[i];
-        }
-
-        return "resetprop-rs";
-    }
-
-    /* 标准 resetprop 降级策略 Standard resetprop fallback */
-    /* 直接执行（PATH 中已有，root 管理器自动加载） */
-    if (system("resetprop --help > /dev/null 2>&1") == 0) return "resetprop";
-
-    /* 固定路径降级 Fixed path fallback */
     const char *std_paths[] = {
         "/data/adb/ksu/bin/resetprop",
         "/data/adb/ap/bin/resetprop",
@@ -213,10 +201,19 @@ static const char *get_resetprop_cmd(void) {
         NULL
     };
     for (int i = 0; std_paths[i] != NULL; i++) {
-        if (file_exists(std_paths[i])) return std_paths[i];
+        if (file_exists(std_paths[i]) && is_executable(std_paths[i])) {
+            g_resetprop_cmd = std_paths[i];
+            log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 [rs not found, fallback]: %s", std_paths[i]);
+            return;
+        }
     }
+    g_resetprop_cmd = "resetprop";
+    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 PATH resetprop [rs not found, fallback to PATH]");
+}
 
-    return "resetprop";
+/* 获取 resetprop 命令路径（已缓存）Get resetprop command path (cached) */
+static const char *get_resetprop_cmd(void) {
+    return g_resetprop_cmd ? g_resetprop_cmd : "resetprop";
 }
 
 /* 执行 resetprop 命令 Execute resetprop command */
@@ -245,11 +242,7 @@ static int run_prop_delete(const char *key) {
     char cmd[512];
     const char *cmd_path = get_resetprop_cmd();
 
-    if (g_prop_tool == PROP_TOOL_RS) {
-        snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
-    } else {
-        snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
-    }
+    snprintf(cmd, sizeof(cmd), "%s --delete %s", cmd_path, key);
 
     log_msg(LOG_DEBUG, "  %s", cmd);
 

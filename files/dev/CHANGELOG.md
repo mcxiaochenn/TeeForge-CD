@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.3.8-b148220
+## TeeForge-CD Dev v0.3.8-8ee0860
 
 ### 构建信息 Build Info
-- Version: `v0.3.8-b148220`
-- Version Code: `102`
-- Commit: `b148220`
+- Version: `v0.3.8-8ee0860`
+- Version Code: `103`
+- Commit: `8ee0860`
 
 ### 最近提交 Recent Commits
+- 8ee0860 fix(ui): reorder install prompts — options at end, add spacing
 - b148220 fix: review findings — timeout logic, cached detection, dead code
 - 8d7f7b1 docs: update CLAUDE.md with resetprop tool selection and fallback
 - f5904b3 feat: add resetprop tool selection during installation
@@ -25,4 +26,3 @@
 - 6a82185 feat: release zip pushed to page branch, zipUrl uses self-hosted CDN
 - c07fe4a fix: remove stale release.json write to master (update/ dir deleted)
 - 83ee3af Refactor README to eliminate redundant warnings
-- d117c56 fix: debug mode not enabled in dev builds; download fallback strategy

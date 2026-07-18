@@ -9,7 +9,7 @@ TeeForge-CD is a Magisk/KernelSU module that:
 - Implements weak bootloader hiding via resetprop (supports resetprop-rs)
 - Manages keybox files with CDN and obfuscation
 
-Primary language: **C** (minimal binary size, direct NDK support).
+Primary language: **C** (minimal binary size, direct NDK support). Secondary: **TypeScript** (WebUI, KernelSU interface).
 
 ## Build & Package Commands
 
@@ -29,6 +29,8 @@ export NDK="/path/to/android-ndk"
 # 清理构建产物 [Clean build artifacts]
 ./clean.sh
 ```
+
+`package.sh` runs `build.sh` internally, then also builds the WebUI (if Node.js is available), and creates the installable `.zip` in `out/`.
 
 ## Architecture
 
@@ -91,6 +93,8 @@ root_version=1234               # 自动检测 auto-detected
 prop_tool=standard              # 安装时选择 install-time choice
 ```
 
+**加载顺序 Loading order**: `config_load()` in `utils.c` reads `sys.conf` first, then the user config (`config.conf`) on top — user settings override system defaults. blhide defaults are all set to 1 before any file is read.
+
 ### 安装流程 Installation Flow
 
 `customize.sh` 执行顺序：
@@ -116,15 +120,25 @@ prop_tool=standard              # 安装时选择 install-time choice
   - resetprop-rs：环境变量 → 模块目录 → 系统 PATH，使用 `--stealth`、`--compact`、`--delete` 参数
   - 批量执行：`bl_build_script()` 将所有属性命令拼成一个 shell 脚本，单次 `system()` 执行（非逐条 fork）
   - 功能开关：`blhide`（总开关）+ 10 个类别开关（boot/security/vendor/oem/secureboot/recovery/realme/developer/selinux/virtual）+ delete + compact，用户配置文件控制，默认全开
-- **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
+  - 包名数组声明为 `static`（`static char packages[MAX_PACKAGES][MAX_PKG_NAME]`），避免 ~512KB 栈溢出
+- **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志
+
+### WebUI（KernelSU 管理界面）
+
+`webroot/` 是一个 Astro + TypeScript 的 WebUI 项目，提供 KernelSU WebUI 界面：
+- `npm ci && npm run build` 在 `webroot/` 下构建，产物输出到 `module/webroot/`
+- `package.sh` 自动检测 Node.js 可用性，有则构建 WebUI，无则跳过
+- 使用 `ksu.exec()` 调用 teeforge 二进制，需设置 `cwd` 为模块目录（`sys.conf` 用相对路径 `./`）
+- `ksu.resetpropBusybox()` 用于 WebUI 内的 resetprop 调用
 
 ### GitHub Action
 - `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `page` 分支 `files/keybox/`（混淆文件名，15个文件）
 - `dev.yml` — push 触发 dev 构建，产物推送到 `page` 分支 `files/dev/`。版本号同步更新 `teeforge.h` 和 `module.prop`，`updateJson` 改为指向自建 CDN
 - `release.yml` — 推送版本标签触发 Release 构建，更新 `page` 分支 `files/` 下的 release.json 和 CHANGELOG.md
 - 所有 CDN 文件统一推送到 `page` 分支的 `files/` 目录，通过自建域名 `teeforge.mcxiaochen.top/files/` 访问
+- **版本注入 Version injection**: CI 同时更新 `module/module.prop`（version, versionCode）和 `native/include/teeforge.h`（TEEFORGE_VERSION），两处必须同步
 
 ### 自动更新 Auto Update
 - `module.prop` 中 `updateJson` 指向 `teeforge.mcxiaochen.top/files/update/release.json`
@@ -145,12 +159,16 @@ prop_tool=standard              # 安装时选择 install-time choice
 - **`system()` 返回值是 `waitpid` 格式**：`(exit_code << 8) | signal`。32256 = 126 << 8 表示 "命令存在但不可执行"（权限问题），不是 resetprop 本身的错误。遇到非零返回值时先右移 8 位取真实 exit code。
 - **`set_perm_recursive` 会重置权限**：Magisk 的 `set_perm_recursive` 必须在所有 `chmod` 之后调用，可执行二进制需要单独 `set_perm` 再次设置 755。
 - **Android 设备没有 openssl**：涉及哈希的 shell 命令只能用 `sha256sum`（toybox 自带），不能用 `openssl`。
+- **大数组用 `static`**：`target.c` 中 `packages[MAX_PACKAGES][MAX_PKG_NAME]`（~512KB）声明为 `static` 以避免栈溢出，但这也意味着该函数非线程安全（当前是单线程，无问题）。
 - **`temp/Integrity-Box/`** 是上游参考项目的本地克隆（gitignored），用于对照解密实现和属性列表，不要提交。
+- **CI 版本号双写**：版本号同时存在于 `module/module.prop` 和 `native/include/teeforge.h`，CI 用 `sed` 同时更新两处。本地开发改版本号时也要两处同步。
+- **config.conf 不在仓库中**：`config.conf` 在 `customize.sh` 安装时动态生成，dev 构建由 CI 动态生成（debug=1）。不要提交 config.conf 到仓库。
 
 ## Project Directories
 
 - `native/` — C 源码和头文件
 - `module/` — Magisk 模块框架（shell 脚本、module.prop、resetprop-rs 二进制）
+- `webroot/` — Astro WebUI 源码（KernelSU 管理界面）
 - `config/` — 默认 sources.conf
 - `keybox/` — 上游同步状态文件（upstream_hash、month、key-status 等）
 - `docs/` — 架构文档、反思小结、任务清单
@@ -163,12 +181,12 @@ prop_tool=standard              # 安装时选择 install-time choice
 |------|------|
 | `native/src/main.c` | 入口、参数解析、CLI |
 | `native/src/target.c` | 包列表解析、生成 target.txt |
-| `native/src/utils.c` | 日志、文件 I/O、配置解析 |
+| `native/src/utils.c` | 日志、文件 I/O、配置解析、模块描述更新 |
 | `native/src/blhide.c` | 弱隐 BL（resetprop 属性伪装） |
 | `native/src/keybox.c` | Keybox 获取与解密（混淆） |
 | `native/src/volume.c` | 音量键监听 |
 | `native/src/rootdetect.c` | Root 方式检测（env + path fallback） |
-| `native/include/teeforge.h` | 公共头文件 |
+| `native/include/teeforge.h` | 公共头文件、config_t 结构体、版本号 |
 | `module/service.sh` | 开机服务 |
 | `module/customize.sh` | 安装脚本（配置保留逻辑） |
 | `module/uninstall.sh` | 卸载脚本 |

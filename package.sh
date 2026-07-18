@@ -99,7 +99,7 @@ echo -e "  生成校验文件 [Generating checksums]..."
     find . -type f ! -name '.sha256' ! -path './META-INF/*' -print0 \
         | sort -z \
         | xargs -0 sha256sum \
-        | sed 's|^\([a-f0-9]*\)  \./|\1  |' \
+        | sed 's|^\([a-f0-9]*\) [*]\./|\1  |' \
         > .sha256
 )
 CHECKSUM_COUNT=$(wc -l < "$MODULE_DIR/.sha256" | tr -d ' ')

@@ -98,13 +98,16 @@ prop_tool=standard              # 安装时选择 install-time choice
 ### 安装流程 Installation Flow
 
 `customize.sh` 执行顺序：
-1. 检测 root 方式（`teeforge --rootdetect`，环境变量可用）
-2. 音量键选择：保留/清除已有配置（10s 超时默认保留）
-3. 音量键选择 resetprop 工具（10s 超时默认传统方式）
+1. 文件完整性校验（`verify.sh`，基于 `.sha256` 校验文件，失败则中止安装）
+2. 检测 root 方式（`teeforge --rootdetect`，环境变量可用）
+3. 音量键选择：保留/清除已有配置（10s 超时默认保留）
+4. 音量键选择 resetprop 工具（10s 超时默认传统方式）
    - 传统 resetprop（推荐）→ 删除 resetprop-rs/ 目录减小体积
    - resetprop-rs → 检测架构（arm64-v8a/armeabi-v7a），只保留对应二进制；x86/x86_64 中断安装
-4. 生成 sys.conf（含 `prop_tool=standard|rs`）
-5. 生成 config.conf（含 debug 和 blhide 开关）
+5. 生成 sys.conf（含 `prop_tool=standard|rs`）
+6. 生成 config.conf（含 debug 和 blhide 开关）
+
+**完整性校验 Integrity Verification**: `package.sh` 打包时对所有模块文件（排除 `.sha256` 自身和 `META-INF/`）生成 SHA256 校验和写入 `.sha256`。安装时 `verify.sh` 逐文件比对，校验失败则 `abort` 中止安装。README.md 也会打包进模块（重命名为 `README`，无扩展名）。
 
 ### 关键实现细节 Key Implementation Details
 
@@ -163,6 +166,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 - **`temp/Integrity-Box/`** 是上游参考项目的本地克隆（gitignored），用于对照解密实现和属性列表，不要提交。
 - **CI 版本号双写**：版本号同时存在于 `module/module.prop` 和 `native/include/teeforge.h`，CI 用 `sed` 同时更新两处。本地开发改版本号时也要两处同步。
 - **config.conf 不在仓库中**：`config.conf` 在 `customize.sh` 安装时动态生成，dev 构建由 CI 动态生成（debug=1）。不要提交 config.conf 到仓库。
+- **`.sha256` 校验文件**：由 `package.sh` 打包时自动生成，不在仓库中。校验范围为模块内所有文件（排除 `.sha256` 自身和 `META-INF/`），使用 `sha256sum`（toybox 自带）。
 
 ## Project Directories
 
@@ -189,6 +193,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 | `native/include/teeforge.h` | 公共头文件、config_t 结构体、版本号 |
 | `module/service.sh` | 开机服务 |
 | `module/customize.sh` | 安装脚本（配置保留逻辑） |
+| `module/verify.sh` | 安装前文件完整性校验 |
 | `module/uninstall.sh` | 卸载脚本 |
 | `module/action.sh` | 手动执行（keybox + generate） |
 | `module/resetprop-rs/` | 预置 resetprop-rs 二进制（arm64-v8a + armeabi-v7a） |

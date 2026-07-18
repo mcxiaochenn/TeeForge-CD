@@ -76,6 +76,12 @@ cp -r "$MODULE_SRC"/* "$MODULE_DIR/"
 # Copy binary 复制二进制
 cp "$OUT_DIR/teeforge" "$MODULE_DIR/"
 
+# Copy README 复制说明文档
+if [ -f "$SCRIPT_DIR/README.md" ]; then
+    cp "$SCRIPT_DIR/README.md" "$MODULE_DIR/README"
+    echo -e "  已复制 [Copied]: README"
+fi
+
 # Set permissions 设置权限
 chmod 755 "$MODULE_DIR/teeforge"
 chmod 755 "$MODULE_DIR/customize.sh"
@@ -83,6 +89,21 @@ chmod 755 "$MODULE_DIR/service.sh"
 chmod 755 "$MODULE_DIR/META-INF/com/google/android/update-binary"
 
 echo -e "  模块目录 [Module directory]: $MODULE_DIR"
+
+# Generate integrity checksums 生成完整性校验
+echo -e "  生成校验文件 [Generating checksums]..."
+(
+    cd "$MODULE_DIR"
+    # 排除校验文件自身和 META-INF（由 Magisk 安装器管理）
+    # Exclude checksums file itself and META-INF (managed by Magisk installer)
+    find . -type f ! -name '.sha256' ! -path './META-INF/*' -print0 \
+        | sort -z \
+        | xargs -0 sha256sum \
+        | sed 's|^\([a-f0-9]*\)  \./|\1  |' \
+        > .sha256
+)
+CHECKSUM_COUNT=$(wc -l < "$MODULE_DIR/.sha256" | tr -d ' ')
+echo -e "  校验文件已生成 [Checksums generated]: $CHECKSUM_COUNT 个文件 [files]"
 
 # Step 5: Create zip 创建压缩包
 echo -e "${GREEN}步骤 5/5: 创建安装包 [Step 5/5: Creating zip]...${NC}"

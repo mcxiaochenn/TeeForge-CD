@@ -6,6 +6,16 @@ ui_print " "
 ui_print "  Installing TeeForge-CD / 正在安装"
 ui_print " "
 
+# 文件完整性校验 File integrity verification
+. "$MODPATH/verify.sh"
+VERIFY_RET=$?
+if [ "$VERIFY_RET" -ne 0 ]; then
+    ui_print "  !! 安装中止 Installation aborted !!"
+    ui_print "  !! 请重新下载模块 Please re-download the module"
+    abort "  Integrity verification failed / 文件校验失败"
+fi
+ui_print " "
+
 TEEFORGE_DIR="/data/adb/teeforge"
 CONFIG_FILE="$TEEFORGE_DIR/config.conf"
 

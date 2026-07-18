@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.4.1-eaad5c7
+## TeeForge-CD Dev v0.5.0-52029a3
 
 ### 构建信息 Build Info
-- Version: `v0.4.1-eaad5c7`
-- Version Code: `113`
-- Commit: `eaad5c7`
+- Version: `v0.5.0-52029a3`
+- Version Code: `116`
+- Commit: `52029a3`
 
 ### 最近提交 Recent Commits
+- 52029a3 fix(package): handle sha256sum binary mode asterisk in sed pattern
+- c1caf0f feat: add verify.sh for file integrity check + package README in module
+- 7d711bd docs: improve CLAUDE.md with WebUI, config loading order, static arrays, CI version injection notes
 - eaad5c7 fix(webui): set cwd for ksu.exec so teeforge finds ./sys.conf
 - f661b39 fix(webui): spawn→exec, lang sync, glassmorphism theme overhaul
 - c99311f ci: integrate WebUI build into package.sh and CI workflows
@@ -23,6 +26,3 @@
 - c2f87e4 docs: document blhide feature toggles in CLAUDE.md
 - 2cdc393 feat: add blhide feature toggles (master + per-category switches)
 - 413cb92 fix: move kaomoji before status icon in description
-- 3c38e1d docs: fix CLAUDE.md and README.md review findings
-- f5e8b5e fix: medium C code issues from review
-- b7ef71b fix(ci): keybox-sync critical issues

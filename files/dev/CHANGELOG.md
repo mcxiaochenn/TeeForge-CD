@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.5.0-52029a3
+## TeeForge-CD Dev v0.5.0-e5354b3
 
 ### 构建信息 Build Info
-- Version: `v0.5.0-52029a3`
-- Version Code: `116`
-- Commit: `52029a3`
+- Version: `v0.5.0-e5354b3`
+- Version Code: `117`
+- Commit: `e5354b3`
 
 ### 最近提交 Recent Commits
+- e5354b3 fix(ci): remove deprecated key-control and key-hash from keybox sync
 - 52029a3 fix(package): handle sha256sum binary mode asterisk in sed pattern
 - c1caf0f feat: add verify.sh for file integrity check + package README in module
 - 7d711bd docs: improve CLAUDE.md with WebUI, config loading order, static arrays, CI version injection notes
@@ -25,4 +26,3 @@
 - f5904b3 feat: add resetprop tool selection during installation
 - c2f87e4 docs: document blhide feature toggles in CLAUDE.md
 - 2cdc393 feat: add blhide feature toggles (master + per-category switches)
-- 413cb92 fix: move kaomoji before status icon in description

@@ -22,13 +22,9 @@ jobs:
         run: |
           UPSTREAM_URL="https://raw.githubusercontent.com/MeowDump/MeowDump/refs/heads/main/Megatron"
           STATUS_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-status"
-          CONTROL_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-control"
-          HASH_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-hash"
 
           curl -fsSL "$UPSTREAM_URL" -o /tmp/megatron_raw --retry 3
           curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3
-          curl -fsSL "$CONTROL_URL" -o /tmp/key-control --retry 3
-          curl -fsSL "$HASH_URL" -o /tmp/key-hash --retry 3
 
           if [ ! -s /tmp/megatron_raw ]; then
             echo "error=Failed to fetch Megatron" >> $GITHUB_OUTPUT
@@ -75,8 +71,6 @@ jobs:
           mkdir -p /tmp/omg_push/keybox
 
           cp /tmp/key-status /tmp/omg_push/keybox/
-          cp /tmp/key-control /tmp/omg_push/keybox/
-          cp /tmp/key-hash /tmp/omg_push/keybox/
           echo "${{ steps.fetch.outputs.hash }}" > /tmp/omg_push/keybox/upstream_hash
           echo "$(date +%Y-%m)" > /tmp/omg_push/keybox/month
 
@@ -148,8 +142,6 @@ jobs:
           git checkout master
           mkdir -p keybox
           cp /tmp/key-status keybox/
-          cp /tmp/key-control keybox/
-          cp /tmp/key-hash keybox/
           cp /tmp/omg_push/keybox/upstream_hash keybox/
           cp /tmp/omg_push/keybox/month keybox/
           git add keybox/

@@ -1,11 +1,17 @@
-## TeeForge-CD Dev v0.5.0-e5354b3
+## TeeForge-CD Dev v0.5.0-6894315
 
 ### 构建信息 Build Info
-- Version: `v0.5.0-e5354b3`
-- Version Code: `117`
-- Commit: `e5354b3`
+- Version: `v0.5.0-6894315`
+- Version Code: `123`
+- Commit: `6894315`
 
 ### 最近提交 Recent Commits
+- 6894315 fix(ci): 稳定构建产物改固定名 + commit message 精细化 fix(ci): fixed-name release zip + richer commit message
+- d3c4cad docs: 修复文档与代码脱节 docs: fix doc-code drift
+- 6fb2899 chore: 移除残留的根 CHANGELOG.md 与 obsolete dev 分支 chore: remove stale root CHANGELOG.md and obsolete dev branch
+- a71221a refactor: 版本号统一为 teeforge.h 单点维护 refactor: unify version to single source teeforge.h
+- 8b80208 fix(verify): 修复 MODDIR 使完整性校验生效 fix(verify): fix MODDIR so integrity check actually runs
+- 2913355 docs: add keybox sync workflow fix report
 - e5354b3 fix(ci): remove deprecated key-control and key-hash from keybox sync
 - 52029a3 fix(package): handle sha256sum binary mode asterisk in sed pattern
 - c1caf0f feat: add verify.sh for file integrity check + package README in module
@@ -20,9 +26,3 @@
 - e4e3451 fix: code review findings — security, correctness, performance
 - 01f337d docs: update CLAUDE.md with config split, install flow, root detection
 - c5e3648 fix: code review findings — null term, dedup paths, stderr redirect
-- 8ee0860 fix(ui): reorder install prompts — options at end, add spacing
-- b148220 fix: review findings — timeout logic, cached detection, dead code
-- 8d7f7b1 docs: update CLAUDE.md with resetprop tool selection and fallback
-- f5904b3 feat: add resetprop tool selection during installation
-- c2f87e4 docs: document blhide feature toggles in CLAUDE.md
-- 2cdc393 feat: add blhide feature toggles (master + per-category switches)

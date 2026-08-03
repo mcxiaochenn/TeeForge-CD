@@ -111,6 +111,6 @@
 | 2026-07-14 | Keybox 来源参考 Integrity-Box | 使用 MeowDump/MeowDump/Megatron |
 | 2026-07-14 | 切换自建 CDN | jsdelivr 更新慢，改用 teeforge.mcxiaochen.top |
 | 2026-07-14 | 配置文件分离 | sys.conf（系统）+ config.conf（用户），动态生成 |
-| 2026-07-14 | curl → wget | 部分设备精简 curl，busybox 自带 wget |
-| 2026-07-14 | 下载降级策略 | curl → wget → busybox 路径，兼容管理器环境 |
+| 2026-07-14 | wget → curl | 部分设备精简 curl，busybox 自带 wget |
+| 2026-07-14 | 下载降级策略 | wget → curl → busybox 路径，兼容管理器环境 |
 | 2026-07-14 | release zip CDN 分发 | zip 也推到 page 分支，zipUrl 指向自建 CDN |

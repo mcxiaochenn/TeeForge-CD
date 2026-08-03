@@ -31,8 +31,7 @@ src/
 ├── i18n/               # Translation dictionaries (source, copied to public/)
 ├── styles/
 │   ├── global.css      # Reset, layout, dialog, button base styles
-│   ├── theme-material.css  # Material 3 tokens (light + dark)
-│   └── theme-cyber.css     # Cyberpunk tokens (always dark)
+│   └── theme-material.css  # Material 3 tokens (light + dark)
 ├── components/
 │   ├── Header.astro    # Logo + language/theme selectors
 │   ├── StatusCard.astro    # Device info (root, version, arch, keybox)
@@ -46,7 +45,7 @@ src/
 
 ### Key Patterns
 
-**Theme switching**: `<html data-theme="material|cyber" data-mode="auto|light|dark">`
+**Theme switching**: `<html data-theme="material" data-mode="auto|light|dark">`
 - CSS variables drive all colors/radii/shadows
 - Theme init runs in `<head>` before paint (prevents flash)
 - User choice saved to `localStorage('tf-theme')`
@@ -61,9 +60,8 @@ src/
 - Streaming: `child.stdout.on('data')` → append to LogDialog
 - Exit handling: `child.on('exit', code)` → success/fail indicator
 
-**External resources**: All via `cdn.jsdelivr.net`
-- `@fontsource-variable/inter` (Material 3)
-- `@fontsource-variable/jetbrains-mono` (Cyberpunk)
+**External resources**: via `cdn.jsdelivr.net`
+- `@fontsource-variable/inter` (Material 3 字体，在 `theme-material.css` 中 @import)
 
 ### Build
 - `npm run build` → outputs to `../module/webroot/`

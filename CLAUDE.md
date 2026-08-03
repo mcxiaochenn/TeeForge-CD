@@ -133,15 +133,15 @@ prop_tool=standard              # 安装时选择 install-time choice
 `webroot/` 是一个 Astro + TypeScript 的 WebUI 项目，提供 KernelSU WebUI 界面：
 - `npm ci && npm run build` 在 `webroot/` 下构建，产物输出到 `module/webroot/`
 - `package.sh` 自动检测 Node.js 可用性，有则构建 WebUI，无则跳过
-- 使用 `ksu.exec()` 调用 teeforge 二进制，需设置 `cwd` 为模块目录（`sys.conf` 用相对路径 `./`）
-- `ksu.resetpropBusybox()` 用于 WebUI 内的 resetprop 调用
+- 使用 `ksu.spawn()`（流式输出，优先）或 `ksu.exec()`（一次性降级）调用 teeforge 二进制，需设置 `cwd` 为模块目录（`sys.conf` 用相对路径 `./`）
+- 命令执行逻辑在 `index.astro` 的 `runAction()`，流式日志追加到 LogDialog；`ksu.spawn` 不存在时降级到 `ksu.exec`
 
 ### GitHub Action
 - `keybox-sync.yml` — 每12小时同步上游 keybox，推送到 `page` 分支 `files/keybox/`（混淆文件名，15个文件）
-- `dev.yml` — push 触发 dev 构建，产物推送到 `page` 分支 `files/dev/`。版本号同步更新 `teeforge.h` 和 `module.prop`，`updateJson` 改为指向自建 CDN
+- `dev.yml` — push 触发 dev 构建，产物推送到 `page` 分支 `files/dev/`。版本号同步更新 `teeforge.h`（`module.prop` 由 `build.sh` 自动生成），`updateJson` 改为指向自建 CDN
 - `release.yml` — 推送版本标签触发 Release 构建，更新 `page` 分支 `files/` 下的 release.json 和 CHANGELOG.md
 - 所有 CDN 文件统一推送到 `page` 分支的 `files/` 目录，通过自建域名 `teeforge.mcxiaochen.top/files/` 访问
-- **版本注入 Version injection**: CI 同时更新 `module/module.prop`（version, versionCode）和 `native/include/teeforge.h`（TEEFORGE_VERSION），两处必须同步
+- **版本注入 Version injection**: 版本号唯一手写源是 `native/include/teeforge.h`（`TEEFORGE_VERSION`）；`module/module.prop` 的 version/versionCode 由 `build.sh` 每次构建时自动生成（CI 通过 `VERSION`/`VERSION_CODE` 环境变量传入，`build.sh` 优先使用）
 
 ### 自动更新 Auto Update
 - `module.prop` 中 `updateJson` 指向 `teeforge.mcxiaochen.top/files/update/release.json`
@@ -164,7 +164,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 - **Android 设备没有 openssl**：涉及哈希的 shell 命令只能用 `sha256sum`（toybox 自带），不能用 `openssl`。
 - **大数组用 `static`**：`target.c` 中 `packages[MAX_PACKAGES][MAX_PKG_NAME]`（~512KB）声明为 `static` 以避免栈溢出，但这也意味着该函数非线程安全（当前是单线程，无问题）。
 - **`temp/Integrity-Box/`** 是上游参考项目的本地克隆（gitignored），用于对照解密实现和属性列表，不要提交。
-- **CI 版本号双写**：版本号同时存在于 `module/module.prop` 和 `native/include/teeforge.h`，CI 用 `sed` 同时更新两处。本地开发改版本号时也要两处同步。
+- **版本号单点维护**：版本号只在 `native/include/teeforge.h` 手写（`TEEFORGE_VERSION`），`build.sh` 每次构建自动把 version/versionCode 写入 `module/module.prop`。改版本号只需改 `teeforge.h` 一处（versionCode 自动取 git 提交数，永不手写）。
 - **config.conf 不在仓库中**：`config.conf` 在 `customize.sh` 安装时动态生成，dev 构建由 CI 动态生成（debug=1）。不要提交 config.conf 到仓库。
 - **`.sha256` 校验文件**：由 `package.sh` 打包时自动生成，不在仓库中。校验范围为模块内所有文件（排除 `.sha256` 自身和 `META-INF/`），使用 `sha256sum`（toybox 自带）。
 

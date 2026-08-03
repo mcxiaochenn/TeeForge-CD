@@ -43,8 +43,10 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
           COMMIT_COUNT=$(git rev-list --count HEAD)
+          COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "versionCode=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "commitHash=$COMMIT_HASH" >> $GITHUB_OUTPUT
 
       - name: Build
         env:
@@ -133,21 +135,26 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+          COMMIT_HASH: ${{ steps.version.outputs.commitHash }}
         run: |
           # 克隆 page 分支 Clone page branch
           git clone --branch page --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/page_push
           cd /tmp/page_push
 
+          # 删除旧版本 zip，只保留最新 Release.zip Remove old versioned zips
+          git rm -f files/teeforge_cd-*.zip 2>/dev/null || true
+
           # 准备 CDN 文件 Prepare CDN files
           mkdir -p files/update
           cp ${{ github.workspace }}/CHANGELOG.md files/CHANGELOG.md
-          cp ${{ github.workspace }}/out/teeforge_cd-$VERSION.zip files/teeforge_cd-$VERSION.zip
+          # 固定名覆盖推送，避免 page 分支积累旧版本 Fixed name to avoid accumulation
+          cp ${{ github.workspace }}/out/teeforge_cd-$VERSION.zip files/teeforge_cd-Release.zip
 
           cat > files/update/release.json << EOF
           {
             "versionCode": $VERSION_CODE,
             "version": "$VERSION",
-            "zipUrl": "https://teeforge.mcxiaochen.top/files/teeforge_cd-$VERSION.zip",
+            "zipUrl": "https://teeforge.mcxiaochen.top/files/teeforge_cd-Release.zip",
             "changelog": "https://teeforge.mcxiaochen.top/files/CHANGELOG.md"
           }
           EOF
@@ -156,5 +163,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add files/
-          git commit -m "release: $VERSION [auto]" || true
+          git commit -m "release: $VERSION (code $VERSION_CODE · $COMMIT_HASH) [auto]" || true
           git push origin page

@@ -8,7 +8,9 @@
 #   1 — 校验失败 Integrity check failed
 #   2 — 校验文件缺失 Checksum file missing
 
-MODDIR=${0%/*}
+# 被 customize.sh source 时 $MODPATH 可用（$0 指向 update-binary），单独执行时回退 $0 目录
+# MODPATH is set when sourced by customize.sh ($0 points to update-binary); fallback to $0 dir otherwise
+MODDIR="${MODPATH:-${0%/*}}"
 CHECKSUMS="$MODDIR/.sha256"
 
 # 检查校验文件是否存在 Check if checksum file exists

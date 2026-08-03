@@ -37,7 +37,7 @@ Android TEE 隐藏环境一体化工具模块（KernelSU / Magisk）
 
 - **弱隐 BL** — 29 个系统属性全量伪装，预置 resetprop-rs，`--stealth` 静默写入，权限自修复
 - **自动填充 target.txt** — 兼容 Android 16 ABX 二进制格式，开机自动刷新
-- **Keybox 管理** — CDN 加密同步，解密链路 `多层编码解密`
+- **Keybox 管理** — CDN 加密同步 + 混淆分发，开机自动同步
 - **音量键交互** — 安装时音量键选择配置保留/清除
 - **KernelSU 自动更新** — updateJson + 自建 CDN 加速，有新版自动提示
 - **Root 检测** — 安装时 + 运行时自动识别 Magisk/KernelSU/APatch
@@ -65,7 +65,7 @@ teeforge --config FILE    # 自定义配置
 | 目标架构 | ARM64 / ARMv7 双预置 |
 | 模块框架 | Magisk / KernelSU 通用 |
 | keybox 解密 | 多层编码混淆 |
-| 混淆方案 | URL/公钥 base64 编码后随机拆分为 多变量 |
+| 混淆方案 | URL/公钥混淆编码后拆分为多变量 |
 | 日志 | 按日期分文件，自动清理，15 份轮转，中英双语 |
 | CI/CD | GitHub Actions 全自动（dev / release / keybox 12h 同步） |
 

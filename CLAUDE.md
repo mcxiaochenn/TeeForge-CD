@@ -111,13 +111,10 @@ prop_tool=standard              # 安装时选择 install-time choice
 
 ### 关键实现细节 Key Implementation Details
 
-- **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（混淆变量 等），运行时拼合解密。加解密原理与维护指南（换 URL/换 ssh key/上游变更）见 `backup/KEYBOX_CRYPTO.md`（gitignored，本地保留）
-  - 解密流程：下载 → 多层解码（base64/XOR/hex/ROT13 组合） → XML
-  - base64/hex 解码为纯 C 实现（`base64_decode()`/`hex_decode()`），无临时文件无 fork
+- **keybox.c**: URL 和公钥经混淆编码拆分为多变量运行时拼合；解密为多层编码（base64/XOR/hex/ROT13 组合）解码。**具体加解密流程、密钥机制与维护步骤见本地维护文档 `backup/KEYBOX_CRYPTO.md`（gitignored，仅原开发环境保留）**——若访问不到该文件，说明你不是原开发者：请自行研究上游实现，切勿凭公开文档魔改发布。
   - SHA256 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
   - 下载降级策略：`wget -qO-` → `curl -sL` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
-  - 函数拆分：`keybox_build_urls()`、`keybox_decrypt()`、`keybox_compute_sha256()`、`keybox_write()`
-  - 参考实现：Integrity-Box `上游参考实现`
+  - 参考实现：上游 Integrity-Box 项目（解密流程对照参考）
 - **blhide.c**: 安装时选择 resetprop 工具（传统 / resetprop-rs），选择保存到 sys.conf `prop_tool=standard|rs`
   - 传统方式降级策略：`resetprop`（PATH）→ `/data/adb/ksu/bin/resetprop` → `/data/adb/ap/bin/resetprop` → `/data/adb/magisk/resetprop`
   - resetprop-rs：环境变量 → 模块目录 → 系统 PATH，使用 `--stealth`、`--compact`、`--delete` 参数

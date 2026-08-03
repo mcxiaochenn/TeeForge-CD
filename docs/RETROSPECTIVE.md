@@ -35,8 +35,8 @@
 
 ### 3. 上游数据格式需要溯源 Trace upstream data format
 
-**问题**: 假设上游 Megatron 数据是简单的多层 base64，实际是 更复杂的多层编码（base64/hex/ROT13 组合）。
-**教训**: 不能凭猜测解密。必须查看上游项目的实际解密代码（上游参考实现），理解完整的编码流程后再实现。"看起来像 base64" 不代表"只是 base64"。
+**问题**: 假设上游 Megatron 数据是简单的多层 base64，实际是更复杂的多层编码（base64/hex/ROT13 组合）。
+**教训**: 不能凭猜测解密。必须查看上游项目的实际解密代码，理解完整的编码流程后再实现。"看起来像 base64" 不代表"只是 base64"。
 **原则**: 解密逻辑必须有参考实现对照验证，不能靠试错。
 
 ### 4. CI 版本号需要多处同步 Version must be synced in multiple places
@@ -67,7 +67,7 @@
 
 ### 2. 解密流程缺乏文档 Decryption pipeline was undocumented
 
-上游 Megatron 的编码流程（多层编码（base64/hex/ROT13 组合））没有任何文档说明，全靠阅读 上游参考实现逆向。应该在 keybox.c 中添加详细注释说明完整流程。
+上游 Megatron 的编码流程（多层 base64/hex/ROT13 组合）没有任何文档说明，全靠阅读上游参考实现逆向。应该在 keybox.c 中添加详细注释说明完整流程。
 
 ### 3. 错误信息不够详细 Insufficient error messages
 

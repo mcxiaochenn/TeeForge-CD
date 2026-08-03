@@ -54,9 +54,9 @@ popen("cmd package list packages -f")
 
 **数据流**：
 ```
-CDN URL（base64 分片拼合还原）
-→ 下载降级：wget -qO- → curl -sL → busybox wget（KSU/AP/Magisk 路径）
-→ 六步解密：多层解码（base64/XOR/hex/ROT13 组合）
+CDN URL（混淆变量拼合还原）
+→ 下载降级：wget → curl → busybox wget（KSU/AP/Magisk 路径）
+→ 多层解码（base64/XOR/hex/ROT13 组合，具体流程见本地维护文档 `backup/KEYBOX_CRYPTO.md`）
 → 校验含 "AndroidAttestation" 标记
 → 写入 keybox_dir/keybox.xml（旧文件改名 .bak）
 → 同步到 /data/adb/tricky_store/keybox.xml
@@ -64,13 +64,13 @@ CDN URL（base64 分片拼合还原）
 
 **实现选型**：
 - 下载用 `wget`/`curl`/`busybox wget` 命令降级；设备无 openssl，SHA256 用 toybox 自带 `sha256sum`
-- base64/hex/ROT13 解码为纯 C 实现（`base64_decode()`/`hex_decode()`/`rot13_decode()`），无临时文件、无 fork
-- URL 与公钥经 base64 编码后拆分为 混淆变量 等多变量，运行时拼合解码（防静态分析）
+- base64/hex/ROT13 解码为纯 C 实现，无临时文件、无 fork
+- URL 与公钥经混淆编码拆分为多变量，运行时拼合解码（防静态分析）
 
 **CDN 同步**：
-- 上游 MeowDump/Integrity-Box 每 12 小时同步（`keybox-sync.yml`，cron 0 */12 * * *）
-- 加密混淆后以 15 个混淆文件名（混淆文件名 + 假文件干扰）推送到 page 分支 `files/keybox/`
-- 设备端通过混淆文件名确定真实文件名，同月内文件名稳定
+- 上游 MeowDump/Integrity-Box 每 12 小时同步（`keybox-sync.yml`）
+- 加密混淆后以混淆文件名（含假文件干扰）推送到 page 分支 `files/keybox/`
+- 设备端按月份派生混淆文件名（具体机制见本地维护文档 `backup/KEYBOX_CRYPTO.md`）
 
 ### 3. 弱隐 BL
 
@@ -133,7 +133,7 @@ STRIP   := llvm-strip
 - 核心逻辑编译为原生静态二进制，非脚本
 - 安装前 `verify.sh` 基于 `.sha256` 逐文件校验，校验失败 `abort` 中止安装
 - `llvm-strip` 去除符号表，增加逆向难度
-- keybox URL/公钥 base64 分片混淆，运行时拼合
+- keybox URL/公钥混淆分片，运行时拼合
 
 ### 运行权限
 - 二进制以 root 执行（Magisk/KernelSU 上下文）

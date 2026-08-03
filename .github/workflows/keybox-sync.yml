@@ -68,11 +68,14 @@ jobs:
       - name: Build keybox files
         if: steps.fetch.outputs.need_update == 'true'
         run: |
-          mkdir -p /tmp/omg_push/keybox
+          # 状态文件放独立目录，避免混入 CDN 的 files/keybox/
+          # Status files go to a separate dir, keep them out of CDN files/keybox/
+          mkdir -p /tmp/status
+          cp /tmp/key-status /tmp/status/
+          echo "${{ steps.fetch.outputs.hash }}" > /tmp/status/upstream_hash
+          echo "$(date +%Y-%m)" > /tmp/status/month
 
-          cp /tmp/key-status /tmp/omg_push/keybox/
-          echo "${{ steps.fetch.outputs.hash }}" > /tmp/omg_push/keybox/upstream_hash
-          echo "$(date +%Y-%m)" > /tmp/omg_push/keybox/month
+          mkdir -p /tmp/omg_push/keybox
 
           MONTH=$(date +%Y-%m)
           SEED=$(echo -n "$MONTH" | sha256sum | head -c 12)
@@ -141,9 +144,9 @@ jobs:
         run: |
           git checkout master
           mkdir -p keybox
-          cp /tmp/key-status keybox/
-          cp /tmp/omg_push/keybox/upstream_hash keybox/
-          cp /tmp/omg_push/keybox/month keybox/
+          cp /tmp/status/key-status keybox/
+          cp /tmp/status/upstream_hash keybox/
+          cp /tmp/status/month keybox/
           git add keybox/
           git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]" || true
           git push origin master

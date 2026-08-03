@@ -226,12 +226,12 @@ static int keybox_build_urls(char *cdn, size_t cdn_sz,
                              char *status_url, size_t st_sz,
                              char *pubkey, size_t pk_sz) {
     /* 混淆变量 Obfuscated variables */
-    char G[]="aHR0cHM6Ly9jZG"; char M[]="4uanNkZWxpdnIub";
-    char T[]="mV0L2doL21jeG"; char A[]="lhb2NoZW5uL1R";
-    char P[]="lZUZvcmdlLUNEQG9tZy9rZXlib3gv";
-    char F[]="aHR0cHM6Ly9jZG"; char K[]="4uanNkZWxpdnIub";
-    char R[]="mV0L2doL21jeG"; char X[]="lhb2NoZW5uL1R";
-    char D[]="lZUZvcmdlLUNEQG1haW4va2V5Ym94L2tleS1zdGF0dXM=";
+    char G[]="aHR0cHM6Ly90"; char M[]="ZWVmb3JnZS5t";
+    char T[]="Y3hpYW9jaGVu"; char A[]="LnRvcC9maWxl";
+    char P[]="cy9rZXlib3gv";
+    char F[]="aHR0cHM6Ly90ZWVm"; char K[]="b3JnZS5tY3hpYW9";
+    char R[]="jaGVuLnRvcC9maW"; char X[]="xlcy9rZXlib3gva";
+    char D[]="2V5LXN0YXR1cw==";
     char J[]="c3NoLWVkMjU1MTkg"; char N[]="QUFBQUMzTnphQzFs";
     char V[]="WkRJMU5URTVBQUFB"; char Z[]="SUU5K1J3NVhadklV";
     char E[]="bW1Wc3pKR0FZRHIwV0krRWp6cHFnSCtVZ0NwL05pZlM=";

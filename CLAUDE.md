@@ -111,7 +111,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 
 ### 关键实现细节 Key Implementation Details
 
-- **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（混淆变量 等），运行时拼合解密。源码备份在 `backup/`（gitignored）
+- **keybox.c**: URL 和公钥经过 base64 编码后拆分成多个变量（混淆变量 等），运行时拼合解密。加解密原理与维护指南（换 URL/换 ssh key/上游变更）见 `backup/KEYBOX_CRYPTO.md`（gitignored，本地保留）
   - 解密流程：下载 → 多层解码（base64/XOR/hex/ROT13 组合） → XML
   - base64/hex 解码为纯 C 实现（`base64_decode()`/`hex_decode()`），无临时文件无 fork
   - SHA256 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）

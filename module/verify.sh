@@ -26,6 +26,11 @@ ui_print "  正在校验文件完整性 [Verifying file integrity]..."
 FAIL_COUNT=0
 TOTAL=0
 
+# 记录调用者的 set -e 状态，source 结束后恢复，避免泄漏到安装脚本
+# Remember caller's set -e state; restore before returning so it doesn't leak into the installer
+SET_E_ACTIVE=0
+case $- in *e*) SET_E_ACTIVE=1 ;; esac
+
 # 临时关闭 set -e，校验失败不应中断脚本
 # Disable set -e, verification failure shouldn't exit the script
 set +e
@@ -51,8 +56,11 @@ while IFS='  ' read -r expected_hash filepath; do
     fi
 done < "$CHECKSUMS"
 
-# 恢复 set -e Restore set -e
-set -e
+# 恢复调用者的 set -e 状态（不强制打开，避免污染安装脚本环境）
+# Restore caller's set -e state (don't force it on, avoid polluting the installer)
+if [ "$SET_E_ACTIVE" = "1" ]; then
+    set -e
+fi
 
 # 结果汇总 Summary
 if [ "$FAIL_COUNT" -eq 0 ]; then

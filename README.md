@@ -107,7 +107,6 @@ TeeForge-CD/
 │   ├── uninstall.sh           # 卸载脚本
 │   ├── module.prop            # 模块元数据
 │   └── resetprop-rs/          # 预置二进制
-├── CHANGELOG.md               # 自动生成（release workflow）
 ├── .github/workflows/         # CI/CD 全自动
 └── docs/                      # 架构、反思、待办
 ```

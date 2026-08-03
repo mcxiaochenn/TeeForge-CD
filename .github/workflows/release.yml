@@ -52,8 +52,8 @@ jobs:
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
         run: |
           # 写入版本号 Write version
-          sed -i "s/^version=.*/version=$VERSION/" module/module.prop
-          sed -i "s/^versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+          # module.prop 的 version/versionCode 由 build.sh 用 VERSION/VERSION_CODE 环境变量自动生成
+          # module.prop version/versionCode are auto-written by build.sh from VERSION/VERSION_CODE env
           sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
 
           # 构建

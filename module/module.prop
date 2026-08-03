@@ -1,7 +1,7 @@
 id=teeforge_cd
 name=TeeForge-CD
-version=0.1.0
-versionCode=39
+version=0.6.0
+versionCode=118
 author=Git@mcxiaochenn（酷安@辰渊尘）
 description=⏳ 等待重启... / Waiting for reboot...
 updateJson=https://teeforge.mcxiaochen.top/files/update/release.json

@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 /* ===== 版本 Version ===== */
-#define TEEFORGE_VERSION "0.1.0"
+#define TEEFORGE_VERSION "0.6.0"
 
 /* ===== 默认路径 Default Paths ===== */
 #define DEFAULT_PACKAGES    "/data/system/packages.xml"

@@ -1,5 +1,9 @@
 name: Release Build
 
+concurrency:
+  group: teeforge-page-publish
+  cancel-in-progress: false
+
 on:
   push:
     tags:
@@ -34,6 +38,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
       - name: Determine version
         id: version
         run: |
@@ -53,15 +62,6 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           VERSION_CODE: ${{ steps.version.outputs.versionCode }}
         run: |
-          # 写入版本号 Write version
-          # module.prop 的 version/versionCode 由 build.sh 用 VERSION/VERSION_CODE 环境变量自动生成
-          # module.prop version/versionCode are auto-written by build.sh from VERSION/VERSION_CODE env
-          sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
-
-          # 构建
-          chmod +x build.sh
-          ./build.sh
-
           # 打包
           chmod +x package.sh
           ./package.sh
@@ -127,7 +127,7 @@ jobs:
           body_path: /tmp/CHANGELOG.md
           files: |
             out/teeforge_cd-${{ steps.version.outputs.version }}.zip
-            out/teeforge
+            out/teeforge-*
           draft: false
           prerelease: false
 

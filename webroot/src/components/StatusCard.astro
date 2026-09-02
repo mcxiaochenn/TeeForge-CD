@@ -50,18 +50,7 @@
 </style>
 
 <script>
-  const MODDIR = '/data/adb/modules/teeforge_cd';
-
-  async function runCmd(cmd: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const cb = 'cb_' + Date.now() + '_' + (Math.random() * 10000 | 0);
-      (window as any)[cb] = (code: number, stdout: string, stderr: string) => {
-        delete (window as any)[cb];
-        code === 0 ? resolve(stdout || '') : reject(new Error(stderr || stdout));
-      };
-      ksu.exec(cmd, '{}', cb);
-    });
-  }
+  import { DATA_DIR, MODDIR, execText } from '../lib/ksu';
 
   async function loadStatus() {
     const rootEl = document.getElementById('val-root');
@@ -71,13 +60,13 @@
 
     // Architecture
     try {
-      const arch = await runCmd('getprop ro.product.cpu.abi');
+      const arch = await execText('getprop ro.product.cpu.abi');
       if (archEl) archEl.textContent = arch.trim() || '—';
     } catch (_) {}
 
     // module.prop — version + keybox from description
     try {
-      const prop = await runCmd('cat ' + MODDIR + '/module.prop');
+      const prop = await execText('cat ' + MODDIR + '/module.prop');
       const ver = prop.match(/version=(.*)/)?.[1]?.trim();
       const desc = prop.match(/description=(.*)/)?.[1]?.trim() || '';
       if (verEl) verEl.textContent = ver || '—';
@@ -88,7 +77,7 @@
           keyboxEl.textContent = kbMatch[1].trim();
         } else {
           try {
-            const mtime = await runCmd("stat -c %Y " + MODDIR + "/keybox/ 2>/dev/null || echo 0");
+            const mtime = await execText("stat -c %Y " + DATA_DIR + "/keybox/keybox.xml 2>/dev/null || echo 0");
             const ts = parseInt(mtime.trim());
             keyboxEl.textContent = ts ? new Date(ts * 1000).toLocaleDateString() : (window as any).__tf.t('status.na');
           } catch (_) { keyboxEl.textContent = (window as any).__tf.t('status.na'); }
@@ -98,16 +87,24 @@
 
     // Root method from sys.conf
     try {
-      const sysconf = await runCmd('cat ' + MODDIR + '/sys.conf');
+      const sysconf = await execText('cat ' + DATA_DIR + '/sys.conf');
       const rm = sysconf.match(/root_method=(.*)/);
       if (rootEl && rm) {
         const dot = rootEl.querySelector('.status-dot');
         const text = rootEl.querySelectorAll('span')[1];
         if (text) { text.textContent = rm[1].trim(); text.removeAttribute('data-i18n'); }
         if (dot) dot.classList.add('success');
+      } else if (rootEl) {
+        const text = rootEl.querySelectorAll('span')[1];
+        if (text) text.textContent = (window as any).__tf.t('status.na');
       }
     } catch (_) {
-      if (rootEl) { const dot = rootEl.querySelector('.status-dot'); if (dot) dot.classList.add('error'); }
+      if (rootEl) {
+        const dot = rootEl.querySelector('.status-dot');
+        const text = rootEl.querySelectorAll('span')[1];
+        if (dot) dot.classList.add('error');
+        if (text) text.textContent = (window as any).__tf.t('status.na');
+      }
     }
   }
 
@@ -116,4 +113,5 @@
   } else {
     setTimeout(loadStatus, 100);
   }
+  window.addEventListener('teeforge:status-refresh', loadStatus);
 </script>

@@ -61,8 +61,8 @@ teeforge --config FILE    # 自定义配置
 
 | 组件 | 选型 |
 |------|------|
-| 核心二进制 | 纯 C，NDK 静态链接，strip 后 < 500KB |
-| 目标架构 | ARM64 / ARMv7 双预置 |
+| 核心二进制 | Rust，同步标准库实现，Release LTO + strip |
+| 目标架构 | arm64-v8a / armeabi-v7a / x86 / x86_64 |
 | 模块框架 | Magisk / KernelSU 通用 |
 | keybox 解密 | 多层编码混淆 |
 | 混淆方案 | URL/公钥混淆编码后拆分为多变量 |
@@ -73,8 +73,8 @@ teeforge --config FILE    # 自定义配置
 
 ```bash
 export NDK="/path/to/android-ndk"
-./build.sh       # 构建
-./package.sh     # 打包 Magisk 模块
+./build.sh       # 构建四种 Android ABI
+./package.sh     # 构建 WebUI 并打包四架构模块
 ```
 
 ## 配置
@@ -89,24 +89,17 @@ debug=0                         # 0=关闭, 1=开启（日志写入文件）
 
 ```
 TeeForge-CD/
-├── native/
-│   ├── src/
-│   │   ├── main.c             # 入口、CLI
-│   │   ├── target.c           # 包列表解析（兼容 Android 16）
-│   │   ├── blhide.c           # 弱隐 BL（权限自修复）
-│   │   ├── keybox.c           # Keybox 加密解密
-│   │   ├── rootdetect.c       # Root 方式检测
-│   │   ├── volume.c           # 音量键监听
-│   │   └── utils.c            # 日志、配置、文件 I/O
-│   └── include/
-│       └── teeforge.h         # 公共头文件
+├── crates/teeforge/           # Rust 设备端 CLI 与核心逻辑
+├── xtask/                     # 跨平台四 ABI 构建、打包和校验
+├── native/                    # 迁移期保留的旧 C 对照实现
+├── tests/fixtures/            # 契约测试样本
 ├── module/
 │   ├── service.sh             # 开机服务
 │   ├── customize.sh           # 安装脚本（音量键交互）
 │   ├── action.sh              # 手动执行
 │   ├── uninstall.sh           # 卸载脚本
 │   ├── module.prop            # 模块元数据
-│   └── resetprop-rs/          # 预置二进制
+│   └── resetprop-rs/          # ARM 架构预置二进制
 ├── .github/workflows/         # CI/CD 全自动
 └── docs/                      # 架构、反思、待办
 ```

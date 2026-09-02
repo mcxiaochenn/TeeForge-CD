@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: webroot/package-lock.json
+
+      - name: Setup NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /tmp/
+          echo "NDK=/tmp/android-ndk-r27d" >> "$GITHUB_ENV"
+
+      - name: Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Host tests
+        run: cargo test --workspace --locked
+
+      - name: Four-ABI package
+        run: cargo run --locked -p xtask -- package
+
+      - name: Verify outputs
+        run: cargo run --locked -p xtask -- verify
+
+      - name: Verify archive checksums
+        run: |
+          cd out/build/teeforge_cd
+          sha256sum -c .sha256
+
+      - name: Enforce package size
+        run: test "$(stat -c%s out/teeforge_cd-*.zip)" -le 6291456

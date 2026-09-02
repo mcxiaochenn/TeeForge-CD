@@ -7,6 +7,33 @@
 
 set -e
 
+# Rust 是默认实现；TEEFORGE_LEGACY_C=1 仅用于切换前回归对照。
+# Rust is the default; TEEFORGE_LEGACY_C=1 is only for migration regression checks.
+if [ "${TEEFORGE_LEGACY_C:-0}" != "1" ]; then
+    PUSH=0
+    CLEAN=0
+    for arg in "$@"; do
+        case "$arg" in
+            --push) PUSH=1 ;;
+            --clean) CLEAN=1 ;;
+            *) echo "未知参数 [Unknown argument]: $arg" >&2; exit 2 ;;
+        esac
+    done
+    if [ "$CLEAN" -eq 1 ]; then
+        cargo clean
+        rm -rf out/bin
+    fi
+    cargo run -p xtask -- build
+    if [ "$PUSH" -eq 1 ]; then
+        ARCH=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
+        BIN="out/bin/$ARCH/teeforge"
+        [ -f "$BIN" ] || { echo "没有当前设备架构的产物 [No output for device ABI]: $ARCH" >&2; exit 1; }
+        adb push "$BIN" /data/adb/modules/teeforge_cd/teeforge
+        adb shell chmod 755 /data/adb/modules/teeforge_cd/teeforge
+    fi
+    exit 0
+fi
+
 # Colors 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'

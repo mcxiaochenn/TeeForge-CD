@@ -7,6 +7,18 @@
 
 set -e
 
+# Rust 是默认实现；TEEFORGE_LEGACY_C=1 仅用于切换前回归对照。
+# Rust is the default; TEEFORGE_LEGACY_C=1 is only for migration regression checks.
+if [ "${TEEFORGE_LEGACY_C:-0}" != "1" ]; then
+    if [ "${1:-}" = "--clean" ]; then
+        rm -rf out/build out/bin
+        shift
+    fi
+    [ "$#" -eq 0 ] || { echo "未知参数 [Unknown argument]: $1" >&2; exit 2; }
+    cargo run -p xtask -- package
+    exit 0
+fi
+
 # Colors 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'

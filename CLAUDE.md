@@ -9,7 +9,7 @@ TeeForge-CD is a Magisk/KernelSU module that:
 - Implements weak bootloader hiding via resetprop (supports resetprop-rs)
 - Manages keybox files with CDN and obfuscation
 
-Primary language: **C** (minimal binary size, direct NDK support). Secondary: **TypeScript** (WebUI, KernelSU interface).
+Primary language: **Rust** (four Android ABIs, memory-safe core). Secondary: **TypeScript** (WebUI) and shell (module lifecycle). The previous C implementation remains in `native/` only for migration comparison until authorized device acceptance.
 
 ## Build & Package Commands
 
@@ -30,7 +30,7 @@ export NDK="/path/to/android-ndk"
 ./clean.sh
 ```
 
-`package.sh` runs `build.sh` internally, then also builds the WebUI (if Node.js is available), and creates the installable `.zip` in `out/`.
+`build.sh` and `package.sh` are compatibility wrappers over Cargo `xtask`. Packaging builds all four Android ABIs, builds the WebUI, verifies ELF metadata/checksums, and creates the installable `.zip` in `out/`.
 
 ## Architecture
 
@@ -93,36 +93,36 @@ root_version=1234               # 自动检测 auto-detected
 prop_tool=standard              # 安装时选择 install-time choice
 ```
 
-**加载顺序 Loading order**: `config_load()` in `utils.c` reads `sys.conf` first, then the user config (`config.conf`) on top — user settings override system defaults. blhide defaults are all set to 1 before any file is read.
+**加载顺序 Loading order**: Rust `Config::load()` reads canonical `/data/adb/teeforge/sys.conf` first, then the selected user config on top. Missing canonical files fall back to legacy relative files. User settings override system defaults.
 
 ### 安装流程 Installation Flow
 
 `customize.sh` 执行顺序：
 1. 文件完整性校验（`verify.sh`，基于 `.sha256` 校验文件，失败则中止安装）
-2. 检测 root 方式（`teeforge --rootdetect`，环境变量可用）
-3. 音量键选择：保留/清除已有配置（10s 超时默认保留）
-4. 音量键选择 resetprop 工具（10s 超时默认传统方式）
+2. 根据 `ro.product.cpu.abi` 选择并校验对应 ELF，随后删除其余架构
+3. 检测 root 方式（`teeforge --rootdetect`，环境变量可用）
+4. 音量键选择：保留/清除已有配置（10s 超时默认保留）
+5. 音量键选择 resetprop 工具（10s 超时默认传统方式）
    - 传统 resetprop（推荐）→ 删除 resetprop-rs/ 目录减小体积
-   - resetprop-rs → 检测架构（arm64-v8a/armeabi-v7a），只保留对应二进制；x86/x86_64 中断安装
-5. 生成 sys.conf（含 `prop_tool=standard|rs`）
-6. 生成 config.conf（含 debug 和 blhide 开关）
+- resetprop-rs → 仅 arm64-v8a/armeabi-v7a 可选；x86/x86_64 自动使用 standard
+6. 生成 sys.conf（含 `prop_tool=standard|rs`）
+7. 生成 config.conf（含 debug 和 blhide 开关）
 
 **完整性校验 Integrity Verification**: `package.sh` 打包时对所有模块文件（排除 `.sha256` 自身和 `META-INF/`）生成 SHA256 校验和写入 `.sha256`。安装时 `verify.sh` 逐文件比对，校验失败则 `abort` 中止安装。README.md 也会打包进模块（重命名为 `README`，无扩展名）。
 
 ### 关键实现细节 Key Implementation Details
 
-- **keybox.c**: URL 和公钥经混淆编码拆分为多变量运行时拼合；解密为多层编码（base64/XOR/hex/ROT13 组合）解码。**具体加解密流程、密钥机制与维护步骤见本地维护文档 `backup/KEYBOX_CRYPTO.md`（gitignored，仅原开发环境保留）**——若访问不到该文件，说明你不是原开发者：请自行研究上游实现，切勿凭公开文档魔改发布。
-  - SHA256 使用 `sha256sum`（toybox 自带）代替 `openssl`（设备上通常不存在）
+- **keybox.rs**: URL 和公钥经混淆编码拆分后运行时拼合；严格执行有界的 base64/XOR/hex/ROT13 解码与 Keybox 内容校验。**具体流程与维护步骤只记录在 gitignored 的本地维护文档中，不写入公开文档。**
+  - SHA256 在进程内使用锁定版本的 `sha2`，不依赖设备上的 `openssl`
   - 下载降级策略：`wget -qO-` → `curl -sL` → busybox 路径（`/data/adb/{ksu,ap}/bin/busybox` 或 `/data/adb/magisk/busybox`）
   - 参考实现：上游 Integrity-Box 项目（解密流程对照参考）
-- **blhide.c**: 安装时选择 resetprop 工具（传统 / resetprop-rs），选择保存到 sys.conf `prop_tool=standard|rs`
+- **blhide.rs**: 安装时选择 resetprop 工具（传统 / resetprop-rs），选择保存到 sys.conf `prop_tool=standard|rs`
   - 传统方式降级策略：`resetprop`（PATH）→ `/data/adb/ksu/bin/resetprop` → `/data/adb/ap/bin/resetprop` → `/data/adb/magisk/resetprop`
   - resetprop-rs：环境变量 → 模块目录 → 系统 PATH，使用 `--stealth`、`--compact`、`--delete` 参数
-  - 批量执行：`bl_build_script()` 将所有属性命令拼成一个 shell 脚本，单次 `system()` 执行（非逐条 fork）
+  - 使用 `Command` 参数数组逐条执行，汇总所有非零退出状态，不拼接 shell 脚本
   - 功能开关：`blhide`（总开关）+ 10 个类别开关（boot/security/vendor/oem/secureboot/recovery/realme/developer/selinux/virtual）+ delete + compact，用户配置文件控制，默认全开
-- **target.c**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16）
-  - 包名数组声明为 `static`（`static char packages[MAX_PACKAGES][MAX_PKG_NAME]`），避免 ~512KB 栈溢出
-- **volume.c**: 独立音量键监听模块，返回 1（音量+）/ 0（音量-）/ -1（超时）
+- **target.rs**: 使用 `cmd package list packages -f` 获取包列表（非 XML 解析，兼容 Android 16），成功后原子替换 target.txt
+- **volume.rs**: 动态扫描 `/dev/input/event*`，通过 `libc` 的目标 ABI 布局读取按键事件，返回 1（音量+）/ 0（音量-）/ -1（超时）
 - **日志系统**: debug 模式写入 `/data/adb/teeforge/logs/teeforge_YYYYMMDD.log`，自动清理保留最近 15 份。shell 脚本不单独写日志
 
 ### WebUI（KernelSU 管理界面）
@@ -130,7 +130,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 `webroot/` 是一个 Astro + TypeScript 的 WebUI 项目，提供 KernelSU WebUI 界面：
 - `npm ci && npm run build` 在 `webroot/` 下构建，产物输出到 `module/webroot/`
 - `package.sh` 自动检测 Node.js 可用性，有则构建 WebUI，无则跳过
-- 使用 `ksu.spawn()`（流式输出，优先）或 `ksu.exec()`（一次性降级）调用 teeforge 二进制，需设置 `cwd` 为模块目录（`sys.conf` 用相对路径 `./`）
+- 使用 `ksu.spawn()`（流式输出，优先）或 `ksu.exec()`（一次性降级）调用 teeforge，并显式传入 `/data/adb/teeforge/config.conf`
 - 命令执行逻辑在 `index.astro` 的 `runAction()`，流式日志追加到 LogDialog；`ksu.spawn` 不存在时降级到 `ksu.exec`
 
 ### GitHub Action
@@ -138,7 +138,7 @@ prop_tool=standard              # 安装时选择 install-time choice
 - `dev.yml` — push 触发 dev 构建，产物推送到 `page` 分支 `files/dev/`。版本号同步更新 `teeforge.h`（`module.prop` 由 `build.sh` 自动生成），`updateJson` 改为指向自建 CDN
 - `release.yml` — 推送版本标签触发 Release 构建，更新 `page` 分支 `files/` 下的 release.json 和 CHANGELOG.md
 - 所有 CDN 文件统一推送到 `page` 分支的 `files/` 目录，通过自建域名 `teeforge.mcxiaochen.top/files/` 访问
-- **版本注入 Version injection**: 版本号唯一手写源是 `native/include/teeforge.h`（`TEEFORGE_VERSION`）；`module/module.prop` 的 version/versionCode 由 `build.sh` 每次构建时自动生成（CI 通过 `VERSION`/`VERSION_CODE` 环境变量传入，`build.sh` 优先使用）
+- **版本注入 Version injection**: 稳定版本唯一手写源是 `crates/teeforge/Cargo.toml`；xtask 在暂存目录生成 module.prop，CI 可通过 `VERSION`/`VERSION_CODE` 注入渠道版本。
 
 ### 自动更新 Auto Update
 - `module.prop` 中 `updateJson` 指向 `teeforge.mcxiaochen.top/files/update/release.json`
@@ -149,25 +149,26 @@ prop_tool=standard              # 安装时选择 install-time choice
 
 - **双语要求**: 所有日志和注释使用中英双语
   All logs and comments must be bilingual (Chinese + English)
-- C 代码目标 Android API 24+ (Magisk 20.4+ 兼容)
+- Rust 核心目标 Android API 24+ (Magisk 20.4+ 兼容)
 - 错误处理：记录日志，永不崩溃，优雅降级
 - 二进制体积优先：静态链接，避免大依赖
 - **连接设备是用户主力机，调试前必须获得用户同意**
 
 ## Gotchas
 
-- **`system()` 返回值是 `waitpid` 格式**：`(exit_code << 8) | signal`。32256 = 126 << 8 表示 "命令存在但不可执行"（权限问题），不是 resetprop 本身的错误。遇到非零返回值时先右移 8 位取真实 exit code。
+- **外部命令状态必须检查**：Rust 使用 `ExitStatus` 读取真实退出状态；下载、属性修改和包列表命令失败都要向 CLI 聚合为非零结果。
 - **`set_perm_recursive` 会重置权限**：Magisk 的 `set_perm_recursive` 必须在所有 `chmod` 之后调用，可执行二进制需要单独 `set_perm` 再次设置 755。
-- **Android 设备没有 openssl**：涉及哈希的 shell 命令只能用 `sha256sum`（toybox 自带），不能用 `openssl`。
-- **大数组用 `static`**：`target.c` 中 `packages[MAX_PACKAGES][MAX_PKG_NAME]`（~512KB）声明为 `static` 以避免栈溢出，但这也意味着该函数非线程安全（当前是单线程，无问题）。
+- **Android 设备没有 openssl**：设备端 Rust 使用 `sha2`；安装包校验继续使用 toybox 的 `sha256sum`。
 - **`temp/Integrity-Box/`** 是上游参考项目的本地克隆（gitignored），用于对照解密实现和属性列表，不要提交。
-- **版本号单点维护**：版本号只在 `native/include/teeforge.h` 手写（`TEEFORGE_VERSION`），`build.sh` 每次构建自动把 version/versionCode 写入 `module/module.prop`。改版本号只需改 `teeforge.h` 一处（versionCode 自动取 git 提交数，永不手写）。
+- **版本号单点维护**：稳定版本只修改 `crates/teeforge/Cargo.toml`；versionCode 默认取 Git 提交数，源码树中的 module.prop 不在构建时改写。
 - **config.conf 不在仓库中**：`config.conf` 在 `customize.sh` 安装时动态生成，dev 构建由 CI 动态生成（debug=1）。不要提交 config.conf 到仓库。
 - **`.sha256` 校验文件**：由 `package.sh` 打包时自动生成，不在仓库中。校验范围为模块内所有文件（排除 `.sha256` 自身和 `META-INF/`），使用 `sha256sum`（toybox 自带）。
 
 ## Project Directories
 
-- `native/` — C 源码和头文件
+- `crates/teeforge/` — Rust CLI 与设备端核心逻辑
+- `xtask/` — 四 ABI 构建、打包和验证
+- `native/` — 迁移期旧 C 对照实现（真机验收后删除）
 - `module/` — Magisk 模块框架（shell 脚本、module.prop、resetprop-rs 二进制）
 - `webroot/` — Astro WebUI 源码（KernelSU 管理界面）
 - `config/` — 默认 sources.conf
@@ -180,14 +181,14 @@ prop_tool=standard              # 安装时选择 install-time choice
 
 | 文件 | 说明 |
 |------|------|
-| `native/src/main.c` | 入口、参数解析、CLI |
-| `native/src/target.c` | 包列表解析、生成 target.txt |
-| `native/src/utils.c` | 日志、文件 I/O、配置解析、模块描述更新 |
-| `native/src/blhide.c` | 弱隐 BL（resetprop 属性伪装） |
-| `native/src/keybox.c` | Keybox 获取与解密（混淆） |
-| `native/src/volume.c` | 音量键监听 |
-| `native/src/rootdetect.c` | Root 方式检测（env + path fallback） |
-| `native/include/teeforge.h` | 公共头文件、config_t 结构体、版本号 |
+| `crates/teeforge/src/cli.rs` | 参数解析、动作顺序与退出码聚合 |
+| `crates/teeforge/src/config.rs` | 配置默认值、优先级与兼容回退 |
+| `crates/teeforge/src/target.rs` | 包列表解析、原子生成 target.txt |
+| `crates/teeforge/src/keybox.rs` | 下载后备、严格解码与内容校验 |
+| `crates/teeforge/src/blhide.rs` | resetprop 参数化执行与错误聚合 |
+| `crates/teeforge/src/volume.rs` | Android input_event 适配与音量键监听 |
+| `crates/teeforge/src/rootdetect.rs` | Root 方式检测（env + path fallback） |
+| `xtask/src/main.rs` | 四 ABI 构建、ELF 校验与模块打包 |
 | `module/service.sh` | 开机服务 |
 | `module/customize.sh` | 安装脚本（配置保留逻辑） |
 | `module/verify.sh` | 安装前文件完整性校验 |

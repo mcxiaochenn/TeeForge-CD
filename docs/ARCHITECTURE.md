@@ -93,47 +93,47 @@ CDN URL（混淆变量拼合还原）
 
 ## 构建系统
 
-### NDK 交叉编译配置
+### Rust + NDK 交叉编译配置
 
-**目标**：主架构 `aarch64-linux-android34-clang`（ARM64），静态链接（`-static`），产物自包含
+Cargo workspace 由 `xtask` 统一驱动，API 基线为 Android 24。每个 ABI 独立编译，
+产物输出到 `out/bin/<abi>/teeforge`：
 
-**编译标志**：
-```
-CC      := $(NDK)/toolchains/llvm/prebuilt/<host>/bin/aarch64-linux-android34-clang
-CFLAGS  := -Wall -Wextra -O2 -static
-STRIP   := llvm-strip
-```
+| Android ABI | Rust target | NDK linker target |
+|---|---|---|
+| arm64-v8a | aarch64-linux-android | aarch64-linux-android24 |
+| armeabi-v7a | armv7-linux-androideabi | armv7a-linux-androideabi24 |
+| x86 | i686-linux-android | i686-linux-android24 |
+| x86_64 | x86_64-linux-android | x86_64-linux-android24 |
 
 ### build.sh 流程
 
 ```
 1. 检测 NDK 环境变量
 2. 按主机 OS 选择 prebuilt 工具链（linux/darwin/windows-x86_64）
-3. 解析 VERSION/VERSION_CODE（CI 环境变量优先；本地从 teeforge.h 提取 version、git rev-list --count 取 code）
-4. 自动写入 module.prop 的 version/versionCode
-5. 编译 native/src/*.c → out/build/obj/*.o
-6. 静态链接 + llvm-strip → out/teeforge
-7. （可选 --push）adb push 到设备
+3. 调用 `cargo run -p xtask -- build`
+4. 为四个 Rust target 配置 NDK clang linker
+5. 执行 LTO、体积优化和 strip
+6. 校验 ELF machine、动态依赖与 1.5 MiB 单文件门禁
+7. （可选 --push）按连接设备 ABI 推送对应产物
 ```
 
 ### package.sh 打包流程
 
 ```
-1. 调用 build.sh
-2. Node.js 可用时构建 WebUI（npm ci && npm run build → module/webroot/）
-3. 从 module.prop 读取 version/versionCode/id
-4. 复制 module/* → out/build/teeforge_cd/，拷入 teeforge 二进制与 README
-5. 生成 .sha256 校验清单（sha256sum，排除自身与 META-INF/）
-6. 打包为 out/teeforge_cd-<version>.zip
+1. 调用 xtask 构建四 ABI
+2. 使用锁定依赖构建 WebUI
+3. 在暂存目录注入 version/versionCode/渠道信息，不修改源码树 module.prop
+4. 写入 `bin/<abi>/teeforge` 与 README
+5. 生成 `.sha256` 校验清单（排除自身与 META-INF/）
+6. 创建 ZIP 并复核 `.sha256` 存在，执行 6 MiB 包体门禁
 ```
 
 ## 安全设计
 
-### 防拆包修改
-- 核心逻辑编译为原生静态二进制，非脚本
-- 安装前 `verify.sh` 基于 `.sha256` 逐文件校验，校验失败 `abort` 中止安装
-- `llvm-strip` 去除符号表，增加逆向难度
-- keybox URL/公钥混淆分片，运行时拼合
+### 包一致性
+- 安装前 `verify.sh` 基于 `.sha256` 逐文件校验，清单缺失或校验失败均 `abort`
+- `.sha256` 用于发现下载损坏和不完整打包，不等同于签名，也不阻止重新制作整个 ZIP
+- 四架构 ELF 在构建和安装阶段分别检查 machine 字段
 
 ### 运行权限
 - 二进制以 root 执行（Magisk/KernelSU 上下文）
@@ -152,6 +152,9 @@ STRIP   := llvm-strip
 | Magisk 20.4+ (API 24+) | ✅ |
 | KernelSU 0.6+ | ✅ |
 | Android 7.0 - 15 | ✅ |
-| ARM64 设备 | ✅ |
-| ARMv7 设备 | ⚠️ 需额外编译 |
-| x86 模拟器 | ❌ 不考虑 |
+| ARM64 设备 | ✅ arm64-v8a |
+| ARMv7 设备 | ✅ armeabi-v7a |
+| x86 环境 | ✅ standard resetprop |
+| x86_64 环境 | ✅ standard resetprop |
+
+> resetprop-rs 仅随 ARM 两种 ABI 提供；x86/x86_64 安装时固定使用 standard。

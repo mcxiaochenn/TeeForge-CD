@@ -13,8 +13,8 @@
 #define DEFAULT_SOURCES     "/data/adb/teeforge/sources.conf"
 #define DEFAULT_LOG_DIR     "/data/adb/teeforge/logs/"
 
-#define CONFIG_FILE         "./config.conf"
-#define SYS_CONFIG_FILE     "./sys.conf"
+#define CONFIG_FILE         "/data/adb/teeforge/config.conf"
+#define SYS_CONFIG_FILE     "/data/adb/teeforge/sys.conf"
 
 /* ===== 限制 Limits ===== */
 #define MAX_LINE         4096

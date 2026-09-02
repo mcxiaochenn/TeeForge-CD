@@ -1,5 +1,9 @@
 name: Dev Build
 
+concurrency:
+  group: teeforge-page-publish
+  cancel-in-progress: false
+
 on:
   push:
     branches: [master]
@@ -28,6 +32,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
       - name: Get version info
         id: ver
         env:
@@ -51,14 +60,12 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           VERSION_CODE: ${{ steps.ver.outputs.versionCode }}
+          BUILD_CHANNEL: dev
         run: |
           echo "Building version=$VERSION code=$VERSION_CODE"
 
           # module.prop 的 version/versionCode 由 build.sh 用 VERSION/VERSION_CODE 环境变量自动生成
           # module.prop version/versionCode are auto-written by build.sh from VERSION/VERSION_CODE env
-          sed -i "s/^name=.*/name=TeeForge-CD [Dev]/" module/module.prop
-          sed -i "s|^updateJson=.*|updateJson=https://teeforge.mcxiaochen.top/files/dev/update/dev.json|" module/module.prop
-          sed -i "s/^#define TEEFORGE_VERSION .*/#define TEEFORGE_VERSION \"$VERSION\"/" native/include/teeforge.h
           # config.conf 已从仓库移除，dev 构建动态生成（debug=1）
           # config.conf removed from repo, generate dynamically for dev (debug=1)
           cat > module/config.conf << 'OUTER'
@@ -79,9 +86,6 @@ jobs:
           blhide_compact=1
           OUTER
 
-          chmod +x build.sh
-          ./build.sh
-
           chmod +x package.sh
           ./package.sh
 
@@ -90,7 +94,7 @@ jobs:
         with:
           name: teeforge_cd-${{ steps.ver.outputs.version }}
           path: |
-            out/teeforge
+            out/teeforge-*
             out/teeforge_cd-*.zip
           retention-days: 30
 

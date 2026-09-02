@@ -73,7 +73,11 @@ int target_generate(void) {
 
     int ret = pclose(fp);
     if (ret != 0) {
-        log_msg(LOG_WARN, "'cmd package list' 返回 %d ['cmd package list' returned %d]", ret, ret);
+        int exit_code = (ret > 255) ? (ret >> 8) : ret;
+        log_msg(LOG_ERROR, "'cmd package list' 失败，保留现有 target.txt，退出码 %d "
+                           "['cmd package list' failed; preserving target.txt, exit code %d]",
+                           exit_code, exit_code);
+        return -1;
     }
 
     log_msg(LOG_INFO, "发现 %d 个用户安装应用 [Found %d user-installed packages]", count, count);

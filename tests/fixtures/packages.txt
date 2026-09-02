@@ -1,0 +1,3 @@
+package:/system/app/System/System.apk=com.android.system
+package:/data/app/~~token/example/base.apk=com.example.user
+package:/product/app/Product/Product.apk=com.android.product

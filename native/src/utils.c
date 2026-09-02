@@ -117,11 +117,20 @@ int config_load(const char *path) {
     strncpy(g_config.prop_tool, "standard", 15);
     blhide_set_defaults(&g_config);
 
-    /* 加载 sys.conf（系统配置）Load sys.conf (system config) */
-    config_parse_file(SYS_CONFIG_FILE);
+    /* 加载规范 sys.conf，缺失时兼容旧的相对路径
+     * Load canonical sys.conf, falling back to the legacy relative path. */
+    if (file_exists(SYS_CONFIG_FILE)) {
+        config_parse_file(SYS_CONFIG_FILE);
+    } else {
+        config_parse_file("./sys.conf");
+    }
 
     /* 加载 config.conf（用户配置，可覆盖 debug）Load config.conf (user config, can override debug) */
-    config_parse_file(path);
+    if (file_exists(path)) {
+        config_parse_file(path);
+    } else if (strcmp(path, CONFIG_FILE) == 0) {
+        config_parse_file("./config.conf");
+    }
 
     /* 确保日志目录存在 Ensure log directory exists */
     if (g_config.debug) {

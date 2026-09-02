@@ -17,8 +17,8 @@ CHECKSUMS="$MODDIR/.sha256"
 if [ ! -f "$CHECKSUMS" ]; then
     ui_print "  !! 校验文件缺失 [.sha256 missing] !!"
     ui_print "  !! 模块包可能被重新打包 Module may be repackaged"
-    ui_print "  !! 跳过校验 Skipping verification"
-    return 0 2>/dev/null || exit 2
+    ui_print "  !! 安装中止 Installation aborted"
+    return 2 2>/dev/null || exit 2
 fi
 
 ui_print "  正在校验文件完整性 [Verifying file integrity]..."

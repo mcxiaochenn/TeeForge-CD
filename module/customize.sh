@@ -16,6 +16,32 @@ if [ "$VERIFY_RET" -ne 0 ]; then
 fi
 ui_print " "
 
+# 选择当前设备对应的 TeeForge 二进制 Select TeeForge binary for current ABI
+ARCH=$(getprop ro.product.cpu.abi)
+case "$ARCH" in
+    arm64-v8a) EXPECTED_MACHINE=183 ;;
+    armeabi-v7a) EXPECTED_MACHINE=40 ;;
+    x86) EXPECTED_MACHINE=3 ;;
+    x86_64) EXPECTED_MACHINE=62 ;;
+    *) abort "  不支持的设备架构 [Unsupported device ABI]: $ARCH" ;;
+esac
+
+TEE_BIN="$MODPATH/bin/$ARCH/teeforge"
+if [ ! -f "$TEE_BIN" ]; then
+    abort "  缺少 $ARCH 二进制 [Missing binary for $ARCH]"
+fi
+
+ELF_MACHINE=$(od -An -t u2 -j 18 -N 2 "$TEE_BIN" 2>/dev/null | tr -d ' ')
+if [ "$ELF_MACHINE" != "$EXPECTED_MACHINE" ]; then
+    abort "  ELF 架构校验失败 [ELF architecture mismatch]: $ARCH/$ELF_MACHINE"
+fi
+
+cp "$TEE_BIN" "$MODPATH/teeforge" || abort "  无法安装 teeforge [Cannot install teeforge]"
+chmod 755 "$MODPATH/teeforge"
+rm -rf "$MODPATH/bin"
+ui_print "  架构 [ABI]: $ARCH"
+ui_print " "
+
 TEEFORGE_DIR="/data/adb/teeforge"
 CONFIG_FILE="$TEEFORGE_DIR/config.conf"
 
@@ -62,17 +88,22 @@ mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
 ui_print " "
 
-# 选择 resetprop 工具 Select resetprop tool
-ui_print "  选择属性修改工具 [Select prop tool]"
-ui_print "  传统方式兼容性好，resetprop-rs 隐蔽性更佳但可能被检测"
-ui_print "  [Traditional has better compat, rs has better stealth but may be detected]"
-ui_print "  10秒超时默认传统方式 [10s timeout, default traditional]"
-ui_print " "
-ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetprop (Recommended)]"
-ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
-
 PROP_TOOL="standard"
-PROP_RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect 2>/dev/null)
+if [ "$ARCH" = "arm64-v8a" ] || [ "$ARCH" = "armeabi-v7a" ]; then
+    # 选择 resetprop 工具 Select resetprop tool
+    ui_print "  选择属性修改工具 [Select prop tool]"
+    ui_print "  传统方式兼容性好，resetprop-rs 隐蔽性更佳但可能被检测"
+    ui_print "  [Traditional has better compat, rs has better stealth but may be detected]"
+    ui_print "  10秒超时默认传统方式 [10s timeout, default traditional]"
+    ui_print " "
+    ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetprop (Recommended)]"
+    ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
+    PROP_RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect 2>/dev/null)
+else
+    PROP_RESULT=1
+    ui_print "  resetprop-rs 不支持 $ARCH，使用传统方式"
+    ui_print "  [resetprop-rs is unavailable for $ARCH; using standard resetprop]"
+fi
 ui_print " "
 if [ "$PROP_RESULT" = "0" ]; then
     PROP_TOOL="rs"
@@ -80,7 +111,6 @@ if [ "$PROP_RESULT" = "0" ]; then
     ui_print " "
 
     # 检测架构，只保留对应二进制 Detect arch, keep matching binary only
-    ARCH=$(getprop ro.product.cpu.abi)
     case "$ARCH" in
         arm64-v8a)
             ui_print "  架构 [Arch]: arm64-v8a"
@@ -120,6 +150,8 @@ keybox_dir=/data/adb/teeforge/keybox/
 sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
 prop_tool=$PROP_TOOL
+root_method=$ROOT_METHOD
+root_version=$ROOT_VERSION
 EOF
 ui_print "  sys.conf 已生成 [sys.conf generated]"
 

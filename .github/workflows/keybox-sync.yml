@@ -1,5 +1,9 @@
 name: Keybox Sync
 
+concurrency:
+  group: teeforge-page-publish
+  cancel-in-progress: false
+
 on:
   schedule:
     - cron: '0 */12 * * *'
@@ -128,6 +132,7 @@ jobs:
           git clone --branch page --single-branch https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/page_push
 
           # 复制 keybox 文件到 files/keybox/ Copy keybox files to files/keybox/
+          rm -rf /tmp/page_push/files/keybox
           mkdir -p /tmp/page_push/files/keybox
           cp /tmp/omg_push/keybox/* /tmp/page_push/files/keybox/
 

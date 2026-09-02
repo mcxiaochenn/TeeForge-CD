@@ -3,6 +3,9 @@ out/
 temp/
 module/webroot/
 backup/
+target/
+.astro/
+node_modules/
 
 # IDE
 .vscode/

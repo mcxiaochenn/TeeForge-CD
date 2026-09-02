@@ -56,6 +56,7 @@ static int base64_decode(const char *in, size_t in_len, char **out, size_t *out_
     }
 
     if (o == 0) { free(buf); return -1; }
+    buf[o] = '\0';
     *out = buf;
     if (out_len) *out_len = o;
     return 0;
@@ -93,6 +94,7 @@ static int hex_decode(const char *in, size_t in_len, char **out, size_t *out_len
     }
 
     if (o == 0) { free(buf); return -1; }
+    buf[o] = '\0';
     *out = buf;
     if (out_len) *out_len = o;
     return 0;

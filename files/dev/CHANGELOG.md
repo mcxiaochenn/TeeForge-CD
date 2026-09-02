@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.5.0-a7fd758
+## TeeForge-CD Dev v0.6.0-4f9ba5c
 
 ### 构建信息 Build Info
-- Version: `v0.5.0-a7fd758`
-- Version Code: `128`
-- Commit: `a7fd758`
+- Version: `v0.6.0-4f9ba5c`
+- Version Code: `130`
+- Commit: `4f9ba5c`
 
 ### 最近提交 Recent Commits
+- 4f9ba5c fix: 修复 Linux 模块归档校验
+- 310922b refactor: 使用 Rust 重构四架构核心
 - a7fd758 docs: 脱敏公开文档中的 keybox 加解密细节
 - fc25eea docs: CLAUDE.md 的 backup/ 描述更新为加解密维护指南
 - d7fa00f fix(ci): 状态文件不再混入 CDN files/keybox/
@@ -24,5 +26,3 @@
 - 08bcb59 fix(webui): set cwd for ksu.exec so teeforge finds ./sys.conf
 - bc35ec3 fix(webui): spawn→exec, lang sync, glassmorphism theme overhaul
 - 6b090ca ci: integrate WebUI build into package.sh and CI workflows
-- 5ec130d feat(webui): add KernelSU WebUI with Astro, i18n, dual themes
-- 1351802 docs: update CLAUDE.md with refactored keybox/blhide implementation details

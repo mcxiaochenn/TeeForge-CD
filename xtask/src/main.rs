@@ -364,10 +364,17 @@ fn create_zip(stage: &Path, destination: &Path) -> Result<()> {
             "创建模块 ZIP [Create module ZIP]",
         )?;
     }
-    let listing = Command::new("tar")
-        .args(["-tf"])
-        .arg(destination)
-        .output()?;
+    let listing = if cfg!(windows) {
+        Command::new("tar")
+            .args(["-tf"])
+            .arg(destination)
+            .output()?
+    } else {
+        Command::new("unzip")
+            .args(["-Z1"])
+            .arg(destination)
+            .output()?
+    };
     if !listing.status.success()
         || !String::from_utf8(listing.stdout)?
             .lines()

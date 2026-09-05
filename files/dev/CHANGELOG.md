@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.6.0-8acde42
+## TeeForge-CD Dev v0.6.0-1037e43
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-8acde42`
-- Version Code: `132`
-- Commit: `8acde42`
+- Version: `v0.6.0-1037e43`
+- Version Code: `133`
+- Commit: `1037e43`
 
 ### 最近提交 Recent Commits
+- 1037e43 docs(readme): 重写用户指南并补充兼容目标
 - 8acde42 docs: 添加 README 编写规范
 - 535fd39 docs: 重组 AI 引导与项目文档
 - 4f9ba5c fix: 修复 Linux 模块归档校验
@@ -25,4 +26,3 @@
 - 44a8f68 fix(package): handle sha256sum binary mode asterisk in sed pattern
 - 2f47163 feat: add verify.sh for file integrity check + package README in module
 - 8501bfe docs: improve CLAUDE.md with WebUI, config loading order, static arrays, CI version injection notes
-- 08bcb59 fix(webui): set cwd for ksu.exec so teeforge finds ./sys.conf

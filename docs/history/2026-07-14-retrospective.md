@@ -1,4 +1,6 @@
-# 反思小结 Retrospective — 2026-07-14 08:54
+# 历史快照：反思小结 Retrospective — 2026-07-14 08:54
+
+> 本文记录旧 C 阶段的历史，不代表当前实现。当前架构见 [`../project/ARCHITECTURE.md`](../project/ARCHITECTURE.md)，可复用经验见 [`../maintenance/LESSONS.md`](../maintenance/LESSONS.md)。
 
 **日期 Date**: 2026-07-14
 **范围 Scope**: v0.1.0 阶段性 Bug 修复

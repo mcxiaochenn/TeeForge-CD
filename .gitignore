@@ -2,7 +2,8 @@
 out/
 temp/
 module/webroot/
-backup/
+docs/private/*
+!docs/private/README.md
 target/
 .astro/
 node_modules/

@@ -1,4 +1,6 @@
-# Keybox Sync 工作流修复报告
+# 历史快照：Keybox Sync 工作流修复报告
+
+> 本文记录历史修复过程，不代表当前同步状态。当前构建和同步规则见 [`../development/BUILD_AND_RELEASE.md`](../development/BUILD_AND_RELEASE.md)，安全边界见 [`../project/ARCHITECTURE.md`](../project/ARCHITECTURE.md)。
 
 ## 问题描述
 

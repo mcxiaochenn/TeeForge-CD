@@ -7,7 +7,7 @@ Android boot
   → module/service.sh
   → selected ABI teeforge
   → /data/adb/teeforge/ 配置和日志
-  → Tricky Store target.txt / keybox.xml
+  → Tricky Store / TEESimulator / TEESimulator-RS 的 target.txt / keybox.xml
 ```
 
 WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级为 `ksu.exec()`；两者都显式使用模块目录和 `/data/adb/teeforge/config.conf`。
@@ -51,10 +51,12 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
   → 有界下载
   → 严格解码和 AndroidAttestation 标记校验
   → 本地 keybox.xml
-  → Tricky Store keybox.xml
+  → Tricky Store / TEESimulator / TEESimulator-RS 的 keybox.xml
 ```
 
 两个目标采用原子写入；第二个目标失败时恢复本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
+
+`/data/adb/tricky_store/` 是 Tricky Store、TEESimulator 和 TEESimulator-RS 三个对接目标共用的目标文件接口。
 
 ## BL 隐藏
 

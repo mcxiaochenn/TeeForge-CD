@@ -4,7 +4,7 @@
 
 TeeForge-CD 是面向 Magisk/KernelSU 的 Android 模块，主要负责：
 
-- 根据用户安装的应用生成 Tricky Store `target.txt`。
+- 根据用户安装的应用生成 `target.txt`，供 Tricky Store、TEESimulator 和 TEESimulator-RS 三个对接目标使用。
 - 通过 resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
 - 从自建 CDN 获取、校验并同步 Keybox 文件。
 - 通过 KernelSU WebUI 提供手动操作入口。
@@ -20,7 +20,7 @@ module/service.sh
   └─ teeforge --generate
 ```
 
-二进制运行时数据位于 `/data/adb/teeforge/`，Tricky Store 文件位于 `/data/adb/tricky_store/`。
+二进制运行时数据位于 `/data/adb/teeforge/`，目标模块文件位于 `/data/adb/tricky_store/`。
 
 ## CLI 公共接口
 

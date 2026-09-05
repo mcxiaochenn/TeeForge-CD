@@ -16,6 +16,7 @@ AI 已能从 `AGENTS.md` 判断目标文档时，应直接读取对应文件；�
 | 当前状态和下一步 | [`maintenance/ROADMAP.md`](maintenance/ROADMAP.md) |
 | 可复用的故障经验 | [`maintenance/LESSONS.md`](maintenance/LESSONS.md) |
 | 每轮结束的文档检查 | [`maintenance/DOCUMENTATION.md`](maintenance/DOCUMENTATION.md) |
+| 根 README 的结构、语言和审查要求 | [`maintenance/README_STANDARD.md`](maintenance/README_STANDARD.md) |
 
 ## 历史与私密资料
 

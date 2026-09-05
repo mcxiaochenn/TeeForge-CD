@@ -15,6 +15,7 @@
 - 当前技术事实变化：更新 `docs/project/`、`development/` 或 `operations/`。
 - 当前任务状态变化：更新 `ROADMAP.md`。
 - 可复用的新故障经验：更新 `LESSONS.md`。
+- 用户可见功能、兼容性、安装、配置、恢复或下载渠道变化：按 [`README_STANDARD.md`](README_STANDARD.md) 检查根 `README.md`；存在 `README_EN.md` 时同步检查。
 - 只属于过去阶段的过程：保留或移动到 `history/`。
 - 没有文档影响：不制造无意义文档改动。
 

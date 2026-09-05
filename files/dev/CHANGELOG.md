@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.6.0-535fd39
+## TeeForge-CD Dev v0.6.0-8acde42
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-535fd39`
-- Version Code: `131`
-- Commit: `535fd39`
+- Version: `v0.6.0-8acde42`
+- Version Code: `132`
+- Commit: `8acde42`
 
 ### 最近提交 Recent Commits
+- 8acde42 docs: 添加 README 编写规范
 - 535fd39 docs: 重组 AI 引导与项目文档
 - 4f9ba5c fix: 修复 Linux 模块归档校验
 - 310922b refactor: 使用 Rust 重构四架构核心
@@ -25,4 +26,3 @@
 - 2f47163 feat: add verify.sh for file integrity check + package README in module
 - 8501bfe docs: improve CLAUDE.md with WebUI, config loading order, static arrays, CI version injection notes
 - 08bcb59 fix(webui): set cwd for ksu.exec so teeforge finds ./sys.conf
-- bc35ec3 fix(webui): spawn→exec, lang sync, glassmorphism theme overhaul

@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.6.0-1037e43
+## TeeForge-CD Dev v0.6.0-edddba0
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-1037e43`
-- Version Code: `133`
-- Commit: `1037e43`
+- Version: `v0.6.0-edddba0`
+- Version Code: `136`
+- Commit: `edddba0`
 
 ### 最近提交 Recent Commits
+- edddba0 docs: 补充多后端配置与验收说明
+- d56290c chore(ui): 统一目标配置操作文案
+- 2afbb5e fix(target): 支持多后端目标配置与 Keybox 事务同步
 - 1037e43 docs(readme): 重写用户指南并补充兼容目标
 - 8acde42 docs: 添加 README 编写规范
 - 535fd39 docs: 重组 AI 引导与项目文档
@@ -23,6 +26,3 @@
 - 30174c6 fix(verify): 修复 MODDIR 使完整性校验生效 fix(verify): fix MODDIR so integrity check actually runs
 - 748d139 docs: add keybox sync workflow fix report
 - 86d5095 fix(ci): remove deprecated key-control and key-hash from keybox sync
-- 44a8f68 fix(package): handle sha256sum binary mode asterisk in sed pattern
-- 2f47163 feat: add verify.sh for file integrity check + package README in module
-- 8501bfe docs: improve CLAUDE.md with WebUI, config loading order, static arrays, CI version injection notes

@@ -18,7 +18,7 @@ cargo run --locked -p xtask -- package
 cargo run --locked -p xtask -- verify
 ```
 
-`build.sh` 和 `package.sh` 是兼容入口，默认委托给 xtask；迁移期只有显式设置 `TEEFORGE_LEGACY_C=1` 才运行旧 C 流程。
+`build.sh` 和 `package.sh` 是兼容入口，默认委托给 xtask；迁移期只有显式设置 `TEEFORGE_LEGACY_C=1` 才运行旧 C 流程。多后端目标配置、TEESimulator `config.json` 合并和 Keybox 多目标事务只属于默认 Rust 核心；旧 C 对照实现继续只支持既有 `target.txt` 行为，本次不维护第二套 C JSON 实现。
 
 ## xtask 阶段
 

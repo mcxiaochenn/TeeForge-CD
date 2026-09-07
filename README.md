@@ -2,10 +2,10 @@
 
 面向 Magisk、KernelSU 和 APatch 模块环境的 Android 工具，用于维护 TEE 目标模块的应用列表、执行 bootloader 属性弱化处理，并按需同步 Keybox。
 
-**目标列表开机更新，Keybox 按需同步。**
+**目标配置开机更新，Keybox 按需同步。**
 
 > [!WARNING]
-> `target.txt` 与 Keybox 可供三个对接目标使用：[Tricky Store](https://github.com/5ec1cff/TrickyStore)、[TEESimulator](https://github.com/JingMatrix/TEESimulator) 和 [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
+> 三个对接目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`；Keybox 分别位于对应目录。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
 
 > [!NOTE]
 > 当前 `master` 构建基线为 Android 7.0（API 24）及以上，包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI。四架构自动化构建已经验证，真机与模拟器覆盖仍需分别验收；稳定 Release 可能晚于 `master`，实际支持范围以对应 Release 说明和安装输出为准。
@@ -14,14 +14,14 @@
 
 ## 功能
 
-- **自动维护 target.txt**：开机扫描用户安装的应用并更新兼容目标模块的应用列表，失败时保留旧文件。
+- **自动维护目标配置**：一次扫描用户安装的应用并分别更新已存在的兼容目标配置，失败时保留旧文件。
 - **弱化 BL 相关属性**：通过 resetprop 处理 bootloader、Verified Boot、调试和厂商相关属性，可按类别关闭。
 - **按需同步 Keybox**：通过模块 Action、WebUI 或 CLI 获取并校验内容，更新失败时保留已有文件。
 - **安装时架构选择**：模块包内置四种 ABI，安装器按设备 ABI 选择并校验对应 ELF，不使用其他架构兜底。
 - **配置与 Root 检测**：识别 Magisk、KernelSU 或 APatch 环境，用户配置在升级时默认保留。
 - **WebUI 与命令行**：支持模块 Action、兼容的模块 WebUI 以及设备端 CLI。
 
-开机服务会更新模块描述、执行 BL 弱化并生成 `target.txt`；Keybox 下载只在用户主动运行 Action、WebUI 操作或 `--keybox` 时执行。
+开机服务会更新模块描述、执行 BL 弱化并更新目标配置；Keybox 下载只在用户主动运行 Action、WebUI 操作或 `--keybox` 时执行。
 
 ## 兼容性与前置条件
 
@@ -30,14 +30,16 @@
 | Android | Android 7.0 / API 24 及以上；Root 管理器自身可能有更高要求 |
 | Root 环境 | Magisk、KernelSU、APatch 的兼容 Magisk 模块环境；未设置硬编码最低管理器版本 |
 | ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
-| 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS |
+| 目标模块 | Tricky Store、TEESimulator-RS、TEESimulator |
+| 目标配置 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/target.txt`；TEESimulator：`/data/adb/teesim/config.json` 的 `profiles.teeforge.apps` |
+| Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml` |
 | 属性工具 | 全架构支持 standard resetprop；ARM 可选预置 resetprop-rs，x86/x86_64 固定使用 standard |
 | WebUI | 需要支持 KernelSU 模块 WebUI 接口的管理器；其他环境可使用 Action 或终端 |
 
 安装前请确保：
 
 - 已从本仓库官方 Release 下载模块 ZIP，而不是 GitHub 自动生成的 Source code 压缩包。
-- 如需使用 `target.txt` 或 Keybox 功能，已安装并配置上述任一兼容目标模块。
+- 如需使用目标配置或 Keybox 功能，已安装并配置上述任一兼容目标模块；TeeForge 只更新实际存在的后端配置，不创建幽灵目录。
 - 知道当前 Root 管理器的模块禁用或安全模式入口，以便异常启动时恢复。
 - 需要保留旧配置时，提前备份 `/data/adb/teeforge/config.conf`。
 
@@ -63,28 +65,34 @@ Recovery 刷入未纳入当前验收范围，请优先使用 Root 管理器安�
 
 重启并等待系统完成启动后，在 Root 管理器的模块页面检查 TeeForge-CD 描述：正常情况下会由“等待重启”更新为包含 Root 类型、TeeForge-CD 版本、ABI 和 Keybox 状态的信息。`keybox: N/A` 表示尚无本地 Keybox 记录，不代表安装失败；描述仍停留在等待状态，则表示描述更新尚未完成。描述更新发生在其他开机动作之前，因此还需继续验证实际使用的功能。
 
-随后检查兼容目标模块共用的目标文件：
+随后按已安装的后端检查目标配置。Tricky Store/TEESimulator-RS：
 
 ```sh
 su -c 'test -s /data/adb/tricky_store/target.txt && wc -l /data/adb/tricky_store/target.txt'
 ```
 
-命令应成功返回非零行数。文件不存在、为空或命令退出码非零时，应按“故障排查与反馈”收集信息。
+命令应成功返回非零行数。使用 TEESimulator 时检查受管 profile：
 
-如果只使用 BL 弱化且未安装兼容目标模块，可跳过 `target.txt` 检查，改为执行以下命令；退出码为 0 表示本次属性命令均已成功执行：
+```sh
+su -c "grep -n 'teeforge\|_teeforgeManaged' /data/adb/teesim/config.json"
+```
+
+文件不存在、为空、缺少受管 profile 或命令退出码非零时，应按“故障排查与反馈”收集信息。
+
+如果只使用 BL 弱化且未安装兼容目标模块，可跳过目标配置检查，改为执行以下命令；退出码为 0 表示本次属性命令均已成功执行：
 
 ```sh
 su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
 ```
 
-还可以在 Root 管理器中运行模块 Action。Action 会依次同步 Keybox 和更新 `target.txt`；两步均成功时输出 `完成 [Done]`，无需再次重启。任一步失败都会输出非零状态，不应视为成功。
+还可以在 Root 管理器中运行模块 Action。Action 会依次同步 Keybox 和更新目标配置；两步均成功时输出 `完成 [Done]`，无需再次重启。任一步失败都会输出非零状态，不应视为成功。
 
 ## 使用与配置
 
 ### 常用入口
 
-- **开机自动执行**：更新模块描述、执行 BL 弱化、生成 `target.txt`。
-- **模块 Action**：同步 Keybox 并重新生成 `target.txt`，无需重启。
+- **开机自动执行**：更新模块描述、执行 BL 弱化、更新已存在的目标配置。
+- **模块 Action**：同步 Keybox 并重新更新目标配置，无需重启。
 - **WebUI**：在支持模块 WebUI 的管理器中运行对应操作并查看输出。
 - **CLI**：适用于终端操作和问题定位。
 
@@ -126,7 +134,7 @@ blhide=1
 
 在 Root 管理器中卸载 TeeForge-CD 后重启。卸载脚本会删除整个 `/data/adb/teeforge/` 数据目录，包括用户配置、日志和 TeeForge 的本地 Keybox 副本；需要保留配置时请先自行备份。
 
-卸载脚本不会删除目标目录中的 `/data/adb/tricky_store/target.txt` 和 `/data/adb/tricky_store/keybox.xml`。这些文件可能仍被 Tricky Store、TEESimulator 或 TEESimulator-RS 使用；如确认不再需要，应在卸载并重启后先备份，再自行清理。
+卸载脚本不会删除目标目录中的 `/data/adb/tricky_store/target.txt`、`/data/adb/tricky_store/keybox.xml`、`/data/adb/teesim/config.json` 或 `/data/adb/teesim/keybox.xml`。这些文件可能仍被对应目标模块使用；如确认不再需要，应在卸载并重启后先备份，再自行清理。
 
 ### 异常恢复
 
@@ -142,7 +150,7 @@ blhide=1
 
 - **安装提示校验失败**：删除当前 ZIP，从官方 Release 重新下载；不要修改或重新打包模块。
 - **提示 ABI 不支持或 ELF 不匹配**：确认设备报告的主 ABI 属于支持列表，不要用其他架构二进制强行替换。
-- **`target.txt` 没有生成**：确认目标模块使用 `/data/adb/tricky_store/` 兼容目录，然后手动运行 `--generate` 并检查真实退出码。
+- **目标配置没有更新**：确认目标模块使用 `/data/adb/tricky_store/target.txt` 或 `/data/adb/teesim/config.json`，检查 `teeforge` 管理标记和手动运行 `--generate` 的真实退出码。没有任何兼容后端时，命令成功但只记录 warning。
 - **Keybox 同步失败**：检查网络和命令输出；失败时程序会保留已有文件，不要把非空响应直接视为有效结果。
 - **x86/x86_64 没有 resetprop-rs 选项**：这是当前安装策略，使用 standard resetprop。
 - **模块描述仍显示等待重启**：确认系统已经完成启动，运行 `--update-desc` 后检查退出码和日志。

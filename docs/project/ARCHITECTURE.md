@@ -7,7 +7,9 @@ Android boot
   → module/service.sh
   → selected ABI teeforge
   → /data/adb/teeforge/ 配置和日志
-  → Tricky Store / TEESimulator / TEESimulator-RS 的 target.txt / keybox.xml
+  → 一次用户应用扫描
+      ├─ Tricky Store / TEESimulator-RS：target.txt
+      └─ TEESimulator：config.json profiles.teeforge.apps
 ```
 
 WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级为 `ksu.exec()`；两者都显式使用模块目录和 `/data/adb/teeforge/config.conf`。
@@ -18,8 +20,8 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 |---|---|
 | `cli` | 兼容参数解析、动作顺序和统一退出码 |
 | `config` | 默认值、系统/用户配置优先级和兼容回退 |
-| `target` | 调用 `cmd package list packages -f`、筛选用户应用并原子写入 |
-| `keybox` | 下载后备、严格有界解码、内容标记校验和双目标回滚 |
+| `target` | 调用 `cmd package list packages -f -U --user 0`，筛选用户应用/UID，并适配两个目标配置后原子事务写入 |
+| `keybox` | 下载后备、严格有界解码、内容标记校验和按实际后端多目标回滚 |
 | `blhide` | 参数数组调用 resetprop，逐项收集失败 |
 | `rootdetect` | 环境变量和 `/data/adb/*` 路径检测 |
 | `volume` | 动态扫描 input event，封装唯一的设备输入 unsafe 适配 |
@@ -39,6 +41,8 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 /data/adb/teeforge/keybox/
 /data/adb/tricky_store/target.txt
 /data/adb/tricky_store/keybox.xml
+/data/adb/teesim/config.json
+/data/adb/teesim/keybox.xml
 ```
 
 加载顺序为：默认值 → `sys.conf` → 用户配置；用户配置覆盖同名系统键。缺少规范文件时，开发环境允许回退到当前目录的旧配置文件。
@@ -51,12 +55,16 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
   → 有界下载
   → 严格解码和 AndroidAttestation 标记校验
   → 本地 keybox.xml
-  → Tricky Store / TEESimulator / TEESimulator-RS 的 keybox.xml
+  → 已存在的 Tricky Store/TEESimulator-RS 目录和/或 TEESimulator 目录中的 keybox.xml
 ```
 
-两个目标采用原子写入；第二个目标失败时恢复本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
+每个已存在的目标采用原子写入；任一目标失败时恢复本轮已写目标和本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
 
-`/data/adb/tricky_store/` 是 Tricky Store、TEESimulator 和 TEESimulator-RS 三个对接目标共用的目标文件接口。
+`target.txt` 只属于 Tricky Store/TEESimulator-RS 兼容接口；当前 TEESimulator 使用独立的 JSON profile。目标适配器只处理真实存在的配置，不创建目标目录。
+
+## 目标配置事务
+
+`target` 模块先完成一次稳定的主用户 0 应用快照，再分别渲染所有已发现后端。`target.txt` 使用受管区块，区块外的注释、模式后缀和 Keybox 分段保持原顺序；TEESimulator 只更新带 `_teeforgeManaged: true` 标记的 `teeforge.apps`，首次创建时深复制 `default` 的非 `apps` 设置。所有渲染和源文件一致性检查通过后才写入，任一写入失败回滚本轮已写文件。
 
 ## BL 隐藏
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 必须保持 LF 换行，供 Linux/Android 环境直接执行 Must remain LF-only
 #
 # TeeForge-CD Build Script
 # 构建脚本 [Build script]

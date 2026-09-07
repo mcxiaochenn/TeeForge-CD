@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# 必须保持 LF 换行，供 Android sh 直接执行 Must remain LF-only
 # TeeForge-CD Action Script
 # 热更新脚本 [Hot update script]
 # 无需重启 No reboot required
@@ -14,6 +15,8 @@ echo ""
 # 获取 keybox
 echo "[1/2] 获取 keybox [Fetching keybox]..."
 echo ""
+# 分别记录两个子任务，确保正常跳过与失败都能进入最终汇总。
+# Track both subtasks so successful skips and failures always reach the final summary.
 "$MODDIR/teeforge" --config "$CONFIG" --keybox 2>&1
 KEYBOX_RET=$?
 echo ""

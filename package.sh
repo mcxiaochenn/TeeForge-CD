@@ -1,4 +1,5 @@
 #!/bin/bash
+# 必须保持 LF 换行，供 Linux/Android 环境直接执行 Must remain LF-only
 #
 # TeeForge-CD Packaging Script
 # 构建并打包 Magisk 模块 [Build and package Magisk module]

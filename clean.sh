@@ -1,4 +1,5 @@
 #!/bin/bash
+# 必须保持 LF 换行，供 Linux/Android 环境直接执行 Must remain LF-only
 #
 # TeeForge-CD Clean Script
 # 清理构建产物 [Clean build artifacts]

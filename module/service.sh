@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# 必须保持 LF 换行，供 Android sh 直接执行 Must remain LF-only
 # TeeForge-CD Service Script
 # 开机服务脚本 [Boot service script]
 # Runs at boot via Magisk service.d

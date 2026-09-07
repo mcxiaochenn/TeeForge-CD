@@ -20,6 +20,8 @@ struct Abi {
     elf_machine: u16,
 }
 
+// Android ABI、Rust target 与 ELF machine 必须成组维护，防止产物被放入错误目录。
+// Keep Android ABI, Rust target, and ELF machine mappings together to prevent mispackaging.
 const ABIS: &[Abi] = &[
     Abi {
         android: "arm64-v8a",
@@ -233,6 +235,43 @@ fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn collect_shell_files(current: &Path, output: &mut Vec<PathBuf>) -> io::Result<()> {
+    for entry in fs::read_dir(current)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            collect_shell_files(&path, output)?;
+        } else if path.extension() == Some(OsStr::new("sh")) {
+            output.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn verify_shell_files_lf(files: impl IntoIterator<Item = PathBuf>) -> Result<()> {
+    for path in files {
+        if fs::read(&path)?.contains(&b'\r') {
+            return Err(format!(
+                "Shell 文件不是纯 LF [Shell file is not LF-only]: {}",
+                path.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn verify_source_shell_files(workspace: &Path) -> Result<()> {
+    // 模块脚本在打包时按字节复制；源码门禁可阻止 Windows 换行进入 Android sh。
+    // Module scripts are copied byte-for-byte, so reject Windows line endings at the source.
+    let mut files = ["build.sh", "clean.sh", "package.sh"]
+        .into_iter()
+        .map(|name| workspace.join(name))
+        .collect::<Vec<_>>();
+    collect_shell_files(&workspace.join("module"), &mut files)?;
+    verify_shell_files_lf(files)
+}
+
 fn build_webui(workspace: &Path) -> Result<()> {
     let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
     let webroot = workspace.join("webroot");
@@ -375,19 +414,50 @@ fn create_zip(stage: &Path, destination: &Path) -> Result<()> {
             .arg(destination)
             .output()?
     };
-    if !listing.status.success()
-        || !String::from_utf8(listing.stdout)?
-            .lines()
-            .any(|line| line.ends_with(".sha256"))
-    {
+    if !listing.status.success() {
+        return Err("无法读取 ZIP 清单 [Unable to read ZIP listing]".into());
+    }
+    let entries = String::from_utf8(listing.stdout)?
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if !entries.iter().any(|line| line.ends_with(".sha256")) {
         return Err("ZIP 缺少 .sha256 [ZIP is missing .sha256]".into());
+    }
+    verify_archive_shell_files_lf(destination, &entries)?;
+    Ok(())
+}
+
+fn verify_archive_shell_files_lf(archive: &Path, entries: &[String]) -> Result<()> {
+    for entry in entries.iter().filter(|entry| entry.ends_with(".sh")) {
+        let output = if cfg!(windows) {
+            Command::new("tar")
+                .args([OsStr::new("-xOf"), archive.as_os_str(), OsStr::new(entry)])
+                .output()?
+        } else {
+            Command::new("unzip")
+                .args([OsStr::new("-p"), archive.as_os_str(), OsStr::new(entry)])
+                .output()?
+        };
+        if !output.status.success() {
+            return Err(
+                format!("无法读取 ZIP 内脚本 [Unable to read script in ZIP]: {entry}").into(),
+            );
+        }
+        if output.stdout.contains(&b'\r') {
+            return Err(format!(
+                "ZIP 内 Shell 文件不是纯 LF [Shell file in ZIP is not LF-only]: {entry}"
+            )
+            .into());
+        }
     }
     Ok(())
 }
 
 fn package() -> Result<()> {
-    build_android()?;
     let workspace = root();
+    verify_source_shell_files(&workspace)?;
+    build_android()?;
     build_webui(&workspace)?;
     let out = workspace.join("out");
     let stage = out.join("build").join("teeforge_cd");
@@ -395,6 +465,9 @@ fn package() -> Result<()> {
         fs::remove_dir_all(&stage)?;
     }
     copy_tree(&workspace.join("module"), &stage)?;
+    let mut staged_shell_files = Vec::new();
+    collect_shell_files(&stage, &mut staged_shell_files)?;
+    verify_shell_files_lf(staged_shell_files)?;
     let stale = stage.join("teeforge");
     if stale.exists() {
         fs::remove_file(stale)?;
@@ -439,7 +512,9 @@ fn package() -> Result<()> {
 }
 
 fn verify_outputs() -> Result<()> {
-    let output = root().join("out").join("bin");
+    let workspace = root();
+    verify_source_shell_files(&workspace)?;
+    let output = workspace.join("out").join("bin");
     for abi in ABIS {
         let binary = output.join(abi.android).join("teeforge");
         let size = fs::metadata(&binary)?.len();
@@ -449,4 +524,23 @@ fn verify_outputs() -> Result<()> {
         println!("{}: {} bytes", abi.android, size);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_lf_check_rejects_carriage_returns() -> Result<()> {
+        let directory = env::temp_dir().join(format!("teeforge-xtask-lf-{}", std::process::id()));
+        fs::create_dir_all(&directory)?;
+        let valid = directory.join("valid.sh");
+        let invalid = directory.join("invalid.sh");
+        fs::write(&valid, b"#!/system/bin/sh\necho ok\n")?;
+        fs::write(&invalid, b"#!/system/bin/sh\r\necho bad\r\n")?;
+        assert!(verify_shell_files_lf([valid]).is_ok());
+        assert!(verify_shell_files_lf([invalid]).is_err());
+        let _ = fs::remove_dir_all(directory);
+        Ok(())
+    }
 }

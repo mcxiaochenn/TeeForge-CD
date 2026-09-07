@@ -27,7 +27,8 @@ cargo run --locked -p xtask -- verify
 3. 用 ELF machine 和 `llvm-readelf` 检查架构及动态依赖。
 4. 在锁定依赖环境中构建 WebUI。
 5. 在暂存目录注入 `version`、`versionCode` 和 dev 渠道信息。
-6. 生成 `.sha256`，创建 ZIP，复核清单存在并执行体积门禁。
+6. 检查源码、暂存目录和最终 ZIP 内 Shell 文件均为纯 LF。
+7. 生成 `.sha256`，创建 ZIP，复核清单存在并执行体积门禁。
 
 限制：单个 stripped 二进制不超过 1.5 MiB，完整 ZIP 不超过 6 MiB；依赖只允许 Android `libc.so` 和 `libdl.so`。
 

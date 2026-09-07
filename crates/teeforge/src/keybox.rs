@@ -217,22 +217,64 @@ fn decrypt(encrypted: &[u8], public_key: &str) -> Result<Vec<u8>> {
     Ok(current)
 }
 
-fn install_keybox(local: &Path, destination: &Path, decoded: &[u8]) -> Result<()> {
-    let previous_local = fs::read(local).ok();
-    atomic_file::write_with_backup(local, decoded)?;
-    if let Err(error) = atomic_file::write_with_backup(destination, decoded) {
-        let rollback = match previous_local {
-            Some(previous) => atomic_file::write(local, &previous),
-            None => fs::remove_file(local).map_err(TfError::from),
+struct KeyboxUpdate {
+    path: PathBuf,
+    original: Option<Vec<u8>>,
+}
+
+fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<()> {
+    let mut updates = Vec::new();
+    for path in paths {
+        let original = match fs::read(path) {
+            Ok(value) => Some(value),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(TfError::from(error).context(path.display())),
         };
-        return match rollback {
-            Ok(()) => Err(error),
-            Err(rollback_error) => Err(TfError::new(format!(
-                "Keybox 同步失败且本地回滚失败 [Keybox sync and local rollback failed]: {error}; {rollback_error}"
-            ))),
+        if original.as_deref() != Some(decoded) {
+            updates.push(KeyboxUpdate {
+                path: path.clone(),
+                original,
+            });
+        }
+    }
+    let mut written: Vec<&KeyboxUpdate> = Vec::new();
+    for update in &updates {
+        let result = if update.original.is_some() {
+            atomic_file::write_with_backup(&update.path, decoded)
+        } else {
+            atomic_file::write(&update.path, decoded)
         };
+        if let Err(error) = result {
+            let mut rollback_errors = Vec::new();
+            for previous in written.into_iter().rev() {
+                let rollback = match &previous.original {
+                    Some(old) => atomic_file::write(&previous.path, old),
+                    None => match fs::remove_file(&previous.path) {
+                        Ok(()) => Ok(()),
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                        Err(error) => Err(TfError::from(error)),
+                    },
+                };
+                if let Err(rollback_error) = rollback {
+                    rollback_errors.push(format!("{}: {rollback_error}", previous.path.display()));
+                }
+            }
+            if !rollback_errors.is_empty() {
+                return Err(TfError::new(format!(
+                    "Keybox 同步失败且回滚失败 [Keybox sync and rollback failed]: {error}; {}",
+                    rollback_errors.join("; ")
+                )));
+            }
+            return Err(error.context(update.path.display()));
+        }
+        written.push(update);
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn install_keybox(local: &Path, destination: &Path, decoded: &[u8]) -> Result<()> {
+    install_keyboxes(&[local.to_path_buf(), destination.to_path_buf()], decoded)
 }
 
 pub(crate) fn fetch(config: &Config) -> Result<()> {
@@ -242,15 +284,32 @@ pub(crate) fn fetch(config: &Config) -> Result<()> {
     let encrypted = download(&url)?;
     let decoded = decrypt(&encrypted, &public_key)?;
 
-    let tricky_store = Path::new("/data/adb/tricky_store");
-    if !tricky_store.is_dir() {
+    let mut destinations = Vec::new();
+    if config
+        .target_txt
+        .parent()
+        .is_some_and(|parent| parent.is_dir())
+    {
+        destinations.push(config.target_txt.parent().unwrap().join("keybox.xml"));
+    }
+    if config.teesim_config.is_file() {
+        if let Some(parent) = config.teesim_config.parent() {
+            destinations.push(parent.join("keybox.xml"));
+        }
+    }
+    destinations.sort();
+    destinations.dedup();
+    if destinations.is_empty() {
         return Err(TfError::new(
-            "Tricky Store 目录不存在，保留现有 Keybox [Tricky Store directory is missing; existing Keybox preserved]",
+            "未发现兼容目标目录，保留现有 Keybox [No compatible target directory found; existing Keybox preserved]",
         ));
     }
     fs::create_dir_all(&config.keybox_dir)?;
     let local = config.keybox_dir.join("keybox.xml");
-    install_keybox(&local, &tricky_store.join("keybox.xml"), &decoded)?;
+    destinations.insert(0, local);
+    destinations.sort();
+    destinations.dedup();
+    install_keyboxes(&destinations, &decoded)?;
     logging::log(
         Level::Info,
         "Keybox 已更新并同步 [Keybox updated and synchronized]",
@@ -353,6 +412,19 @@ mod tests {
         fs::create_dir_all(&invalid_destination).expect("block destination parent with a file");
         assert!(install_keybox(&local, &invalid_destination, b"new").is_err());
         assert_eq!(fs::read(&local).expect("read rolled back keybox"), b"old");
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn unchanged_keybox_is_not_rewritten() {
+        let directory =
+            std::env::temp_dir().join(format!("teeforge-keybox-unchanged-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("create keybox fixture");
+        let path = directory.join("keybox.xml");
+        fs::write(&path, b"same").expect("write keybox");
+        install_keyboxes(std::slice::from_ref(&path), b"same").expect("skip unchanged keybox");
+        assert!(!path.with_extension("xml.bak").exists());
+        assert_eq!(fs::read(&path).expect("read keybox"), b"same");
         let _ = fs::remove_dir_all(directory);
     }
 }

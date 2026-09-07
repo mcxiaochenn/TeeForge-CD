@@ -10,6 +10,7 @@ pub(crate) const USER_CONFIG: &str = "/data/adb/teeforge/config.conf";
 pub(crate) struct Config {
     pub(crate) packages_xml: PathBuf,
     pub(crate) target_txt: PathBuf,
+    pub(crate) teesim_config: PathBuf,
     pub(crate) keybox_dir: PathBuf,
     pub(crate) sources_conf: PathBuf,
     pub(crate) log_dir: PathBuf,
@@ -43,6 +44,7 @@ impl Default for Config {
         Self {
             packages_xml: "/data/system/packages.xml".into(),
             target_txt: "/data/adb/tricky_store/target.txt".into(),
+            teesim_config: "/data/adb/teesim/config.json".into(),
             keybox_dir: "/data/adb/teeforge/keybox".into(),
             sources_conf: "/data/adb/teeforge/sources.conf".into(),
             log_dir: "/data/adb/teeforge/logs".into(),
@@ -105,6 +107,7 @@ impl Config {
         match key {
             "packages_xml" => self.packages_xml = value.into(),
             "target_txt" => self.target_txt = value.into(),
+            "teesim_config" => self.teesim_config = value.into(),
             "keybox_dir" => self.keybox_dir = value.into(),
             "sources_conf" => self.sources_conf = value.into(),
             "log_dir" => self.log_dir = value.into(),
@@ -182,6 +185,10 @@ mod tests {
         assert!(config.debug);
         assert_eq!(config.prop_tool, PropTool::Rs);
         assert_eq!(config.target_txt, PathBuf::from("/tmp/target"));
+        assert_eq!(
+            config.teesim_config,
+            PathBuf::from("/data/adb/teesim/config.json")
+        );
     }
 
     #[test]

@@ -3,43 +3,466 @@ use crate::config::Config;
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::process;
+use serde_json::Value;
+use std::collections::{BTreeMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
-pub(crate) fn parse_user_packages(text: &str) -> Vec<String> {
-    text.lines()
-        .filter_map(|line| line.strip_prefix("package:"))
-        .filter_map(|line| line.rsplit_once('='))
-        .filter(|(path, package)| path.starts_with("/data/app/") && !package.is_empty())
-        .map(|(_, package)| package.to_owned())
-        .collect()
+const TARGET_BEGIN: &str = "# BEGIN TeeForge-CD managed targets";
+const TARGET_END: &str = "# END TeeForge-CD managed targets";
+const TEESIM_PROFILE: &str = "teeforge";
+const TEESIM_MARKER: &str = "_teeforgeManaged";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PackageRecord {
+    pub(crate) name: String,
+    pub(crate) uids: Vec<u32>,
+}
+
+pub(crate) fn parse_user_packages(text: &str) -> Result<Vec<PackageRecord>> {
+    let mut packages = BTreeMap::<String, HashSet<u32>>::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let rest = line.strip_prefix("package:").ok_or_else(|| {
+            TfError::new(format!(
+                "包列表输出含无法识别的行 [package listing contains malformed line]: {line}"
+            ))
+        })?;
+        let (path, details) = rest.split_once('=').ok_or_else(|| {
+            TfError::new(format!(
+                "包列表输出缺少路径分隔符 [package listing lacks path separator]: {line}"
+            ))
+        })?;
+        if !path.starts_with('/') {
+            return Err(TfError::new(format!(
+                "包列表输出含无效 APK 路径 [package listing contains invalid APK path]: {line}"
+            )));
+        }
+        let mut fields = details.split_whitespace();
+        let name = fields
+            .next()
+            .filter(|name| valid_package_name(name))
+            .ok_or_else(|| {
+                TfError::new(format!(
+                    "包列表输出含无效包名 [package listing contains invalid package]: {line}"
+                ))
+            })?;
+        let mut line_uids = HashSet::new();
+        for field in fields {
+            let uids = field.strip_prefix("uid:").ok_or_else(|| {
+                TfError::new(format!(
+                    "包列表输出含无法识别字段 [package listing contains unknown field]: {line}"
+                ))
+            })?;
+            if uids.is_empty() {
+                return Err(TfError::new(format!(
+                    "包列表输出含空 UID [package listing contains empty UID]: {line}"
+                )));
+            }
+            for uid in uids.split(',') {
+                line_uids.insert(uid.parse::<u32>().map_err(|_| {
+                    TfError::new(format!(
+                        "包列表输出含无效 UID [package listing contains invalid UID]: {line}"
+                    ))
+                })?);
+            }
+        }
+        if line_uids.is_empty() {
+            return Err(TfError::new(format!(
+                "包列表输出缺少 UID [package listing lacks UID]: {line}"
+            )));
+        }
+        if path.starts_with("/data/app/") {
+            packages
+                .entry(name.to_owned())
+                .or_default()
+                .extend(line_uids);
+        }
+    }
+    Ok(packages
+        .into_iter()
+        .map(|(name, uids)| {
+            let mut uids = uids.into_iter().collect::<Vec<_>>();
+            uids.sort_unstable();
+            PackageRecord { name, uids }
+        })
+        .collect())
+}
+
+fn valid_package_name(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'.')
+}
+
+fn package_line_name(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('[') {
+        return None;
+    }
+    let name = trimmed
+        .strip_suffix('!')
+        .or_else(|| trimmed.strip_suffix('?'));
+    let name = name.unwrap_or(trimmed).trim();
+    valid_package_name(name).then_some(name)
+}
+
+fn render_target_file(text: &str, packages: &[PackageRecord]) -> Result<String> {
+    let lines = text.lines().map(str::to_owned).collect::<Vec<_>>();
+    let begin = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| (line.trim() == TARGET_BEGIN).then_some(index))
+        .collect::<Vec<_>>();
+    let end = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| (line.trim() == TARGET_END).then_some(index))
+        .collect::<Vec<_>>();
+    if begin.len() > 1 || end.len() > 1 || begin.len() != end.len() {
+        return Err(TfError::new(
+            "target.txt 管理区块标记不完整或重复 [target.txt managed markers are incomplete or duplicated]",
+        ));
+    }
+    if let (Some(begin), Some(end)) = (begin.first(), end.first())
+        && begin >= end
+    {
+        return Err(TfError::new(
+            "target.txt 管理区块顺序无效 [target.txt managed marker order is invalid]",
+        ));
+    }
+
+    let (outside, legacy_generated) = if let (Some(begin), Some(end)) = (begin.first(), end.first())
+    {
+        let mut outside = Vec::with_capacity(lines.len().saturating_sub(end - begin + 1));
+        outside.extend(lines[..*begin].iter().cloned());
+        outside.extend(lines[*end + 1..].iter().cloned());
+        (outside, false)
+    } else {
+        let legacy_generated = lines.iter().all(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty() || package_line_name(trimmed) == Some(trimmed)
+        });
+        if legacy_generated {
+            (Vec::new(), true)
+        } else {
+            (lines, false)
+        }
+    };
+
+    let user_packages = if legacy_generated {
+        HashSet::new()
+    } else {
+        outside
+            .iter()
+            .filter_map(|line| package_line_name(line))
+            .map(str::to_owned)
+            .collect::<HashSet<_>>()
+    };
+    let managed = packages
+        .iter()
+        .filter(|package| !user_packages.contains(&package.name))
+        .map(|package| package.name.as_str())
+        .collect::<Vec<_>>();
+
+    let mut rendered = Vec::with_capacity(managed.len() + outside.len() + 2);
+    rendered.push(TARGET_BEGIN.to_owned());
+    rendered.extend(managed.into_iter().map(str::to_owned));
+    rendered.push(TARGET_END.to_owned());
+    if !outside.is_empty() {
+        rendered.push(String::new());
+        rendered.extend(outside);
+    }
+    Ok(format!("{}\n", rendered.join("\n")))
+}
+
+fn profile_entry(entry: &str) -> Result<ProfileEntry<'_>> {
+    if let Some(uid) = entry.strip_prefix("uid:") {
+        let uid = uid.parse::<u32>().map_err(|_| {
+            TfError::new(format!(
+                "TEESimulator apps 含无效 UID [TEESimulator apps contains invalid UID]: {entry}"
+            ))
+        })?;
+        return Ok(ProfileEntry::Uid(uid));
+    }
+    let (package, user) = match entry.rsplit_once('@') {
+        Some((package, user)) if user.bytes().all(|byte| byte.is_ascii_digit()) => {
+            (package, Some(user.parse::<u32>().map_err(|_| {
+                TfError::new(format!(
+                    "TEESimulator apps 含无效用户 [TEESimulator apps contains invalid user]: {entry}"
+                ))
+            })?))
+        }
+        _ => (entry, None),
+    };
+    if !valid_package_name(package) {
+        return Err(TfError::new(format!(
+            "TEESimulator apps 含无效包名 [TEESimulator apps contains invalid package]: {entry}"
+        )));
+    }
+    Ok(ProfileEntry::Package(package, user.unwrap_or(0)))
+}
+
+enum ProfileEntry<'a> {
+    Package(&'a str, u32),
+    Uid(u32),
+}
+
+fn render_teesim_config(text: &str, packages: &[PackageRecord]) -> Result<String> {
+    let mut root: Value = serde_json::from_str(text).map_err(|error| {
+        TfError::new(format!(
+            "TEESimulator config.json 无效 [invalid config.json]: {error}"
+        ))
+    })?;
+    let root_object = root.as_object_mut().ok_or_else(|| {
+        TfError::new("TEESimulator config.json 根节点不是对象 [config.json root is not an object]")
+    })?;
+    if root_object.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err(TfError::new(
+            "TEESimulator config.json 版本不是 1 [config.json version is not 1]",
+        ));
+    }
+    let profiles = root_object
+        .get_mut("profiles")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            TfError::new(
+                "TEESimulator config.json 缺少 profiles 对象 [config.json lacks profiles object]",
+            )
+        })?;
+    if profiles.is_empty() {
+        return Err(TfError::new(
+            "TEESimulator config.json 没有 profile [config.json has no profiles]",
+        ));
+    }
+
+    let mut claimed_packages = HashSet::new();
+    let mut claimed_uids = HashSet::new();
+    for (id, profile) in profiles.iter() {
+        if id == TEESIM_PROFILE {
+            continue;
+        }
+        let profile = profile.as_object().ok_or_else(|| {
+            TfError::new(format!(
+                "TEESimulator profile 不是对象 [profile is not an object]: {id}"
+            ))
+        })?;
+        let Some(apps) = profile.get("apps") else {
+            continue;
+        };
+        let apps = apps.as_array().ok_or_else(|| {
+            TfError::new(format!(
+                "TEESimulator profile.apps 不是数组 [profile.apps is not an array]: {id}"
+            ))
+        })?;
+        for entry in apps {
+            let entry = entry.as_str().ok_or_else(|| {
+                TfError::new(format!(
+                    "TEESimulator profile.apps 含非字符串 [profile.apps contains non-string]: {id}"
+                ))
+            })?;
+            match profile_entry(entry)? {
+                ProfileEntry::Package(package, 0) => {
+                    claimed_packages.insert(package.to_owned());
+                }
+                ProfileEntry::Package(_, _) => {}
+                ProfileEntry::Uid(uid) => {
+                    claimed_uids.insert(uid);
+                }
+            }
+        }
+    }
+
+    let selected = if let Some(profile) = profiles.get_mut(TEESIM_PROFILE) {
+        let profile = profile.as_object_mut().ok_or_else(|| {
+            TfError::new(
+                "TEESimulator teeforge profile 不是对象 [teeforge profile is not an object]",
+            )
+        })?;
+        if profile.get(TEESIM_MARKER) != Some(&Value::Bool(true)) {
+            return Err(TfError::new(
+                "TEESimulator teeforge profile 缺少管理标记 [teeforge profile lacks management marker]",
+            ));
+        }
+        if !profile.get("apps").is_some_and(Value::is_array) {
+            return Err(TfError::new(
+                "TEESimulator teeforge.apps 不是数组 [teeforge.apps is not an array]",
+            ));
+        }
+        profile
+    } else {
+        let template = profiles.get("default").and_then(Value::as_object).ok_or_else(|| {
+            TfError::new(
+                "TEESimulator 首次创建需要合法 default profile [first setup requires a valid default profile]",
+            )
+        })?;
+        profiles.insert(TEESIM_PROFILE.to_owned(), Value::Object(template.clone()));
+        profiles
+            .get_mut(TEESIM_PROFILE)
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| {
+                TfError::new(
+                    "无法创建 TEESimulator teeforge profile [unable to create teeforge profile]",
+                )
+            })?
+    };
+    selected.insert(TEESIM_MARKER.to_owned(), Value::Bool(true));
+    let apps = packages
+        .iter()
+        .filter(|package| {
+            !claimed_packages.contains(&package.name)
+                && !package.uids.iter().any(|uid| claimed_uids.contains(uid))
+        })
+        .map(|package| Value::String(package.name.clone()))
+        .collect::<Vec<_>>();
+    selected.insert("apps".to_owned(), Value::Array(apps));
+
+    serde_json::to_string_pretty(&root)
+        .map(|json| format!("{json}\n"))
+        .map_err(|error| {
+            TfError::new(format!(
+                "TEESimulator config.json 序列化失败 [failed to serialize config.json]: {error}"
+            ))
+        })
+}
+
+struct PendingUpdate {
+    path: PathBuf,
+    original: Option<Vec<u8>>,
+    rendered: Vec<u8>,
+}
+
+impl PendingUpdate {
+    fn from_text(path: &Path, rendered: String) -> Result<Self> {
+        let original = match fs::read(path) {
+            Ok(value) => Some(value),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(TfError::from(error).context(path.display())),
+        };
+        Ok(Self {
+            path: path.to_path_buf(),
+            original,
+            rendered: rendered.into_bytes(),
+        })
+    }
+
+    fn changed(&self) -> bool {
+        self.original.as_deref() != Some(self.rendered.as_slice())
+    }
+}
+
+fn commit_updates(updates: &[PendingUpdate]) -> Result<()> {
+    for update in updates.iter().filter(|update| update.changed()) {
+        let current = match fs::read(&update.path) {
+            Ok(value) => Some(value),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(TfError::from(error).context(update.path.display())),
+        };
+        if current != update.original {
+            return Err(TfError::new(format!(
+                "目标配置在读取后发生变化，未覆盖 [target config changed during update]: {}",
+                update.path.display()
+            )));
+        }
+    }
+
+    let mut written: Vec<&PendingUpdate> = Vec::new();
+    for update in updates.iter().filter(|update| update.changed()) {
+        let result = if update.original.is_some() {
+            atomic_file::write_with_backup(&update.path, &update.rendered)
+        } else {
+            atomic_file::write(&update.path, &update.rendered)
+        };
+        if let Err(error) = result {
+            let mut rollback_errors = Vec::new();
+            for previous in written.into_iter().rev() {
+                if let Err(rollback_error) = restore_update(previous) {
+                    rollback_errors.push(format!("{}: {rollback_error}", previous.path.display()));
+                }
+            }
+            if !rollback_errors.is_empty() {
+                return Err(TfError::new(format!(
+                    "目标配置写入失败且回滚失败 [target config write and rollback failed]: {error}; {}",
+                    rollback_errors.join("; ")
+                )));
+            }
+            return Err(error.context(update.path.display()));
+        }
+        written.push(update);
+    }
+    Ok(())
+}
+
+fn restore_update(update: &PendingUpdate) -> Result<()> {
+    match &update.original {
+        Some(original) => atomic_file::write(&update.path, original),
+        None => match fs::remove_file(&update.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        },
+    }
 }
 
 pub(crate) fn generate(config: &Config) -> Result<()> {
+    let target_active = config
+        .target_txt
+        .parent()
+        .is_some_and(|parent| parent.is_dir());
+    let teesim_active = config.teesim_config.is_file();
+    if !target_active && !teesim_active {
+        logging::log(
+            Level::Warn,
+            "未发现兼容目标配置目录，跳过目标更新 [No compatible target backend found; skipping target update]",
+        );
+        return Ok(());
+    }
     logging::log(
         Level::Info,
         "正在获取已安装包列表... [Listing installed packages...]",
     );
-    let output = process::output("cmd", ["package", "list", "packages", "-f"])?;
+    let output = process::output(
+        "cmd",
+        ["package", "list", "packages", "-f", "-U", "--user", "0"],
+    )?;
     let text = process::stdout_text(output, "获取包列表失败 [Failed to list packages]")?;
-    let packages = parse_user_packages(&text);
-    let mut rendered = packages.join("\n");
-    if !rendered.is_empty() {
-        rendered.push('\n');
+    let packages = parse_user_packages(&text)?;
+    let mut updates = Vec::new();
+    if target_active {
+        let current = match fs::read(&config.target_txt) {
+            Ok(value) => String::from_utf8(value).map_err(|_| {
+                TfError::new(format!(
+                    "target.txt 不是 UTF-8，未覆盖 [target.txt is not UTF-8; refusing to overwrite]: {}",
+                    config.target_txt.display()
+                ))
+            })?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(TfError::from(error).context(config.target_txt.display())),
+        };
+        let rendered = render_target_file(&current, &packages)?;
+        updates.push(PendingUpdate::from_text(&config.target_txt, rendered)?);
     }
-    atomic_file::write(&config.target_txt, rendered.as_bytes()).map_err(|error| {
-        TfError::new(format!(
-            "无法更新 {} [Failed to update {}]: {error}",
-            config.target_txt.display(),
-            config.target_txt.display()
-        ))
-    })?;
+    let teesim_active = config.teesim_config.is_file();
+    if teesim_active {
+        let current = fs::read_to_string(&config.teesim_config)
+            .map_err(|error| TfError::from(error).context(config.teesim_config.display()))?;
+        let rendered = render_teesim_config(&current, &packages)?;
+        updates.push(PendingUpdate::from_text(&config.teesim_config, rendered)?);
+    }
+    let changed = updates.iter().filter(|update| update.changed()).count();
+    commit_updates(&updates)?;
     logging::log(
         Level::Info,
         format!(
-            "已写入 {} 个包到 {} [Wrote {} packages to {}]",
+            "已处理 {} 个用户应用，更新 {} 个目标配置 [Processed {} user apps; updated {} target configs]",
             packages.len(),
-            config.target_txt.display(),
+            changed,
             packages.len(),
-            config.target_txt.display()
+            changed
         ),
     );
     Ok(())
@@ -49,20 +472,191 @@ pub(crate) fn generate(config: &Config) -> Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parses_only_user_apps_and_has_no_fixed_limit() {
-        let fixture = include_str!("../../../tests/fixtures/packages.txt");
-        assert_eq!(parse_user_packages(fixture), ["com.example.user"]);
+    fn packages(names: &[&str]) -> Vec<PackageRecord> {
+        names
+            .iter()
+            .map(|name| PackageRecord {
+                name: (*name).into(),
+                uids: Vec::new(),
+            })
+            .collect()
+    }
 
-        let mut input = String::from("package:/system/app/System.apk=com.system\n");
-        for index in 0..2_100 {
+    #[test]
+    fn parses_only_primary_user_apps_and_uids() {
+        let input = "package:/system/app/System/System.apk=com.android.system uid:1000\npackage:/data/app/~~token/example/base.apk=com.example.user uid:10123\npackage:/data/app/duplicate/base.apk=com.example.user uid:10123\n";
+        assert_eq!(
+            parse_user_packages(input).unwrap(),
+            vec![PackageRecord {
+                name: "com.example.user".into(),
+                uids: vec![10123],
+            }]
+        );
+    }
+
+    #[test]
+    fn parses_no_fixed_limit_and_sorts_packages() {
+        let mut input = String::new();
+        for index in (0..2_100).rev() {
             input.push_str(&format!(
-                "package:/data/app/~~token/app{index}/base.apk=com.example.app{index}\n"
+                "package:/data/app/~~token/app{index}/base.apk=com.example.app{index:04} uid:{}\n",
+                10_000 + index
             ));
         }
-        let packages = parse_user_packages(&input);
-        assert_eq!(packages.len(), 2_100);
-        assert_eq!(packages[0], "com.example.app0");
-        assert_eq!(packages[2_099], "com.example.app2099");
+        let result = parse_user_packages(&input).unwrap();
+        assert_eq!(result.len(), 2_100);
+        assert_eq!(result[0].name, "com.example.app0000");
+        assert_eq!(result[2_099].name, "com.example.app2099");
+    }
+
+    #[test]
+    fn rejects_malformed_package_listing_lines() {
+        assert!(parse_user_packages("not-a-package-line\n").is_err());
+        assert!(parse_user_packages("package:/data/app/a.apk=com.example.app\n").is_err());
+        assert!(
+            parse_user_packages("package:/data/app/a.apk=com.example.app uid:not-a-number\n")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn migrates_legacy_bare_target_file_to_managed_block() {
+        let rendered = render_target_file("com.old\n", &packages(&["com.new"])).unwrap();
+        assert_eq!(
+            rendered,
+            "# BEGIN TeeForge-CD managed targets\ncom.new\n# END TeeForge-CD managed targets\n"
+        );
+    }
+
+    #[test]
+    fn preserves_custom_target_content_and_modes() {
+        let current = "# user config\ncom.keep!\n[custom.xml]\ncom.custom?\n";
+        let rendered = render_target_file(current, &packages(&["com.keep", "com.new"])).unwrap();
+        assert!(rendered.starts_with("# BEGIN TeeForge-CD managed targets\ncom.new\n"));
+        assert!(rendered.contains("# user config\ncom.keep!\n[custom.xml]\ncom.custom?\n"));
+        assert!(!rendered.contains("\ncom.keep\n"));
+    }
+
+    #[test]
+    fn managed_block_rebuilds_and_removes_uninstalled_packages() {
+        let current = "# BEGIN TeeForge-CD managed targets\ncom.old\n# END TeeForge-CD managed targets\n\ncom.user?\n";
+        let rendered = render_target_file(current, &packages(&["com.new"])).unwrap();
+        assert!(rendered.contains("com.new"));
+        assert!(!rendered.contains("com.old"));
+        assert!(rendered.contains("com.user?"));
+    }
+
+    #[test]
+    fn rejects_ambiguous_target_markers() {
+        assert!(
+            render_target_file(
+                "# BEGIN TeeForge-CD managed targets\ncom.a\n",
+                &packages(&["com.a"])
+            )
+            .is_err()
+        );
+        assert!(
+            render_target_file(
+                "# END TeeForge-CD managed targets\n# BEGIN TeeForge-CD managed targets\n",
+                &packages(&["com.a"])
+            )
+            .is_err()
+        );
+        assert!(
+            render_target_file(
+                "# BEGIN TeeForge-CD managed targets\n# END TeeForge-CD managed targets\n# BEGIN TeeForge-CD managed targets\n# END TeeForge-CD managed targets\n",
+                &packages(&["com.a"])
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn creates_and_updates_teeforge_profile_without_touching_others() {
+        let input = r#"{
+  "version": 1,
+  "unknown": {"keep": true},
+  "profiles": {
+    "default": {"keybox": "keybox.xml", "mode": "patch", "apps": ["com.default"]},
+    "other": {"keybox": "other.xml", "apps": ["com.claimed", "uid:10124"]}
+  }
+}"#;
+        let rendered = render_teesim_config(
+            input,
+            &[
+                PackageRecord {
+                    name: "com.claimed".into(),
+                    uids: vec![10124],
+                },
+                PackageRecord {
+                    name: "com.new".into(),
+                    uids: vec![10125],
+                },
+            ],
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&rendered).unwrap();
+        let profiles = value["profiles"].as_object().unwrap();
+        assert_eq!(profiles["other"]["apps"][0], "com.claimed");
+        assert_eq!(profiles["teeforge"]["apps"], serde_json::json!(["com.new"]));
+        assert_eq!(profiles["teeforge"]["mode"], "patch");
+        assert_eq!(value["unknown"]["keep"], true);
+        assert_eq!(profiles["teeforge"][TEESIM_MARKER], true);
+    }
+
+    #[test]
+    fn rejects_unmarked_teeforge_profile_and_invalid_apps() {
+        let unmarked = r#"{"version":1,"profiles":{"default":{"apps":[]},"teeforge":{"apps":[]}}}"#;
+        assert!(render_teesim_config(unmarked, &packages(&["com.a"])).is_err());
+        let invalid = r#"{"version":1,"profiles":{"default":{"apps":"bad"}}}"#;
+        assert!(render_teesim_config(invalid, &packages(&["com.a"])).is_err());
+        let invalid_managed = r#"{"version":1,"profiles":{"default":{"apps":[]},"teeforge":{"_teeforgeManaged":true,"apps":"bad"}}}"#;
+        assert!(render_teesim_config(invalid_managed, &packages(&["com.a"])).is_err());
+    }
+
+    #[test]
+    fn claims_only_primary_user_packages_and_matching_uids() {
+        let input = r#"{
+  "version": 1,
+  "profiles": {
+    "default": {"apps": ["com.primary@0", "com.work@10", "uid:10101"]}
+  }
+}"#;
+        let rendered = render_teesim_config(
+            input,
+            &[
+                PackageRecord {
+                    name: "com.primary".into(),
+                    uids: vec![10001],
+                },
+                PackageRecord {
+                    name: "com.work".into(),
+                    uids: vec![10002],
+                },
+                PackageRecord {
+                    name: "com.uid".into(),
+                    uids: vec![10101, 10103],
+                },
+                PackageRecord {
+                    name: "com.free".into(),
+                    uids: vec![10102],
+                },
+            ],
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&rendered).unwrap();
+        assert_eq!(
+            value["profiles"]["teeforge"]["apps"],
+            serde_json::json!(["com.work", "com.free"])
+        );
+    }
+
+    #[test]
+    fn no_compatible_backend_is_a_successful_noop() {
+        let mut config = Config::default();
+        let root = std::env::temp_dir().join(format!("teeforge-no-backend-{}", std::process::id()));
+        config.target_txt = root.join("tricky_store").join("target.txt");
+        config.teesim_config = root.join("teesim").join("config.json");
+        assert!(generate(&config).is_ok());
     }
 }

@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.6.0-edddba0
+## TeeForge-CD Dev v0.6.0-7d56070
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-edddba0`
-- Version Code: `136`
-- Commit: `edddba0`
+- Version: `v0.6.0-7d56070`
+- Version Code: `139`
+- Commit: `7d56070`
 
 ### 最近提交 Recent Commits
+- 7d56070 docs(maintenance): 记录运行期回归与验证状态
+- 33fb32c build(module): 强制 Shell 使用 LF 并校验产物
+- 504d299 fix(core): 修复运行期解码与目标更新状态
 - edddba0 docs: 补充多后端配置与验收说明
 - d56290c chore(ui): 统一目标配置操作文案
 - 2afbb5e fix(target): 支持多后端目标配置与 Keybox 事务同步
@@ -23,6 +26,3 @@
 - c465b5d docs: 修复文档与代码脱节 docs: fix doc-code drift
 - bbc08df chore: 移除残留的根 CHANGELOG.md 与 obsolete dev 分支 chore: remove stale root CHANGELOG.md and obsolete dev branch
 - 1a5ff2f refactor: 版本号统一为 teeforge.h 单点维护 refactor: unify version to single source teeforge.h
-- 30174c6 fix(verify): 修复 MODDIR 使完整性校验生效 fix(verify): fix MODDIR so integrity check actually runs
-- 748d139 docs: add keybox sync workflow fix report
-- 86d5095 fix(ci): remove deprecated key-control and key-hash from keybox sync

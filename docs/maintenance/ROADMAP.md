@@ -9,6 +9,8 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 - Rust CLI、四 ABI 构建、xtask 打包和 CI 门禁。
 - Keybox 有界下载、严格解码、内容校验和原子回滚。
 - 多后端目标配置适配：Tricky Store/TEESimulator-RS `target.txt` 受管区块、TEESimulator `teeforge` profile，以及 Keybox 多目录事务同步。
+- 目标更新终态日志、受管区块幂等回归和错误输出边界的本地自动化测试。
+- Shell 源码、暂存目录和模块 ZIP 的 LF 换行门禁。
 - 安装时 ABI 选择、ELF 校验和 x86 standard resetprop 约束。
 - WebUI、Shell 生命周期和公开架构文档同步到 Rust 实现。
 
@@ -16,7 +18,7 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 
 - arm64-v8a 主力设备安装、升级保留配置、音量键选择和开机服务。
 - ARMv7、x86、x86_64 对应环境的安装和运行行为。
-- Tricky Store：带注释、`!`、`?` 的现有 `target.txt` 两次 `--generate`，确认区块幂等和用户内容不变。
+- Tricky Store：在真机上对带注释、`!`、`?` 的现有 `target.txt` 连续执行两次 `--generate`，确认本地自动化结论与设备行为一致。
 - TEESimulator-RS：含 `[custom.xml]` 分段的 `target.txt` 归属保持与新增包更新。
 - TEESimulator：多 profile、`package@N`、`uid:N`、未知字段、FileObserver 热加载及 Keybox 路径。
 - 双目录共存、第二目标写失败回滚、BL-only 无后端 warning、升级迁移和三种 Keybox 组合。
@@ -33,4 +35,4 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 2. 取得授权后执行分层设备验收。
 3. 验收通过后单独评估删除旧 C 实现、提交稳定版本和发布流程。
 
-最近更新：2026-09-06
+最近更新：2026-09-07

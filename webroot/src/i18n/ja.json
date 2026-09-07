@@ -14,8 +14,8 @@
 
   "action.keybox.title": "Keybox 更新",
   "action.keybox.desc": "CDN から最新 keybox を取得して適用",
-  "action.target.title": "Target 更新",
-  "action.target.desc": "インストール済みアプリから target.txt を生成",
+  "action.target.title": "対象設定を更新",
+  "action.target.desc": "インストール済みアプリで互換対象設定を更新",
   "action.execute": "実行",
 
   "dialog.running": "実行中...",

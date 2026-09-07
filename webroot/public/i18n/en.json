@@ -14,8 +14,8 @@
 
   "action.keybox.title": "Update Keybox",
   "action.keybox.desc": "Fetch latest keybox from CDN and apply",
-  "action.target.title": "Update Target",
-  "action.target.desc": "Generate target.txt with installed apps",
+  "action.target.title": "Update Target Config",
+  "action.target.desc": "Update compatible target configs with installed apps",
   "action.execute": "Execute",
 
   "dialog.running": "Running...",

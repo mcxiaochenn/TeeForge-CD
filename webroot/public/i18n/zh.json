@@ -14,8 +14,8 @@
 
   "action.keybox.title": "更新 Keybox",
   "action.keybox.desc": "从 CDN 获取最新 keybox 并应用",
-  "action.target.title": "更新 Target",
-  "action.target.desc": "根据已安装应用生成 target.txt",
+  "action.target.title": "更新目标配置",
+  "action.target.desc": "根据已安装应用更新兼容目标配置",
   "action.execute": "执行",
 
   "dialog.running": "执行中...",

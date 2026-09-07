@@ -19,5 +19,5 @@ sleep 5
 # 执行弱隐 BL Execute weak bootloader hiding
 "$MODDIR/teeforge" --config "$CONFIG" --hide-bl
 
-# 生成 target.txt Generate target.txt
+# 更新目标应用配置 Update target app configuration
 "$MODDIR/teeforge" --config "$CONFIG" --generate

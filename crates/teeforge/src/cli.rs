@@ -72,7 +72,7 @@ fn parse(args: &[String]) -> Result<Options> {
 fn usage(program: &str) {
     println!("用法 Usage: {program} [options]");
     println!("\n选项 Options:");
-    println!("  --generate      生成 target.txt [Generate target.txt]");
+    println!("  --generate      更新目标应用配置 [Update target app configuration]");
     println!("  --hide-bl       弱隐 bootloader [Weak bootloader hiding]");
     println!("  --keybox        获取并更新 keybox [Fetch and update keybox]");
     println!("  --rootdetect    检测 root 方式并输出 [Detect root method]");

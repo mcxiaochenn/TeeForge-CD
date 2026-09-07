@@ -18,8 +18,8 @@ echo ""
 KEYBOX_RET=$?
 echo ""
 
-# 更新 target.txt
-echo "[2/2] 更新 target.txt [Updating target.txt]..."
+# 更新目标应用配置
+echo "[2/2] 更新目标应用配置 [Updating target app configuration]..."
 echo ""
 "$MODDIR/teeforge" --config "$CONFIG" --generate 2>&1
 TARGET_RET=$?

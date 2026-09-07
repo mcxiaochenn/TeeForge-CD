@@ -146,6 +146,7 @@ cat > "$TEEFORGE_DIR/sys.conf" << EOF
 
 packages_xml=/data/system/packages.xml
 target_txt=/data/adb/tricky_store/target.txt
+teesim_config=/data/adb/teesim/config.json
 keybox_dir=/data/adb/teeforge/keybox/
 sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/

@@ -6,6 +6,7 @@ use crate::process;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -18,6 +19,22 @@ fn decode_text(encoded: &str, label: &str) -> Result<String> {
         .decode(encoded)
         .map_err(|_| TfError::new(format!("{label} base64 解码失败 [decode failed]")))?;
     String::from_utf8(bytes).map_err(|_| TfError::new(format!("{label} 不是 UTF-8 [is not UTF-8]")))
+}
+
+fn decode_transport_base64(data: &[u8], error: impl Into<String>) -> Result<Vec<u8>> {
+    let normalized = if data.iter().any(u8::is_ascii_whitespace) {
+        Cow::Owned(
+            data.iter()
+                .copied()
+                .filter(|byte| !byte.is_ascii_whitespace())
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        Cow::Borrowed(data)
+    };
+    STANDARD
+        .decode(normalized.as_ref())
+        .map_err(|_| TfError::new(error))
 }
 
 fn endpoints() -> Result<(String, String)> {
@@ -183,19 +200,19 @@ fn decode_hex(data: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn decrypt(encrypted: &[u8], public_key: &str) -> Result<Vec<u8>> {
-    let mut current = STANDARD
-        .decode(encrypted)
-        .map_err(|_| TfError::new("首次 base64 解码失败 [First base64 decode failed]"))?;
+    let mut current = decode_transport_base64(
+        encrypted,
+        "首次 base64 解码失败 [First base64 decode failed]",
+    )?;
     let key = Sha256::digest(public_key.as_bytes());
     for (index, byte) in current.iter_mut().enumerate() {
         *byte ^= key[index % key.len()];
     }
     for round in 1..=10 {
-        current = STANDARD.decode(&current).map_err(|_| {
-            TfError::new(format!(
-                "base64 第 {round} 层无效 [Invalid base64 at layer {round}]"
-            ))
-        })?;
+        current = decode_transport_base64(
+            &current,
+            format!("base64 第 {round} 层无效 [Invalid base64 at layer {round}]"),
+        )?;
     }
     current = decode_hex(&current)?;
     for byte in &mut current {
@@ -364,6 +381,9 @@ mod tests {
     #[test]
     fn base64_decoder_rejects_invalid_characters() {
         assert!(STANDARD.decode(b"%%%=").is_err());
+        assert!(decode_transport_base64(b" %%%=\r\n", "invalid").is_err());
+        assert!(decode_transport_base64(b"AA=A", "invalid padding").is_err());
+        assert!(decode_transport_base64(b"A", "truncated").is_err());
         assert!(
             decrypt(
                 include_bytes!("../../../tests/fixtures/invalid-download.txt"),
@@ -394,9 +414,49 @@ mod tests {
         for (index, byte) in encoded.iter_mut().enumerate() {
             *byte ^= key[index % key.len()];
         }
-        let encrypted = STANDARD.encode(encoded);
+        let encrypted = format!(" \t{}\r\n", STANDARD.encode(encoded));
         assert_eq!(
             decrypt(encrypted.as_bytes(), public_key).expect("valid fixture"),
+            xml
+        );
+    }
+
+    #[test]
+    fn decrypts_base64_with_transport_whitespace() {
+        fn wrap(data: String) -> Vec<u8> {
+            let mut wrapped = Vec::new();
+            for (index, chunk) in data.as_bytes().chunks(48).enumerate() {
+                if index > 0 {
+                    wrapped.extend_from_slice(if index % 2 == 0 { b"\n" } else { b"\r\n" });
+                }
+                wrapped.extend_from_slice(chunk);
+            }
+            wrapped
+        }
+
+        let public_key = "ssh-ed25519 test-key";
+        let xml = b"<AndroidAttestation>abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz</AndroidAttestation>";
+        let mut encoded = xml
+            .iter()
+            .map(|byte| match *byte {
+                b'a'..=b'm' | b'A'..=b'M' => *byte + 13,
+                b'n'..=b'z' | b'N'..=b'Z' => *byte - 13,
+                _ => *byte,
+            })
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+            .into_bytes();
+        for _ in 0..10 {
+            encoded = wrap(STANDARD.encode(encoded));
+        }
+        let key = Sha256::digest(public_key.as_bytes());
+        for (index, byte) in encoded.iter_mut().enumerate() {
+            *byte ^= key[index % key.len()];
+        }
+        let encrypted = STANDARD.encode(encoded);
+
+        assert_eq!(
+            decrypt(encrypted.as_bytes(), public_key).expect("wrapped base64 fixture"),
             xml
         );
     }

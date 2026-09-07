@@ -25,6 +25,8 @@ pub(crate) fn write(path: &Path, data: &[u8]) -> Result<()> {
         .ok_or_else(|| TfError::new("目标路径没有父目录 [Target path has no parent]"))?;
     fs::create_dir_all(parent).map_err(|e| TfError::from(e).context(parent.display()))?;
 
+    // 临时文件必须独占创建；写入并落盘成功后才替换目标，失败则清理本轮临时文件。
+    // Create the temporary file exclusively and replace the target only after a synced write.
     for attempt in 0..32 {
         let temporary = temp_path(path, attempt)?;
         let opened = OpenOptions::new()
@@ -57,6 +59,8 @@ pub(crate) fn write(path: &Path, data: &[u8]) -> Result<()> {
 
 pub(crate) fn write_with_backup(path: &Path, data: &[u8]) -> Result<()> {
     if path.is_file() {
+        // 备份保存替换前的完整内容，供上层事务在后续目标失败时恢复。
+        // The backup preserves the full pre-replacement content for higher-level rollback.
         let old = fs::read(path).map_err(|e| TfError::from(e).context(path.display()))?;
         let backup = PathBuf::from(format!("{}.bak", path.display()));
         write(&backup, &old)?;

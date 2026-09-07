@@ -145,7 +145,10 @@ pub fn run(args: Vec<String>) -> i32 {
         );
     }
     if options.generate {
-        record(target::generate(&config), &mut failed);
+        match target::generate(&config) {
+            Ok(outcome) => outcome.log(),
+            Err(error) => record(Err(error), &mut failed),
+        }
     }
     if options.hide_bl {
         record(blhide::hide(&config), &mut failed);

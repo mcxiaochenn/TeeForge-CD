@@ -34,7 +34,9 @@ pub(crate) fn parse_user_packages(text: &str) -> Result<Vec<PackageRecord>> {
                 "包列表输出含无法识别的行 [package listing contains malformed line]: {line}"
             ))
         })?;
-        let (path, details) = rest.split_once('=').ok_or_else(|| {
+        // Android 的随机安装目录可能包含 Base64 padding；真正的分隔符是最后一个 '='。
+        // Randomized Android install paths may contain Base64 padding; the final '=' is the delimiter.
+        let (path, details) = rest.rsplit_once('=').ok_or_else(|| {
             TfError::new(format!(
                 "包列表输出缺少路径分隔符 [package listing lacks path separator]: {line}"
             ))
@@ -602,6 +604,18 @@ mod tests {
         let input = "package:/system/app/System/System.apk=com.android.system uid:1000\npackage:/data/app/~~token/example/base.apk=com.example.user uid:10123\npackage:/data/app/duplicate/base.apk=com.example.user uid:10123\n";
         assert_eq!(
             parse_user_packages(input).unwrap(),
+            vec![PackageRecord {
+                name: "com.example.user".into(),
+                uids: vec![10123],
+            }]
+        );
+    }
+
+    #[test]
+    fn parses_user_app_when_apk_path_contains_equals_signs() {
+        let input = "package:/data/app/~~token==/com.example.user-random==/base.apk=com.example.user uid:10123\n";
+        assert_eq!(
+            parse_user_packages(input).expect("path padding is valid"),
             vec![PackageRecord {
                 name: "com.example.user".into(),
                 uids: vec![10123],

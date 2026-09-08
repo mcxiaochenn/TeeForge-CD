@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.6.0-7d56070
+## TeeForge-CD Dev v0.6.0-a082b9b
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-7d56070`
-- Version Code: `139`
-- Commit: `7d56070`
+- Version: `v0.6.0-a082b9b`
+- Version Code: `142`
+- Commit: `a082b9b`
 
 ### 最近提交 Recent Commits
+- a082b9b docs(maintenance): 记录第二轮运行期回归
+- e2c4315 fix(module): 输出 Action 子任务退出状态
+- ad8d3b7 fix(runtime): 收紧下载文本与包列表执行边界
 - 7d56070 docs(maintenance): 记录运行期回归与验证状态
 - 33fb32c build(module): 强制 Shell 使用 LF 并校验产物
 - 504d299 fix(core): 修复运行期解码与目标更新状态
@@ -23,6 +26,3 @@
 - ddee09c fix(keybox): 修正 CDN URL 为自建 CDN，修复 keybox 下载 404
 - 3b945de fix(verify): 保存并恢复调用者 set -e 状态，修复安装失败 fix(verify): save/restore caller's set -e state to fix install failure
 - 1e3fdc9 fix(ci): 稳定构建产物改固定名 + commit message 精细化 fix(ci): fixed-name release zip + richer commit message
-- c465b5d docs: 修复文档与代码脱节 docs: fix doc-code drift
-- bbc08df chore: 移除残留的根 CHANGELOG.md 与 obsolete dev 分支 chore: remove stale root CHANGELOG.md and obsolete dev branch
-- 1a5ff2f refactor: 版本号统一为 teeforge.h 单点维护 refactor: unify version to single source teeforge.h

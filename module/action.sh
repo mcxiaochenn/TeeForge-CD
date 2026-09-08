@@ -19,6 +19,7 @@ echo ""
 # Track both subtasks so successful skips and failures always reach the final summary.
 "$MODDIR/teeforge" --config "$CONFIG" --keybox 2>&1
 KEYBOX_RET=$?
+echo "[1/2] 退出码 [Exit code]: $KEYBOX_RET"
 echo ""
 
 # 更新目标应用配置
@@ -26,6 +27,7 @@ echo "[2/2] 更新目标应用配置 [Updating target app configuration]..."
 echo ""
 "$MODDIR/teeforge" --config "$CONFIG" --generate 2>&1
 TARGET_RET=$?
+echo "[2/2] 退出码 [Exit code]: $TARGET_RET"
 echo ""
 
 echo "========================================"

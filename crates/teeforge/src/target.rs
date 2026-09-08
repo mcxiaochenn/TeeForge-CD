@@ -7,9 +7,12 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 const TARGET_BEGIN: &str = "# BEGIN TeeForge-CD managed targets";
 const TARGET_END: &str = "# END TeeForge-CD managed targets";
+const PACKAGE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_PACKAGE_LIST_BYTES: usize = 4 * 1024 * 1024;
 const TEESIM_PROFILE: &str = "teeforge";
 const TEESIM_MARKER: &str = "_teeforgeManaged";
 
@@ -485,7 +488,7 @@ fn generate_with(
     );
     logging::log(
         Level::Info,
-        "正在获取已安装包列表... [Listing installed packages...]",
+        "正在获取已安装包列表，最多等待 30 秒... [Listing installed packages; timeout: 30s]",
     );
     let text = list_packages()?;
     let packages = parse_user_packages(&text)?;
@@ -551,11 +554,20 @@ fn generate_with(
 
 pub(crate) fn generate(config: &Config) -> Result<GenerateOutcome> {
     generate_with(config, || {
-        let output = process::output(
+        let context = "获取包列表失败 [Failed to list packages]";
+        let output = process::output_bounded(
             "cmd",
             ["package", "list", "packages", "-f", "-U", "--user", "0"],
+            PACKAGE_LIST_TIMEOUT,
+            MAX_PACKAGE_LIST_BYTES,
+            context,
         )?;
-        process::stdout_text(output, "获取包列表失败 [Failed to list packages]")
+        let text = process::stdout_text(output, context)?;
+        logging::log(
+            Level::Info,
+            "包列表获取完成，正在解析... [Package listing received; parsing...]",
+        );
+        Ok(text)
     })
 }
 
@@ -870,6 +882,28 @@ mod tests {
         let error = generate_with(&config, || Err(TfError::new("mock command failure")))
             .expect_err("command error must propagate");
         assert_eq!(error.to_string(), "mock command failure");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn package_command_failure_preserves_target_and_backup() {
+        let (config, root) = test_config("command-failure-preserves-files");
+        fs::create_dir_all(config.target_txt.parent().unwrap()).expect("create target directory");
+        fs::write(&config.target_txt, b"com.existing?\n").expect("write target");
+        let backup = config.target_txt.with_extension("txt.bak");
+        fs::write(&backup, b"previous backup\n").expect("write backup");
+
+        let error = generate_with(&config, || Err(TfError::new("mock timeout")))
+            .expect_err("command failure must propagate");
+        assert_eq!(error.to_string(), "mock timeout");
+        assert_eq!(
+            fs::read(&config.target_txt).expect("read target"),
+            b"com.existing?\n"
+        );
+        assert_eq!(
+            fs::read(&backup).expect("read backup"),
+            b"previous backup\n"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

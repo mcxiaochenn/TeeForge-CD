@@ -14,6 +14,19 @@ use std::process::{Command, Stdio};
 
 const MAX_DOWNLOAD: usize = 2 * 1024 * 1024;
 
+fn without_ascii_whitespace(data: &[u8]) -> Cow<'_, [u8]> {
+    if data.iter().any(u8::is_ascii_whitespace) {
+        Cow::Owned(
+            data.iter()
+                .copied()
+                .filter(|byte| !byte.is_ascii_whitespace())
+                .collect(),
+        )
+    } else {
+        Cow::Borrowed(data)
+    }
+}
+
 fn decode_text(encoded: &str, label: &str) -> Result<String> {
     let bytes = STANDARD
         .decode(encoded)
@@ -22,16 +35,7 @@ fn decode_text(encoded: &str, label: &str) -> Result<String> {
 }
 
 fn decode_transport_base64(data: &[u8], error: impl Into<String>) -> Result<Vec<u8>> {
-    let normalized = if data.iter().any(u8::is_ascii_whitespace) {
-        Cow::Owned(
-            data.iter()
-                .copied()
-                .filter(|byte| !byte.is_ascii_whitespace())
-                .collect::<Vec<_>>(),
-        )
-    } else {
-        Cow::Borrowed(data)
-    };
+    let normalized = without_ascii_whitespace(data);
     STANDARD
         .decode(normalized.as_ref())
         .map_err(|_| TfError::new(error))
@@ -177,6 +181,7 @@ fn download_with(
 }
 
 fn decode_hex(data: &[u8]) -> Result<Vec<u8>> {
+    let data = without_ascii_whitespace(data);
     if data.is_empty() || data.len() % 2 != 0 {
         return Err(TfError::new("hex 长度无效 [Invalid hex length]"));
     }
@@ -342,7 +347,13 @@ mod tests {
     fn strict_hex_rejects_partial_and_invalid_input() {
         assert!(decode_hex(b"abc").is_err());
         assert!(decode_hex(b"00xz").is_err());
+        assert!(decode_hex(b" \t\r\n").is_err());
         assert_eq!(decode_hex(b"4142").expect("valid hex"), b"AB");
+    }
+
+    #[test]
+    fn hex_decoder_accepts_ascii_transport_whitespace() {
+        assert_eq!(decode_hex(b" \t41\r\n42\n").expect("wrapped hex"), b"AB");
     }
 
     #[test]

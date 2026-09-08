@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.6.0-a082b9b
+## TeeForge-CD Dev v0.6.0-dee93d6
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-a082b9b`
-- Version Code: `142`
-- Commit: `a082b9b`
+- Version: `v0.6.0-dee93d6`
+- Version Code: `143`
+- Commit: `dee93d6`
 
 ### 最近提交 Recent Commits
+- dee93d6 fix(target): 兼容含等号的 Android 安装路径
 - a082b9b docs(maintenance): 记录第二轮运行期回归
 - e2c4315 fix(module): 输出 Action 子任务退出状态
 - ad8d3b7 fix(runtime): 收紧下载文本与包列表执行边界
@@ -25,4 +26,3 @@
 - d7fa00f fix(ci): 状态文件不再混入 CDN files/keybox/
 - ddee09c fix(keybox): 修正 CDN URL 为自建 CDN，修复 keybox 下载 404
 - 3b945de fix(verify): 保存并恢复调用者 set -e 状态，修复安装失败 fix(verify): save/restore caller's set -e state to fix install failure
-- 1e3fdc9 fix(ci): 稳定构建产物改固定名 + commit message 精细化 fix(ci): fixed-name release zip + richer commit message

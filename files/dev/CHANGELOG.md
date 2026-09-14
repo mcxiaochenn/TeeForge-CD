@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.6.0-dee93d6
+## TeeForge-CD Dev v0.6.0-2132d6c
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-dee93d6`
-- Version Code: `143`
-- Commit: `dee93d6`
+- Version: `v0.6.0-2132d6c`
+- Version Code: `146`
+- Commit: `2132d6c`
 
 ### 最近提交 Recent Commits
+- 2132d6c docs(omk): 更新兼容说明与分层验收记录
+- 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护
+- 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具
 - dee93d6 fix(target): 兼容含等号的 Android 安装路径
 - a082b9b docs(maintenance): 记录第二轮运行期回归
 - e2c4315 fix(module): 输出 Action 子任务退出状态
@@ -23,6 +26,3 @@
 - 310922b refactor: 使用 Rust 重构四架构核心
 - a7fd758 docs: 脱敏公开文档中的 keybox 加解密细节
 - fc25eea docs: CLAUDE.md 的 backup/ 描述更新为加解密维护指南
-- d7fa00f fix(ci): 状态文件不再混入 CDN files/keybox/
-- ddee09c fix(keybox): 修正 CDN URL 为自建 CDN，修复 keybox 下载 404
-- 3b945de fix(verify): 保存并恢复调用者 set -e 状态，修复安装失败 fix(verify): save/restore caller's set -e state to fix install failure

@@ -531,6 +531,79 @@ mod tests {
     use super::*;
 
     #[test]
+    fn installer_freezes_omk_detection_and_prefers_pending_module() -> Result<()> {
+        let directory = env::temp_dir().join(format!("teeforge-install-{}", std::process::id()));
+        fs::create_dir_all(&directory)?;
+        let source = fs::read_to_string(root().join("module/customize.sh"))?;
+        let start = source
+            .find("OMK_ENABLED=0")
+            .ok_or("missing OMK detection")?;
+        let end = source
+            .find("# 生成用户配置")
+            .ok_or("missing system config boundary")?;
+        let snippet = &source[start..end];
+        let shell = if cfg!(windows) {
+            "C:/Program Files/Git/bin/bash.exe"
+        } else {
+            "sh"
+        };
+        // 同一沙箱连续模拟安装与升级，不接触设备路径。
+        // Simulate install/upgrade in one sandbox without touching device paths.
+        let active = directory.join("modules/oh_my_keymint");
+        let pending = directory.join("modules_update/oh_my_keymint");
+        fs::create_dir_all(directory.join("teeforge"))?;
+        let run = |expected: bool| -> Result<()> {
+            let sandbox = directory.to_string_lossy().replace('\\', "/");
+            let script = format!(
+                "set -eu\nui_print() {{ :; }}\nTEEFORGE_DIR='{sandbox}/teeforge'\nROOT_METHOD=Test\nROOT_VERSION=1\n{}",
+                snippet
+                    .replace(
+                        "/data/adb/modules_update",
+                        &format!("{sandbox}/modules_update")
+                    )
+                    .replace("/data/adb/modules/", &format!("{sandbox}/modules/"))
+            );
+            let output = Command::new(shell).args(["-c", &script]).output()?;
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let config = fs::read_to_string(directory.join("teeforge/sys.conf"))?;
+            assert!(config.contains(&format!("omk_enabled={}\n", u8::from(expected))));
+            assert!(config.contains("omk_injector_config=/data/misc/keystore/omk/injector.toml\n"));
+            assert!(!config.contains("prop_tool="));
+            Ok(())
+        };
+        run(false)?;
+        fs::create_dir_all(directory.join("omk-data"))?;
+        run(false)?;
+        fs::create_dir_all(&active)?;
+        fs::write(active.join("module.prop"), "id=wrong\n")?;
+        run(false)?;
+        fs::write(active.join("module.prop"), "id=oh_my_keymint\n")?;
+        run(true)?;
+        for marker in ["disable", "remove"] {
+            fs::write(active.join(marker), "")?;
+            run(false)?;
+            fs::remove_file(active.join(marker))?;
+        }
+        fs::create_dir_all(&pending)?;
+        fs::write(pending.join("module.prop"), "id=oh_my_keymint\n")?;
+        fs::write(active.join("disable"), "")?;
+        run(true)?;
+        fs::write(pending.join("disable"), "")?;
+        run(false)?;
+        fs::remove_file(pending.join("disable"))?;
+        fs::write(pending.join("remove"), "")?;
+        run(false)?;
+        fs::remove_file(pending.join("remove"))?;
+        run(true)?;
+        fs::remove_dir_all(directory)?;
+        Ok(())
+    }
+
+    #[test]
     fn shell_lf_check_rejects_carriage_returns() -> Result<()> {
         let directory = env::temp_dir().join(format!("teeforge-xtask-lf-{}", std::process::id()));
         fs::create_dir_all(&directory)?;

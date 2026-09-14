@@ -89,6 +89,21 @@ mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
 ui_print " "
 
+# 安装时固化 OMK 检测结果；运行时不重新发现模块。
+# Freeze OMK detection at installation; do not rediscover at runtime.
+OMK_ENABLED=0
+OMK_MODULE=""
+for candidate in /data/adb/modules_update/oh_my_keymint /data/adb/modules/oh_my_keymint; do
+    if [ -d "$candidate" ]; then
+        OMK_MODULE="$candidate"
+        break
+    fi
+done
+if [ -n "$OMK_MODULE" ] && [ ! -e "$OMK_MODULE/disable" ] && [ ! -e "$OMK_MODULE/remove" ] &&
+    grep -q '^id=oh_my_keymint$' "$OMK_MODULE/module.prop"; then
+    OMK_ENABLED=1
+fi
+ui_print "  OMK 作用域适配 [OMK scope integration]: $OMK_ENABLED"
 ui_print "  属性工具 [Property tool]: standard resetprop"
 
 # 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)
@@ -102,6 +117,8 @@ teesim_config=/data/adb/teesim/config.json
 keybox_dir=/data/adb/teeforge/keybox/
 sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
+omk_enabled=$OMK_ENABLED
+omk_injector_config=/data/misc/keystore/omk/injector.toml
 root_method=$ROOT_METHOD
 root_version=$ROOT_VERSION
 EOF

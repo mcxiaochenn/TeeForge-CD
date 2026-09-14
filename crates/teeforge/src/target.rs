@@ -2,6 +2,7 @@ use crate::atomic_file;
 use crate::config::Config;
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
+use crate::omk;
 use crate::process;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
@@ -349,21 +350,23 @@ struct PendingUpdate {
     path: PathBuf,
     original: Option<Vec<u8>>,
     rendered: Vec<u8>,
+    metadata: Option<atomic_file::PreservedMetadata>,
 }
 
 impl PendingUpdate {
-    fn from_text(label: &'static str, path: &Path, rendered: String) -> Result<Self> {
-        let original = match fs::read(path) {
-            Ok(value) => Some(value),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(TfError::from(error).context(path.display())),
-        };
-        Ok(Self {
+    fn from_text(
+        label: &'static str,
+        path: &Path,
+        original: Option<Vec<u8>>,
+        rendered: String,
+    ) -> Self {
+        Self {
             label,
             path: path.to_path_buf(),
             original,
             rendered: rendered.into_bytes(),
-        })
+            metadata: None,
+        }
     }
 
     fn changed(&self) -> bool {
@@ -386,11 +389,26 @@ fn commit_updates(updates: &[PendingUpdate]) -> Result<()> {
                 update.path.display()
             )));
         }
+        if let Some(metadata) = &update.metadata
+            && &atomic_file::PreservedMetadata::read(&update.path)? != metadata
+        {
+            return Err(TfError::new(
+                "OMK 文件元数据已变化，未覆盖 [OMK metadata changed; not overwritten]",
+            ));
+        }
     }
 
     let mut written: Vec<&PendingUpdate> = Vec::new();
     for update in updates.iter().filter(|update| update.changed()) {
-        let result = if update.original.is_some() {
+        let result = if let Some(metadata) = &update.metadata {
+            let backup = PathBuf::from(format!("{}.teeforge.bak", update.path.display()));
+            atomic_file::write_preserved(
+                &backup,
+                update.original.as_deref().unwrap_or_default(),
+                metadata,
+            )
+            .and_then(|()| atomic_file::write_preserved(&update.path, &update.rendered, metadata))
+        } else if update.original.is_some() {
             atomic_file::write_with_backup(&update.path, &update.rendered)
         } else {
             atomic_file::write(&update.path, &update.rendered)
@@ -418,8 +436,16 @@ fn commit_updates(updates: &[PendingUpdate]) -> Result<()> {
 }
 
 fn restore_update(update: &PendingUpdate) -> Result<()> {
+    if fs::read(&update.path)? != update.rendered {
+        return Err(TfError::new(
+            "目标已被其他进程修改，未回滚覆盖 [Target changed externally; rollback refused]",
+        ));
+    }
     match &update.original {
-        Some(original) => atomic_file::write(&update.path, original),
+        Some(original) => match &update.metadata {
+            Some(metadata) => atomic_file::write_preserved(&update.path, original, metadata),
+            None => atomic_file::write(&update.path, original),
+        },
         None => match fs::remove_file(&update.path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -478,10 +504,28 @@ fn generate_with(
         .parent()
         .is_some_and(|parent| parent.is_dir());
     let teesim_active = config.teesim_config.is_file();
-    if !target_active && !teesim_active {
+    let omk_active = if config.omk_enabled {
+        match fs::symlink_metadata(&config.omk_injector_config) {
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                logging::log(
+                    Level::Warn,
+                    "OMK 配置尚不存在，已跳过；请先完成 OMK 启动 [OMK config missing; skipped; initialize OMK first]",
+                );
+                false
+            }
+            Err(error) => {
+                return Err(TfError::from(error).context(config.omk_injector_config.display()));
+            }
+        }
+    } else {
+        false
+    };
+    if !target_active && !teesim_active && !omk_active {
         return Ok(GenerateOutcome::SkippedNoBackend);
     }
-    let backend_count = usize::from(target_active) + usize::from(teesim_active);
+    let backend_count =
+        usize::from(target_active) + usize::from(teesim_active) + usize::from(omk_active);
     logging::log(
         Level::Info,
         format!(
@@ -504,22 +548,24 @@ fn generate_with(
     );
     let mut updates = Vec::new();
     if target_active {
-        let current = match fs::read(&config.target_txt) {
-            Ok(value) => String::from_utf8(value).map_err(|_| {
+        let original = match fs::read(&config.target_txt) {
+            Ok(value) => Some(value),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(TfError::from(error).context(config.target_txt.display())),
+        };
+        let current = std::str::from_utf8(original.as_deref().unwrap_or_default()).map_err(|_| {
                 TfError::new(format!(
                     "target.txt 不是 UTF-8，未覆盖 [target.txt is not UTF-8; refusing to overwrite]: {}",
                     config.target_txt.display()
                 ))
-            })?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(error) => return Err(TfError::from(error).context(config.target_txt.display())),
-        };
-        let rendered = render_target_file(&current, &packages)?;
+            })?;
+        let rendered = render_target_file(current, &packages)?;
         updates.push(PendingUpdate::from_text(
             "Tricky Store/TEESimulator-RS target.txt",
             &config.target_txt,
+            original,
             rendered,
-        )?);
+        ));
     }
     if teesim_active {
         let current = fs::read_to_string(&config.teesim_config)
@@ -528,8 +574,27 @@ fn generate_with(
         updates.push(PendingUpdate::from_text(
             "TEESimulator config.json",
             &config.teesim_config,
+            Some(current.into_bytes()),
             rendered,
-        )?);
+        ));
+    }
+    if omk_active {
+        let metadata = atomic_file::PreservedMetadata::read(&config.omk_injector_config)?;
+        let current = fs::read_to_string(&config.omk_injector_config)
+            .map_err(|error| TfError::from(error).context(config.omk_injector_config.display()))?;
+        let names = packages
+            .iter()
+            .map(|package| package.name.clone())
+            .collect::<Vec<_>>();
+        let rendered = omk::render(&current, &names)?;
+        let mut update = PendingUpdate::from_text(
+            "Oh My Keymint injector.toml",
+            &config.omk_injector_config,
+            Some(current.into_bytes()),
+            rendered,
+        );
+        update.metadata = Some(metadata);
+        updates.push(update);
     }
     let changed = updates.iter().filter(|update| update.changed()).count();
     commit_updates(&updates)?;
@@ -594,6 +659,7 @@ mod tests {
         let config = Config {
             target_txt: root.join("tricky_store").join("target.txt"),
             teesim_config: root.join("teesim").join("config.json"),
+            omk_injector_config: root.join("omk").join("injector.toml"),
             ..Config::default()
         };
         (config, root)
@@ -609,6 +675,180 @@ mod tests {
                 uids: vec![10123],
             }]
         );
+    }
+
+    fn seed_omk(config: &Config, text: &str) {
+        fs::create_dir_all(config.omk_injector_config.parent().unwrap()).unwrap();
+        fs::write(&config.omk_injector_config, text).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(
+                &config.omk_injector_config,
+                fs::Permissions::from_mode(0o600),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn omk_disabled_never_discovers_and_missing_enabled_config_is_skipped() {
+        let (mut config, root) = test_config("omk-disabled");
+        config.omk_enabled = true;
+        assert_eq!(
+            generate_with(&config, || panic!("must not scan")).unwrap(),
+            GenerateOutcome::SkippedNoBackend
+        );
+        assert!(!root.exists());
+        seed_omk(&config, "scoop = []\n");
+        config.omk_enabled = false;
+        assert_eq!(
+            generate_with(&config, || panic!("must not scan")).unwrap(),
+            GenerateOutcome::SkippedNoBackend
+        );
+        assert_eq!(
+            fs::read_to_string(&config.omk_injector_config).unwrap(),
+            "scoop = []\n"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn omk_updates_once_preserves_metadata_and_retains_backup() {
+        let (mut config, root) = test_config("omk-update");
+        config.omk_enabled = true;
+        let original = "version = 1\nscoop = ['manual.app']\n[filter]\nenabled = true\n";
+        seed_omk(&config, original);
+        let metadata = atomic_file::PreservedMetadata::read(&config.omk_injector_config).unwrap();
+        let listing = "package:/data/app/a/base.apk=new.app uid:10001\n";
+        assert!(matches!(
+            generate_with(&config, || Ok(listing.into())).unwrap(),
+            GenerateOutcome::Updated {
+                backend_count: 1,
+                ..
+            }
+        ));
+        let backup = PathBuf::from(format!(
+            "{}.teeforge.bak",
+            config.omk_injector_config.display()
+        ));
+        assert_eq!(fs::read_to_string(&backup).unwrap(), original);
+        assert_eq!(
+            metadata,
+            atomic_file::PreservedMetadata::read(&config.omk_injector_config).unwrap()
+        );
+        assert_eq!(
+            metadata,
+            atomic_file::PreservedMetadata::read(&backup).unwrap()
+        );
+        let modified = fs::metadata(&config.omk_injector_config)
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert!(matches!(
+            generate_with(&config, || Ok(listing.into())).unwrap(),
+            GenerateOutcome::Unchanged {
+                backend_count: 1,
+                ..
+            }
+        ));
+        assert_eq!(
+            modified,
+            fs::metadata(&config.omk_injector_config)
+                .unwrap()
+                .modified()
+                .unwrap()
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), original);
+        generate_with(&config, || Ok(String::new())).unwrap();
+        let output = fs::read_to_string(&config.omk_injector_config).unwrap();
+        assert!(output.contains("'manual.app'"));
+        assert!(!output.contains("\"new.app\""));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_omk_aborts_all_backends_before_writing() {
+        let (mut config, root) = test_config("omk-invalid");
+        config.omk_enabled = true;
+        seed_omk(&config, "scoop = [1]");
+        fs::create_dir_all(config.target_txt.parent().unwrap()).unwrap();
+        fs::write(&config.target_txt, "manual.app!\n").unwrap();
+        let result = generate_with(&config, || {
+            Ok("package:/data/app/a/base.apk=new.app uid:10001".into())
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read_to_string(&config.target_txt).unwrap(),
+            "manual.app!\n"
+        );
+        assert!(!PathBuf::from(format!("{}.bak", config.target_txt.display())).exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn all_three_configuration_formats_share_one_scan() {
+        let (mut config, root) = test_config("omk-three");
+        config.omk_enabled = true;
+        seed_omk(&config, "scoop = []\n");
+        fs::create_dir_all(config.target_txt.parent().unwrap()).unwrap();
+        fs::create_dir_all(config.teesim_config.parent().unwrap()).unwrap();
+        fs::write(
+            &config.teesim_config,
+            r#"{"version":1,"profiles":{"default":{"apps":[]}}}"#,
+        )
+        .unwrap();
+        let mut calls = 0;
+        let result = generate_with(&config, || {
+            calls += 1;
+            Ok("package:/data/app/a/base.apk=new.app uid:10001".into())
+        })
+        .unwrap();
+        assert_eq!(calls, 1);
+        assert!(matches!(
+            result,
+            GenerateOutcome::Updated {
+                backend_count: 3,
+                ..
+            }
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transaction_uses_render_snapshot_and_rolls_back_omk_metadata() {
+        let (config, root) = test_config("omk-transaction");
+        seed_omk(&config, "scoop = []\n");
+        let original = fs::read(&config.omk_injector_config).unwrap();
+        let metadata = atomic_file::PreservedMetadata::read(&config.omk_injector_config).unwrap();
+        let mut omk = PendingUpdate::from_text(
+            "OMK",
+            &config.omk_injector_config,
+            Some(original.clone()),
+            "scoop = ['new.app']\n".into(),
+        );
+        omk.metadata = Some(metadata.clone());
+        fs::write(&config.omk_injector_config, "scoop = ['external.app']\n").unwrap();
+        assert!(commit_updates(std::slice::from_ref(&omk)).is_err());
+        assert!(
+            fs::read_to_string(&config.omk_injector_config)
+                .unwrap()
+                .contains("external.app")
+        );
+        fs::write(&config.omk_injector_config, &original).unwrap();
+        let other = root.join("other.txt");
+        fs::write(&other, "old").unwrap();
+        fs::create_dir(root.join("other.txt.bak")).unwrap();
+        let failing =
+            PendingUpdate::from_text("other", &other, Some(b"old".to_vec()), "new".into());
+        assert!(commit_updates(&[omk, failing]).is_err());
+        assert_eq!(fs::read(&config.omk_injector_config).unwrap(), original);
+        assert_eq!(
+            atomic_file::PreservedMetadata::read(&config.omk_injector_config).unwrap(),
+            metadata
+        );
+        assert_eq!(fs::read_to_string(other).unwrap(), "old");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -6,6 +6,7 @@ mod description;
 mod error;
 mod keybox;
 mod logging;
+mod omk;
 mod process;
 mod rootdetect;
 mod target;

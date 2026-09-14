@@ -11,6 +11,8 @@ pub(crate) struct Config {
     pub(crate) packages_xml: PathBuf,
     pub(crate) target_txt: PathBuf,
     pub(crate) teesim_config: PathBuf,
+    pub(crate) omk_enabled: bool,
+    pub(crate) omk_injector_config: PathBuf,
     pub(crate) keybox_dir: PathBuf,
     pub(crate) sources_conf: PathBuf,
     pub(crate) log_dir: PathBuf,
@@ -37,6 +39,8 @@ impl Default for Config {
             packages_xml: "/data/system/packages.xml".into(),
             target_txt: "/data/adb/tricky_store/target.txt".into(),
             teesim_config: "/data/adb/teesim/config.json".into(),
+            omk_enabled: false,
+            omk_injector_config: "/data/misc/keystore/omk/injector.toml".into(),
             keybox_dir: "/data/adb/teeforge/keybox".into(),
             sources_conf: "/data/adb/teeforge/sources.conf".into(),
             log_dir: "/data/adb/teeforge/logs".into(),
@@ -98,6 +102,8 @@ impl Config {
             "packages_xml" => self.packages_xml = value.into(),
             "target_txt" => self.target_txt = value.into(),
             "teesim_config" => self.teesim_config = value.into(),
+            "omk_enabled" => self.omk_enabled = parse_bool(value),
+            "omk_injector_config" => self.omk_injector_config = value.into(),
             "keybox_dir" => self.keybox_dir = value.into(),
             "sources_conf" => self.sources_conf = value.into(),
             "log_dir" => self.log_dir = value.into(),
@@ -177,6 +183,25 @@ mod tests {
         let mut config = Config::default();
         config.apply("blhide", "invalid");
         assert!(!config.blhide);
+    }
+
+    #[test]
+    fn omk_defaults_and_user_overrides_ignore_legacy_rs_keys() {
+        let mut config = Config::default();
+        assert!(!config.omk_enabled);
+        let original = config.clone();
+        config.apply("prop_tool", "rs");
+        config.apply("blhide_compact", "1");
+        assert_eq!(config, original);
+        config.apply("omk_enabled", "1");
+        config.apply("omk_injector_config", "/tmp/omk/injector.toml");
+        assert!(config.omk_enabled);
+        assert_eq!(
+            config.omk_injector_config,
+            PathBuf::from("/tmp/omk/injector.toml")
+        );
+        config.apply("omk_enabled", "0");
+        assert!(!config.omk_enabled);
     }
 
     #[test]

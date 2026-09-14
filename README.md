@@ -5,7 +5,7 @@
 **目标配置开机更新，Keybox 按需同步。**
 
 > [!WARNING]
-> 三个对接目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`；Keybox 分别位于对应目录。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
+> 现有三个对接目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`；Keybox 分别位于对应目录。Oh My Keymint（OMK）仅适配应用作用域，安装时检测并固化启用状态，不接管其 Keybox 或服务配置。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
 
 > [!NOTE]
 > 当前 `master` 构建基线为 Android 7.0（API 24）及以上，包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI。四架构自动化构建已经验证，真机与模拟器覆盖仍需分别验收；稳定 Release 可能晚于 `master`，实际支持范围以对应 Release 说明和安装输出为准。
@@ -30,10 +30,11 @@
 | Android | Android 7.0 / API 24 及以上；Root 管理器自身可能有更高要求 |
 | Root 环境 | Magisk、KernelSU、APatch 的兼容 Magisk 模块环境；未设置硬编码最低管理器版本 |
 | ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
-| 目标模块 | Tricky Store、TEESimulator-RS、TEESimulator |
+| 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS；Oh My Keymint 仅应用作用域 |
 | 目标配置 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/target.txt`；TEESimulator：`/data/adb/teesim/config.json` 的 `profiles.teeforge.apps` |
+| OMK 作用域 | 安装时检测并固化；更新 `/data/misc/keystore/omk/injector.toml` 的 `scoop`；OMK 自身要求 Android 12+，真机待验收 |
 | Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml` |
-| 属性工具 | 全架构支持 standard resetprop；ARM 可选预置 resetprop-rs，x86/x86_64 固定使用 standard |
+| 属性工具 | 全架构统一使用 Root 环境提供的 standard resetprop |
 | WebUI | 需要支持 KernelSU 模块 WebUI 接口的管理器；其他环境可使用 Action 或终端 |
 
 安装前请确保：
@@ -56,7 +57,7 @@
 2. 选择从官方 Release 下载的 TeeForge-CD ZIP，不要解压。
 3. 安装器先校验包内 `.sha256` 清单，再选择并验证当前设备 ABI；清单缺失、文件异常或 ABI 不支持时会中止安装。
 4. 检测到已有配置时：音量加保留配置，音量减清除全部 TeeForge 数据；10 秒无操作默认保留。
-5. ARM 设备可选择属性工具：音量加使用兼容性优先的 standard resetprop，音量减使用 resetprop-rs；10 秒无操作默认 standard。x86/x86_64 自动使用 standard。
+5. 安装器统一使用 standard resetprop，并显示 OMK 作用域适配检测结果；OMK 待更新模块优先，禁用或待卸载时不启用适配。
 6. 安装完成后重启设备。
 
 Recovery 刷入未纳入当前验收范围，请优先使用 Root 管理器安装。
@@ -107,6 +108,14 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --help'
 
 CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](docs/project/OVERVIEW.md)。
 
+### OMK 应用作用域
+
+先安装 OMK，再安装 TeeForge；同次重启前安装也可以被检测。后来安装或重新启用 OMK 时，重新安装 TeeForge 刷新检测结果。活动配置尚未生成时会输出 warning 并跳过，完成 OMK 初始化后再次运行 `--generate`。
+
+TeeForge 保留 `scoop` 中原有手动条目，只维护 `# BEGIN TeeForge-CD managed scoop` 与 `# END TeeForge-CD managed scoop` 之间的自动条目。需要长期固定的条目请放在区块外；自动条目会随应用安装、卸载更新。数组以外的配置保持原样，更新前备份为 `injector.toml.teeforge.bak`。
+
+使用 WebUI 的目标更新按钮或 CLI `--generate`。OMK 作用域更新不需要运行 Keybox 操作，模块 Action 仍会执行既有的 Keybox 步骤。成功输出只代表文件更新；OMK 加载和应用实际行为需另行确认。TeeForge 不自动重启 OMK；旧格式迁移由 OMK 完成。
+
 ### 配置
 
 用户配置位于 `/data/adb/teeforge/config.conf`，升级时默认保留。常用总开关：
@@ -119,6 +128,9 @@ blhide=1
 - `debug=1`：将运行日志写入 `/data/adb/teeforge/logs/`。
 - `blhide=0`：关闭全部 BL 弱化操作。
 - 安装器生成的分类开关可分别设为 `0` 或 `1`。
+- `omk_enabled` 由安装器在系统配置中固化，默认 `0`；用户配置可覆盖，设为 `0` 停止更新 OMK。
+- `omk_injector_config` 默认 `/data/misc/keystore/omk/injector.toml`，仅覆盖作用域文件路径。
+- 旧 `prop_tool`、`blhide_compact` 键兼容忽略，不再生成，升级不改写已有用户配置。
 
 `/data/adb/teeforge/sys.conf` 由安装器维护，不应手动编辑。配置修改会在下一次相关命令或开机服务执行时读取。数据流与安全边界见[当前架构](docs/project/ARCHITECTURE.md)。
 
@@ -134,12 +146,11 @@ blhide=1
 
 在 Root 管理器中卸载 TeeForge-CD 后重启。卸载脚本会删除整个 `/data/adb/teeforge/` 数据目录，包括用户配置、日志和 TeeForge 的本地 Keybox 副本；需要保留配置时请先自行备份。
 
-卸载脚本不会删除目标目录中的 `/data/adb/tricky_store/target.txt`、`/data/adb/tricky_store/keybox.xml`、`/data/adb/teesim/config.json` 或 `/data/adb/teesim/keybox.xml`。这些文件可能仍被对应目标模块使用；如确认不再需要，应在卸载并重启后先备份，再自行清理。
+卸载脚本不会删除目标目录中的 `/data/adb/tricky_store/target.txt`、`/data/adb/tricky_store/keybox.xml`、`/data/adb/teesim/config.json` 或 `/data/adb/teesim/keybox.xml`。OMK 的 `injector.toml` 及其 TeeForge 备份也会保留。上述文件可能仍被对应目标模块使用；如确认不再需要，应在卸载并重启后先备份，再自行清理。
 
 ### 异常恢复
 
 - BL 弱化行为异常但系统仍可启动时，先将 `blhide=0`，再重启或手动重新执行相关命令。
-- 选择 resetprop-rs 后出现兼容性问题时，重新安装模块并选择 standard resetprop。
 - 无法正常启动时，使用当前 Root 管理器的安全模式或模块禁用机制，进入系统后禁用或卸载 TeeForge-CD。
 
 官方恢复说明：[Magisk 模块安全模式](https://topjohnwu.github.io/Magisk/faq.html) · [KernelSU Bootloop 恢复](https://kernelsu.org/guide/rescue-from-bootloop.html) · [APatch Bootloop 恢复](https://apatch.dev/rescue-bootloop.html)
@@ -152,7 +163,7 @@ blhide=1
 - **提示 ABI 不支持或 ELF 不匹配**：确认设备报告的主 ABI 属于支持列表，不要用其他架构二进制强行替换。
 - **目标配置没有更新**：确认目标模块使用 `/data/adb/tricky_store/target.txt` 或 `/data/adb/teesim/config.json`，检查 `teeforge` 管理标记和手动运行 `--generate` 的真实退出码。没有任何兼容后端时，命令成功但只记录 warning。
 - **Keybox 同步失败**：检查网络和命令输出；失败时程序会保留已有文件，不要把非空响应直接视为有效结果。
-- **x86/x86_64 没有 resetprop-rs 选项**：这是当前安装策略，使用 standard resetprop。
+- **OMK 没有更新**：检查安装检测结果、`omk_enabled` 与活动配置是否已生成；无效 TOML、未知版本或文件元数据无法保留时会拒绝更新。不要将文件写入成功视为服务已加载。
 - **模块描述仍显示等待重启**：确认系统已经完成启动，运行 `--update-desc` 后检查退出码和日志。
 
 需要文件日志时，将 `config.conf` 中的 `debug` 改为 `1`，复现问题后查看 `/data/adb/teeforge/logs/`。分享前请移除设备标识、账号信息和其他隐私内容。
@@ -189,6 +200,6 @@ TeeForge-CD 采用 [GNU GPL v3 或更高版本](LICENSE)发布。
 - [Tricky Store](https://github.com/5ec1cff/TrickyStore)
 - [TEESimulator](https://github.com/JingMatrix/TEESimulator)
 - [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
-- [resetprop-rs](https://github.com/5ec1cff/resetprop-rs) 及其贡献者
+- [Oh My Keymint](https://github.com/qwq233/OhMyKeymint)
 
 第三方项目名称仅用于说明依赖与兼容关系，不代表官方合作或背书。

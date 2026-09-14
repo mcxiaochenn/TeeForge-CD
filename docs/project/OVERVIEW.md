@@ -5,7 +5,8 @@
 TeeForge-CD 是面向 Magisk/KernelSU 的 Android 模块，主要负责：
 
 - 一次扫描用户安装的应用，分别更新实际存在的目标配置：Tricky Store/TEESimulator-RS 的 `target.txt`，以及 TEESimulator 的 `config.json` 受管 profile。
-- 通过 resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
+- 根据安装时固化的状态更新 Oh My Keymint（OMK）`injector.toml` 的 `scoop`，仅维护应用作用域。
+- 通过 standard resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
 - 从自建 CDN 获取、校验并同步 Keybox 文件。
 - 通过 KernelSU WebUI 提供手动操作入口。
 
@@ -55,6 +56,8 @@ teeforge --config FILE        # 覆盖用户配置来源
 - `/data/adb/teeforge/sys.conf`：安装时生成的系统配置，不应手动编辑。
 - `/data/adb/teeforge/config.conf`：用户配置，跨更新保留。
 - `target_txt=/data/adb/tricky_store/target.txt`：Tricky Store/TEESimulator-RS 目标文件。
+- `omk_enabled=0`：默认关闭；安装器检测 OMK 后写入系统配置，用户配置可覆盖。
+- `omk_injector_config=/data/misc/keystore/omk/injector.toml`：OMK 活动作用域配置，不用于 Keybox。
 - `teesim_config=/data/adb/teesim/config.json`：TEESimulator 配置；其 Keybox 路径由父目录派生。
 - Rust 加载顺序为系统配置，再由用户配置覆盖；`--config FILE` 只覆盖用户配置来源。
 

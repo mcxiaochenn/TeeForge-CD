@@ -18,17 +18,9 @@
  * - Developer 选项 [Developer options]
  * - SELinux 伪装 [SELinux spoofing]
  * - 虚拟设备检测 [Virtual device detection]
- * - compact 内存整理 [Compact memory]
  * - 属性删除 [Property deletion]
  */
 
-/* resetprop 工具类型 Resetprop tool type */
-typedef enum {
-    PROP_TOOL_STANDARD = 0,  /* 标准 Magisk resetprop */
-    PROP_TOOL_RS       = 1   /* resetprop-rs (KernelSU) */
-} prop_tool_t;
-
-static prop_tool_t g_prop_tool = PROP_TOOL_STANDARD;
 static const char *g_resetprop_cmd = NULL;  /* 缓存检测结果 Cache detection result */
 
 /* 弱隐 BL 属性类别 Weak BL hiding property categories */
@@ -129,80 +121,8 @@ static const char *find_std_resetprop(void) {
 
 /* 检测 resetprop 工具类型并缓存命令路径 Detect and cache resetprop command */
 static void detect_prop_tool(void) {
-    /* 用户配置优先 User config takes priority */
-    if (strcmp(g_config.prop_tool, "standard") == 0) {
-        g_prop_tool = PROP_TOOL_STANDARD;
-        const char *found = find_std_resetprop();
-        if (found) {
-            g_resetprop_cmd = found;
-        } else {
-            g_resetprop_cmd = "resetprop";
-        }
-        log_msg(LOG_INFO, "使用标准 resetprop（用户配置）[Using standard resetprop (user config)]: %s", g_resetprop_cmd);
-        return;
-    }
-
-    /* --- resetprop-rs 检测 --- */
-    log_msg(LOG_INFO, "检测 resetprop-rs [Detecting resetprop-rs]...");
-
-    /* 1. 环境变量 Environment variable */
-    const char *env_path = getenv("RESETPROP_RS");
-    if (env_path && file_exists(env_path)) {
-        if (!is_executable(env_path)) {
-            log_msg(LOG_WARN, "  resetprop-rs 无执行权限，尝试修复 [No execute permission, attempting fix]: %s", env_path);
-            chmod(env_path, 0755);
-        }
-        if (is_executable(env_path)) {
-            g_prop_tool = PROP_TOOL_RS;
-            g_resetprop_cmd = env_path;
-            log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", env_path);
-            return;
-        }
-        log_msg(LOG_WARN, "  resetprop-rs 无法执行，回退标准 resetprop [Cannot execute, falling back]");
-    }
-
-    /* 2. 模块目录 Module directory */
-    const char *mod_paths[] = {
-        "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-        "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-        "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-        "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-        NULL
-    };
-
-    for (int i = 0; mod_paths[i] != NULL; i++) {
-        if (file_exists(mod_paths[i])) {
-            if (!is_executable(mod_paths[i])) {
-                log_msg(LOG_WARN, "  无执行权限，尝试修复 [No execute permission, attempting fix]: %s", mod_paths[i]);
-                chmod(mod_paths[i], 0755);
-            }
-            if (is_executable(mod_paths[i])) {
-                g_prop_tool = PROP_TOOL_RS;
-                g_resetprop_cmd = mod_paths[i];
-                log_msg(LOG_INFO, "  使用 resetprop-rs [Using resetprop-rs]: %s", mod_paths[i]);
-                return;
-            }
-        }
-    }
-
-    /* 3. 系统 PATH */
-    int ret = system("which resetprop-rs > /dev/null 2>&1");
-    if (ret == 0) {
-        g_prop_tool = PROP_TOOL_RS;
-        g_resetprop_cmd = "resetprop-rs";
-        log_msg(LOG_INFO, "  使用系统 resetprop-rs [Using system resetprop-rs]");
-        return;
-    }
-
-    /* rs 检测全部失败，降级标准 resetprop All rs detection failed, fallback to standard */
-    g_prop_tool = PROP_TOOL_STANDARD;
     const char *found = find_std_resetprop();
-    if (found) {
-        g_resetprop_cmd = found;
-    } else {
-        g_resetprop_cmd = "resetprop";
-    }
-    log_msg(LOG_INFO, "  resetprop-rs 未找到，降级 [rs not found, fallback]: %s", g_resetprop_cmd);
+    g_resetprop_cmd = found ? found : "resetprop";
 }
 
 /* 获取 resetprop 命令路径（已缓存）Get resetprop command path (cached) */
@@ -244,10 +164,9 @@ static const char *del_props[] = {
  */
 static char *bl_build_script(void) {
     const char *cmd_path = get_resetprop_cmd();
-    const char *stealth = (g_prop_tool == PROP_TOOL_RS) ? " --stealth" : "";
 
-    /* 估算大小：每行约 100 字节，最多 30 属性 + 删除 + compact */
-    /* Estimate: ~100 bytes per line, max 30 props + delete + compact */
+    /* 估算大小：每行约 100 字节，最多 30 属性 + 删除 */
+    /* Estimate: ~100 bytes per line, max 30 props + delete */
     size_t buf_sz = 4096;
     char *script = malloc(buf_sz);
     if (!script) return NULL;
@@ -259,11 +178,11 @@ static char *bl_build_script(void) {
     for (int i = 0; bl_props[i].key != NULL; i++) {
         if (!is_category_enabled(bl_props[i].category)) continue;
 
-        log_msg(LOG_DEBUG, "  %s%s %s %s", cmd_path, stealth, bl_props[i].key, bl_props[i].value);
+        log_msg(LOG_DEBUG, "  %s %s %s", cmd_path, bl_props[i].key, bl_props[i].value);
 
         if (pos < buf_sz - 200) {
             pos += snprintf(script + pos, buf_sz - pos,
-                "%s%s %s %s\n", cmd_path, stealth, bl_props[i].key, bl_props[i].value);
+                "%s %s %s\n", cmd_path, bl_props[i].key, bl_props[i].value);
         }
     }
 
@@ -275,14 +194,6 @@ static char *bl_build_script(void) {
                 pos += snprintf(script + pos, buf_sz - pos,
                     "%s --delete %s\n", cmd_path, del_props[i]);
             }
-        }
-    }
-
-    /* compact（仅 resetprop-rs） */
-    if (g_config.blhide && g_config.blhide_compact && g_prop_tool == PROP_TOOL_RS) {
-        if (pos < buf_sz - 100) {
-            pos += snprintf(script + pos, buf_sz - pos,
-                "%s --compact\n", cmd_path);
         }
     }
 

@@ -89,56 +89,7 @@ mkdir -p "$TEEFORGE_DIR/keybox"
 mkdir -p "$TEEFORGE_DIR/logs"
 ui_print " "
 
-PROP_TOOL="standard"
-if [ "$ARCH" = "arm64-v8a" ] || [ "$ARCH" = "armeabi-v7a" ]; then
-    # 选择 resetprop 工具 Select resetprop tool
-    ui_print "  选择属性修改工具 [Select prop tool]"
-    ui_print "  传统方式兼容性好，resetprop-rs 隐蔽性更佳但可能被检测"
-    ui_print "  [Traditional has better compat, rs has better stealth but may be detected]"
-    ui_print "  10秒超时默认传统方式 [10s timeout, default traditional]"
-    ui_print " "
-    ui_print "  音量+ = 传统 resetprop（推荐）[Volume+ = Traditional resetprop (Recommended)]"
-    ui_print "  音量- = resetprop-rs [Volume- = resetprop-rs]"
-    PROP_RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect 2>/dev/null)
-else
-    PROP_RESULT=1
-    ui_print "  resetprop-rs 不支持 $ARCH，使用传统方式"
-    ui_print "  [resetprop-rs is unavailable for $ARCH; using standard resetprop]"
-fi
-ui_print " "
-if [ "$PROP_RESULT" = "0" ]; then
-    PROP_TOOL="rs"
-    ui_print "  已选择 resetprop-rs [Selected resetprop-rs]"
-    ui_print " "
-
-    # 检测架构，只保留对应二进制 Detect arch, keep matching binary only
-    case "$ARCH" in
-        arm64-v8a)
-            ui_print "  架构 [Arch]: arm64-v8a"
-            rm -f "$MODPATH/resetprop-rs/resetprop-armeabi-v7a"
-            ;;
-        armeabi-v7a)
-            ui_print "  架构 [Arch]: armeabi-v7a"
-            rm -f "$MODPATH/resetprop-rs/resetprop-arm64-v8a"
-            ;;
-        x86|x86_64)
-            ui_print "  !! 设备架构不支持 resetprop-rs !!"
-            ui_print "  !! Arch not supported for resetprop-rs !!"
-            ui_print "  $ARCH"
-            ui_print "  请重新安装并选择传统方式"
-            ui_print "  [Please reinstall and select traditional]"
-            abort "  Installation aborted: resetprop-rs not available for $ARCH"
-            ;;
-        *)
-            ui_print "  未知架构，保留全部 [Unknown arch, keeping all]: $ARCH"
-            ;;
-    esac
-else
-    ui_print "  已选择传统 resetprop [Selected traditional resetprop]"
-    # 删除 resetprop-rs 二进制，减小体积 Remove resetprop-rs binaries, reduce size
-    rm -rf "$MODPATH/resetprop-rs"
-fi
-ui_print " "
+ui_print "  属性工具 [Property tool]: standard resetprop"
 
 # 生成 sys.conf（系统配置，动态生成）Generate sys.conf (system config, dynamic)
 cat > "$TEEFORGE_DIR/sys.conf" << EOF
@@ -151,7 +102,6 @@ teesim_config=/data/adb/teesim/config.json
 keybox_dir=/data/adb/teeforge/keybox/
 sources_conf=/data/adb/teeforge/sources.conf
 log_dir=/data/adb/teeforge/logs/
-prop_tool=$PROP_TOOL
 root_method=$ROOT_METHOD
 root_version=$ROOT_VERSION
 EOF
@@ -188,7 +138,6 @@ blhide_developer=1
 blhide_selinux=1
 blhide_virtual=1
 blhide_delete=1
-blhide_compact=1
 EOF
     ui_print "  config.conf 已创建 [config.conf created] (debug=$MODULE_DEBUG)"
 else
@@ -198,13 +147,6 @@ fi
 # Set permissions
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$MODPATH/teeforge" 0 0 0755
-
-# resetprop-rs 需要执行权限（set_perm_recursive 会重置为 0644）
-# resetprop-rs needs execute permission (set_perm_recursive resets to 0644)
-# 传统方式已删除此目录，循环安全跳过 Dir removed for standard, loop safely skips
-for f in "$MODPATH/resetprop-rs"/resetprop-*; do
-    [ -f "$f" ] && set_perm "$f" 0 0 0755
-done
 
 ui_print " "
 ui_print "  Done! Reboot to activate"

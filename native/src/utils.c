@@ -76,11 +76,6 @@ static void config_parse_file(const char *path) {
             g_config.blhide_virtual = atoi(val);
         } else if (strcmp(key, "blhide_delete") == 0) {
             g_config.blhide_delete = atoi(val);
-        } else if (strcmp(key, "blhide_compact") == 0) {
-            g_config.blhide_compact = atoi(val);
-        } else if (strcmp(key, "prop_tool") == 0) {
-            strncpy(g_config.prop_tool, val, 15);
-            g_config.prop_tool[15] = '\0';
         }
     }
 
@@ -101,7 +96,6 @@ static void blhide_set_defaults(config_t *cfg) {
     cfg->blhide_selinux = 1;
     cfg->blhide_virtual = 1;
     cfg->blhide_delete = 1;
-    cfg->blhide_compact = 1;
 }
 
 int config_load(const char *path) {
@@ -114,7 +108,6 @@ int config_load(const char *path) {
     strncpy(g_config.root_method, "Unknown", 63);
     strncpy(g_config.root_version, "unknown", 31);
     g_config.debug = 0;
-    strncpy(g_config.prop_tool, "standard", 15);
     blhide_set_defaults(&g_config);
 
     /* 加载规范 sys.conf，缺失时兼容旧的相对路径

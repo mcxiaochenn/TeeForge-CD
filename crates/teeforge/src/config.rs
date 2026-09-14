@@ -29,14 +29,6 @@ pub(crate) struct Config {
     pub(crate) blhide_selinux: bool,
     pub(crate) blhide_virtual: bool,
     pub(crate) blhide_delete: bool,
-    pub(crate) blhide_compact: bool,
-    pub(crate) prop_tool: PropTool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PropTool {
-    Standard,
-    Rs,
 }
 
 impl Default for Config {
@@ -63,8 +55,6 @@ impl Default for Config {
             blhide_selinux: true,
             blhide_virtual: true,
             blhide_delete: true,
-            blhide_compact: true,
-            prop_tool: PropTool::Standard,
         }
     }
 }
@@ -126,14 +116,6 @@ impl Config {
             "blhide_selinux" => self.blhide_selinux = parse_bool(value),
             "blhide_virtual" => self.blhide_virtual = parse_bool(value),
             "blhide_delete" => self.blhide_delete = parse_bool(value),
-            "blhide_compact" => self.blhide_compact = parse_bool(value),
-            "prop_tool" => {
-                self.prop_tool = if value == "rs" {
-                    PropTool::Rs
-                } else {
-                    PropTool::Standard
-                }
-            }
             _ => {}
         }
     }
@@ -183,7 +165,6 @@ mod tests {
         config.apply("prop_tool", "rs");
         config.apply("target_txt", "/tmp/target");
         assert!(config.debug);
-        assert_eq!(config.prop_tool, PropTool::Rs);
         assert_eq!(config.target_txt, PathBuf::from("/tmp/target"));
         assert_eq!(
             config.teesim_config,
@@ -214,7 +195,6 @@ mod tests {
             config.apply(key, value);
         }
         assert_eq!(config.root_method, "KernelSU");
-        assert_eq!(config.prop_tool, PropTool::Rs);
         assert!(config.debug);
         assert!(!config.blhide);
     }

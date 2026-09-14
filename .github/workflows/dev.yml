@@ -83,7 +83,6 @@ jobs:
           blhide_selinux=1
           blhide_virtual=1
           blhide_delete=1
-          blhide_compact=1
           OUTER
 
           chmod +x package.sh

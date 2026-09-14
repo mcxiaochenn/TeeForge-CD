@@ -1,4 +1,4 @@
-use crate::config::{Config, PropTool};
+use crate::config::Config;
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::process;
@@ -76,34 +76,17 @@ fn executable(path: &Path) -> bool {
     path.is_file()
 }
 
-fn find_tool(config: &Config) -> (PathBuf, bool) {
-    if config.prop_tool == PropTool::Rs {
-        if let Some(path) = std::env::var_os("RESETPROP_RS").map(PathBuf::from)
-            && executable(&path)
-        {
-            return (path, true);
-        }
-        for path in [
-            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-            "/data/adb/modules/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-arm64-v8a",
-            "/data/adb/modules_update/teeforge_cd/resetprop-rs/resetprop-armeabi-v7a",
-        ] {
-            if executable(Path::new(path)) {
-                return (path.into(), true);
-            }
-        }
-    }
+fn find_tool() -> PathBuf {
     for path in [
         "/data/adb/ksu/bin/resetprop",
         "/data/adb/ap/bin/resetprop",
         "/data/adb/magisk/resetprop",
     ] {
         if executable(Path::new(path)) {
-            return (path.into(), false);
+            return path.into();
         }
     }
-    ("resetprop".into(), false)
+    "resetprop".into()
 }
 
 fn boot_completed() -> bool {
@@ -125,11 +108,7 @@ fn run_one(tool: &Path, args: &[&str]) -> Result<()> {
     }
 }
 
-fn apply_properties(
-    config: &Config,
-    is_rs: bool,
-    mut apply: impl FnMut(&[&str]) -> Result<()>,
-) -> Vec<String> {
+fn apply_properties(config: &Config, mut apply: impl FnMut(&[&str]) -> Result<()>) -> Vec<String> {
     if !config.blhide {
         return Vec::new();
     }
@@ -138,12 +117,7 @@ fn apply_properties(
         if !enabled(config, *category) {
             continue;
         }
-        let mut args = Vec::with_capacity(3);
-        if is_rs {
-            args.push("--stealth");
-        }
-        args.extend([*key, *value]);
-        if let Err(error) = apply(&args) {
+        if let Err(error) = apply(&[*key, *value]) {
             failures.push(format!("{key}: {error}"));
         }
     }
@@ -151,12 +125,6 @@ fn apply_properties(
         && let Err(error) = apply(&["--delete", "ro.build.selinux"])
     {
         failures.push(format!("ro.build.selinux: {error}"));
-    }
-    if is_rs
-        && config.blhide_compact
-        && let Err(error) = apply(&["--compact"])
-    {
-        failures.push(format!("compact: {error}"));
     }
     failures
 }
@@ -173,8 +141,8 @@ pub(crate) fn hide(config: &Config) -> Result<()> {
         thread::sleep(Duration::from_secs(1));
     }
 
-    let (tool, is_rs) = find_tool(config);
-    let failures = apply_properties(config, is_rs, |args| run_one(&tool, args));
+    let tool = find_tool();
+    let failures = apply_properties(config, |args| run_one(&tool, args));
     if failures.is_empty() {
         logging::log(Level::Info, "弱隐 BL 完成 [Weak BL hiding done]");
         Ok(())
@@ -195,7 +163,7 @@ mod tests {
     fn aggregates_all_property_failures() {
         let config = Config::default();
         let mut attempts = 0;
-        let failures = apply_properties(&config, false, |_| {
+        let failures = apply_properties(&config, |_| {
             attempts += 1;
             Err(TfError::new("mock failure"))
         });
@@ -220,11 +188,38 @@ mod tests {
             ..Config::default()
         };
         let mut attempts = 0;
-        let failures = apply_properties(&config, false, |_| {
+        let failures = apply_properties(&config, |_| {
             attempts += 1;
             Ok(())
         });
         assert_eq!(attempts, 0);
         assert!(failures.is_empty());
+    }
+
+    #[test]
+    fn standard_arguments_never_include_rs_options() {
+        let mut calls = Vec::new();
+        assert!(
+            apply_properties(&Config::default(), |args| {
+                calls.push(
+                    args.iter()
+                        .map(|value| value.to_string())
+                        .collect::<Vec<_>>(),
+                );
+                Ok(())
+            })
+            .is_empty()
+        );
+        assert!(calls.iter().all(|args| args.len() == 2));
+        assert!(calls.iter().all(|args| {
+            !args
+                .iter()
+                .any(|arg| arg == "--stealth" || arg == "--compact")
+        }));
+        assert!(
+            calls
+                .iter()
+                .any(|args| args == &["--delete", "ro.build.selinux"])
+        );
     }
 }

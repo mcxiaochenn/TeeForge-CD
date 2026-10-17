@@ -19,11 +19,20 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 - Dev 配置模板同步删除废弃的 blhide_compact；用户将使用 Dev 包进行后续真机验收，自动化通过不替代设备结论。
 - WebUI、Shell 生命周期和公开架构文档同步到 Rust 实现。
 - 设备端 RKP 签发（移植自 Duck-ToolBox，MIT）：高通/arm64 前置检查、CSR_V2 帧、TA 隔离子进程、Google RKP 交互、证书链校验、keybox 生成与 `rkp_mode` 回退链；主机侧 90 项测试与四 ABI 编译通过。
+- WebUI v2：Astro → Vite + Vue 3 + hash 路由 + Tailwind 3.4；五个页面（Home / 目标作用域 / Keybox 配置 / 本机 RKP / 模块与更新）、偏好浮层、统一 `--json` 契约。
+- 二进制拆分：RKP 独立为 `--rkp-issue/-status/-artifacts/-delete`，产物写入 `/data/adb/teeforge/RKP/`；`--keybox` 恢复为纯远程，新增 `--source`。
+- 目标作用域手动模式：`target_mode` + `target-selection.json`，新增 `--target-list/-apply/-target-mode`。
+- 更新：`--self-update check/install`，自建 CDN 清单 + sha256/大小/ZIP 头校验，按 root 管理器选择安装器。
+- Action 重做：音量键两级菜单（音量下切换、音量上确认、15 秒取消），全程落盘 `logs/action-*.log`；包列表超时 12s + `pm` 兜底 + 3s 心跳。
+- 主机验证：99 项测试、Clippy/格式通过、Vite 构建通过；真机验收待执行。
 
 ## 待验证
 
 - arm64-v8a 主力设备安装、升级保留配置、音量键选择和开机服务。
-- 设备端 RKP：`--rkp-status` 判定、真实签发、`-18` 等 TA 错误码、Google 服务端签发结果、`rkp_refresh_days` 复用、回退远程行为；小米 17 Pro 等社区成功机型优先。
+- 设备端 RKP：`--rkp-status` 判定、`--rkp-issue` 真实签发、`-18` 等 TA 错误码的透传与解释、产物落盘/删除、`--keybox --source rkp` 安装；小米 17 Pro 等社区成功机型优先。
+- WebUI v2：五个页面在真机 WebView 下的布局与滚动、`ksu.spawn` 流式日志、`ksu.getPackagesInfo` / `ksu://icon` 缺失时的降级、手动选择重启后保持。
+- Action：音量键在 Action 上下文可读、三个分支（RKP / 远程池 / 作用域）、超时取消不写文件、日志文件完整。
+- 更新：清单 sha256 校验、`ksud`/`apd`/`magisk` 安装器识别、无校验和时只保存到 Download。
 - ARMv7、x86、x86_64 对应环境的安装和运行行为。
 - Tricky Store：在真机上对带注释、`!`、`?` 的现有 `target.txt` 连续执行两次 `--generate`，确认本地自动化结论与设备行为一致。
 - TEESimulator-RS：含 `[custom.xml]` 分段的 `target.txt` 归属保持与新增包更新。
@@ -42,5 +51,6 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 1. 完成文档入口重组并验证按需阅读路径。
 2. 取得授权后执行分层设备验收。
 3. 验收通过后单独评估删除旧 C 实现、提交稳定版本和发布流程。
+4. 在 CDN 更新清单中补 `sha256` 与 `size`，否则 WebUI 只能保存安装包、无法自动安装。
 
 最近更新：2026-10-17

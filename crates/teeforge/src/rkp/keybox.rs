@@ -37,8 +37,17 @@ fn fail(message: impl Into<String>) -> TfError {
     ))
 }
 
-/// 生成 keybox XML，并完成证书链与私钥的绑定校验。
-pub(crate) fn build(secret: &SecretKey, chain_der: &[u8]) -> Result<String> {
+/// 完整产物：XML 之外还带上便于排查的 PEM 链与元信息。
+/// Everything the caller needs to persist: XML plus a readable chain and metadata.
+pub(crate) struct Built {
+    pub(crate) xml: String,
+    pub(crate) chain_pem: String,
+    pub(crate) device_id: String,
+    pub(crate) certificates: usize,
+}
+
+/// 同 `build`，但额外返回 PEM 链、device id 与证书数量。
+pub(crate) fn build_full(secret: &SecretKey, chain_der: &[u8]) -> Result<Built> {
     let chain = parse_chain(chain_der)?;
     ensure_leaf_matches(secret, &chain)?;
     let ordered = leaf_to_root(&chain)?;
@@ -55,7 +64,16 @@ pub(crate) fn build(secret: &SecretKey, chain_der: &[u8]) -> Result<String> {
         .iter()
         .map(|index| &chain[*index])
         .collect::<Vec<_>>();
-    Ok(render_xml(&private_key, &ordered_certificates, &device_id))
+    let mut chain_pem = String::new();
+    for certificate in &ordered_certificates {
+        chain_pem.push_str(&pem("CERTIFICATE", &certificate.der));
+    }
+    Ok(Built {
+        xml: render_xml(&private_key, &ordered_certificates, &device_id),
+        chain_pem,
+        device_id,
+        certificates: ordered_certificates.len(),
+    })
 }
 
 fn parse_chain(data: &[u8]) -> Result<Vec<ParsedCertificate>> {

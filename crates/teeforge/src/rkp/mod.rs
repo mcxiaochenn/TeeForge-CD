@@ -1,4 +1,4 @@
-//! 设备端 RKP keybox 签发 [Device-backed RKP keybox issuance]
+//! 设备端 RKP 签发 [Device-backed RKP issuance]
 //!
 //! 来源与许可 [Origin and license]
 //! 本模块移植并适配自 Duck-ToolBox 的 Device RKP Issuer：
@@ -16,18 +16,25 @@
 //!   RKP 服务端完成，非法 CSR 不会签发证书。
 //!   Only structure and binding are checked locally; Google performs the
 //!   cryptographic validation and never signs an invalid CSR.
+//!
+//! 职责边界 [Boundary]
+//! 本模块只负责"产出产物"（写入 `RKP/`），不负责安装到 Tricky Store 等后端；
+//! 安装由 `keybox` 模块按 `--source rkp` 完成。两者解耦，互不回退。
+//! This module only produces artifacts; installation lives in `keybox`.
 
 use crate::config::Config;
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::process;
 use p256::SecretKey;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+mod explain;
 mod keybox;
 mod protocol;
 mod server;
@@ -37,33 +44,59 @@ mod worker;
 
 const VENDOR_LIBRARY: &str = "/vendor/lib64/libkeymasterdeviceutils.so";
 const SMCINVOKE: &str = "/dev/smcinvoke";
-const MARKER: &str = ".rkp-issued";
 /// 服务端证书链的拼接上限 [Upper bound for the concatenated server chain].
 pub(crate) const MAX_CHAIN_BYTES: usize = 0x4000;
 
-struct Prerequisites {
-    fingerprint: String,
-    manufacturer: String,
+/// 一次签发的结果，足以落盘与展示。
+pub(crate) struct Issued {
+    pub(crate) keybox_xml: String,
+    pub(crate) chain_pem: String,
+    pub(crate) device_id: String,
+    pub(crate) certificates: usize,
+    pub(crate) fingerprint: String,
+    pub(crate) duration_ms: u128,
+}
+
+/// 落盘后的产物路径。
+pub(crate) struct SavedArtifacts {
+    pub(crate) keybox: PathBuf,
+    pub(crate) chain: PathBuf,
+    pub(crate) meta: PathBuf,
+}
+
+pub(crate) struct Diagnosis {
+    pub(crate) arm64_android: bool,
+    pub(crate) library_present: bool,
+    pub(crate) device_present: bool,
+    pub(crate) fingerprint: String,
+    pub(crate) manufacturer: String,
+    pub(crate) soc_model: String,
+    pub(crate) detection: soc::Detection,
+    pub(crate) blockers: Vec<(&'static str, String)>,
 }
 
 /// 执行一次完整签发：前置检查 → 生成密钥 → 取 challenge → 调 TA → 取证书 → 生成 XML。
-pub(crate) fn issue(config: &Config) -> Result<Vec<u8>> {
-    let prerequisites = prerequisites()?;
+pub(crate) fn issue(config: &Config) -> Result<Issued> {
+    let started = Instant::now();
+    let diagnosis = diagnose();
+    if let Some((id, detail)) = diagnosis.blockers.first() {
+        return Err(blocker_error(id, detail));
+    }
     logging::log(
         Level::Info,
         format!(
             "设备端 RKP 签发 [Device RKP issuance]: {}",
-            if prerequisites.manufacturer.is_empty() {
+            if diagnosis.manufacturer.is_empty() {
                 "Qualcomm"
             } else {
-                &prerequisites.manufacturer
+                &diagnosis.manufacturer
             }
         ),
     );
 
     let key = generate_key()?;
     let tmp = work_dir(config);
-    let challenge = server::fetch_challenge(&config.rkp_server, &prerequisites.fingerprint, &tmp)?;
+    let challenge = server::fetch_challenge(&config.rkp_server, &diagnosis.fingerprint, &tmp)?;
     logging::log(
         Level::Debug,
         format!("RKP challenge: {} 字节 [bytes]", challenge.len()),
@@ -83,70 +116,244 @@ pub(crate) fn issue(config: &Config) -> Result<Vec<u8>> {
     );
 
     let chain = server::sign_certificates(&config.rkp_server, &csr, &challenge, &tmp)?;
-    keybox::build(&key, &chain).map(String::into_bytes)
-}
-
-fn prerequisites() -> Result<Prerequisites> {
-    if !device_path_supported() {
-        return Err(TfError::new(
-            "设备端 RKP 仅支持 Android arm64 [device RKP requires Android arm64]",
-        ));
-    }
-    if !Path::new(VENDOR_LIBRARY).is_file() {
-        return Err(TfError::new(format!(
-            "缺少 {VENDOR_LIBRARY} [vendor library missing]"
-        )));
-    }
-    if !Path::new(SMCINVOKE).exists() {
-        return Err(TfError::new("缺少 /dev/smcinvoke [smcinvoke missing]"));
-    }
-    let detection = soc::detect();
-    if detection.state != soc::State::Qualcomm {
-        return Err(TfError::new(format!(
-            "需要高通 SoC [Qualcomm SoC required]: {}",
-            detection.summary()
-        )));
-    }
-    let fingerprint = getprop("ro.build.fingerprint");
-    if fingerprint.is_empty() {
-        return Err(TfError::new(
-            "ro.build.fingerprint 为空 [fingerprint is empty]",
-        ));
-    }
-    Ok(Prerequisites {
-        fingerprint,
-        manufacturer: getprop("ro.soc.manufacturer"),
+    let built = keybox::build_full(&key, &chain)?;
+    Ok(Issued {
+        keybox_xml: built.xml,
+        chain_pem: built.chain_pem,
+        device_id: built.device_id,
+        certificates: built.certificates,
+        fingerprint: diagnosis.fingerprint,
+        duration_ms: started.elapsed().as_millis(),
     })
 }
 
-/// `--rkp-status` 输出：不联网、不调用 TA。
+/// 签发并写入 `RKP/`：keybox.xml、cert-chain.pem、meta.json。
+pub(crate) fn issue_and_save(config: &Config) -> Result<SavedArtifacts> {
+    let issued = issue(config)?;
+    save(config, &issued)
+}
+
+fn save(config: &Config, issued: &Issued) -> Result<SavedArtifacts> {
+    create_private_dir(&config.rkp_dir)?;
+    let keybox = config.rkp_dir.join("keybox.xml");
+    let chain = config.rkp_dir.join("cert-chain.pem");
+    let meta = config.rkp_dir.join("meta.json");
+
+    let meta_value = json!({
+        "version": 1,
+        "created_at": now(),
+        "fingerprint": issued.fingerprint,
+        "device_id": issued.device_id,
+        "certificates": issued.certificates,
+        "protocol": "csr_v2",
+        "duration_ms": issued.duration_ms,
+        "ta_status": 0,
+        "tool_version": crate::VERSION,
+        "sha256": hex_sha256(issued.keybox_xml.as_bytes()),
+    });
+    let meta_text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&meta_value).unwrap_or_default()
+    );
+
+    // 三个文件都是私钥材料，统一 0600 + 原子替换。
+    // All three files contain private material: 0600 and atomic replace.
+    crate::atomic_file::write_private(&keybox, issued.keybox_xml.as_bytes())?;
+    crate::atomic_file::write_private(&chain, issued.chain_pem.as_bytes())?;
+    crate::atomic_file::write_private(&meta, meta_text.as_bytes())?;
+    logging::log(
+        Level::Info,
+        format!(
+            "RKP 产物已写入 [RKP artifacts written]: {}（{} 张证书）",
+            keybox.display(),
+            issued.certificates
+        ),
+    );
+    Ok(SavedArtifacts {
+        keybox,
+        chain,
+        meta,
+    })
+}
+
+/// 只读探测：不联网、不调用 TA。
+pub(crate) fn diagnose() -> Diagnosis {
+    let arm64_android = device_path_supported();
+    let library_present = Path::new(VENDOR_LIBRARY).is_file();
+    let device_present = Path::new(SMCINVOKE).exists();
+    let fingerprint = getprop("ro.build.fingerprint");
+    let detection = soc::detect();
+    let mut blockers = Vec::new();
+    if !arm64_android {
+        blockers.push((
+            "arch",
+            "设备端 RKP 仅支持 Android arm64 [requires Android arm64]".to_owned(),
+        ));
+    }
+    if !library_present {
+        blockers.push((
+            "library",
+            format!("缺少 {VENDOR_LIBRARY} [vendor library missing]"),
+        ));
+    }
+    if !device_present {
+        blockers.push((
+            "smcinvoke",
+            "缺少 /dev/smcinvoke [smcinvoke missing]".to_owned(),
+        ));
+    }
+    if detection.state != soc::State::Qualcomm {
+        blockers.push((
+            "soc",
+            format!(
+                "需要高通 SoC [Qualcomm SoC required]: {}",
+                detection.summary()
+            ),
+        ));
+    }
+    if fingerprint.is_empty() {
+        blockers.push((
+            "fingerprint",
+            "ro.build.fingerprint 为空 [fingerprint is empty]".to_owned(),
+        ));
+    }
+    Diagnosis {
+        arm64_android,
+        library_present,
+        device_present,
+        manufacturer: getprop("ro.soc.manufacturer"),
+        soc_model: getprop("ro.soc.model"),
+        fingerprint,
+        detection,
+        blockers,
+    }
+}
+
+fn blocker_error(id: &'static str, detail: &str) -> TfError {
+    TfError::staged(
+        "prerequisite",
+        id,
+        format!("前置条件不满足 [prerequisite]: {detail}"),
+    )
+    .with_hint(format!("rkp.blocker.{id}"))
+    .with_raw(json!({ "blocker": id }))
+}
+
+/// `--rkp-status` 的结构化输出。
+pub(crate) fn status_value(config: &Config) -> Value {
+    let diagnosis = diagnose();
+    let blockers = diagnosis
+        .blockers
+        .iter()
+        .map(|(id, detail)| json!({ "id": id, "detail": detail }))
+        .collect::<Vec<_>>();
+    let artifact_meta = read_meta(config);
+    json!({
+        "supported": blockers.is_empty(),
+        "platform": {
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH,
+            "arm64_android": diagnosis.arm64_android,
+        },
+        "root": {
+            "method": config.root_method,
+            "version": config.root_version,
+        },
+        "soc": {
+            "state": diagnosis.detection.state.label(),
+            "manufacturer": diagnosis.manufacturer,
+            "model": diagnosis.soc_model,
+            "evidence": diagnosis.detection.evidence,
+        },
+        "library": { "path": VENDOR_LIBRARY, "present": diagnosis.library_present },
+        "device": { "path": SMCINVOKE, "present": diagnosis.device_present },
+        "fingerprint": diagnosis.fingerprint,
+        "server": config.rkp_server,
+        "blockers": blockers,
+        "artifacts": {
+            "exists": config.rkp_dir.join("keybox.xml").is_file(),
+            "dir": config.rkp_dir.display().to_string(),
+            "meta": artifact_meta,
+        },
+    })
+}
+
+/// 产物列表：目录不存在时返回 `exists=false`，不报错。
+pub(crate) fn artifacts_value(config: &Config) -> Value {
+    let entry = |name: &str| {
+        let path = config.rkp_dir.join(name);
+        match fs::metadata(&path) {
+            Ok(metadata) => json!({
+                "path": path.display().to_string(),
+                "size": metadata.len(),
+                "mtime": metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                    .map(|value| value.as_secs()),
+            }),
+            Err(_) => Value::Null,
+        }
+    };
+    json!({
+        "exists": config.rkp_dir.is_dir(),
+        "dir": config.rkp_dir.display().to_string(),
+        "keybox": entry("keybox.xml"),
+        "chain": entry("cert-chain.pem"),
+        "meta_file": entry("meta.json"),
+        "meta": read_meta(config),
+    })
+}
+
+/// 删除整个 `RKP/` 目录。目录原本不存在按成功处理。
+pub(crate) fn delete_artifacts(config: &Config) -> Result<Value> {
+    let freed = directory_size(&config.rkp_dir);
+    match fs::remove_dir_all(&config.rkp_dir) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(TfError::staged(
+                "artifacts",
+                "delete_failed",
+                format!("无法删除 RKP 目录 [cannot delete RKP dir]: {error}"),
+            )
+            .with_raw(json!({ "dir": config.rkp_dir.display().to_string() })));
+        }
+    }
+    logging::log(
+        Level::Info,
+        format!("RKP 产物已删除 [RKP artifacts removed]: {freed} 字节 [bytes]"),
+    );
+    Ok(json!({
+        "deleted": true,
+        "dir": config.rkp_dir.display().to_string(),
+        "freed_bytes": freed,
+    }))
+}
+
+/// `--rkp-status` 的文本输出（非 JSON 模式）。
 pub(crate) fn status_lines(config: &Config) -> Vec<String> {
+    let diagnosis = diagnose();
     let mut lines = Vec::new();
-    lines.push(format!(
-        "模式 Mode: {} / 复用窗口 Refresh: {} 天 [days]",
-        config.rkp_mode.label(),
-        config.rkp_refresh_days
-    ));
     lines.push(format!("服务 Server: {}", config.rkp_server));
     lines.push(format!(
         "平台 Platform: {}/{}",
         std::env::consts::OS,
         std::env::consts::ARCH
     ));
-    let detection = soc::detect();
     lines.push(format!(
         "SoC: {} {}",
-        detection.state.label(),
-        if detection.evidence.is_empty() {
+        diagnosis.detection.state.label(),
+        if diagnosis.detection.evidence.is_empty() {
             "(无证据 no evidence)".to_owned()
         } else {
-            format!("[{}]", detection.evidence.join(", "))
+            format!("[{}]", diagnosis.detection.evidence.join(", "))
         }
     ));
     lines.push(format!(
         "厂商库 Vendor library: {} ({})",
         VENDOR_LIBRARY,
-        if Path::new(VENDOR_LIBRARY).is_file() {
+        if diagnosis.library_present {
             "存在 present"
         } else {
             "缺失 missing"
@@ -155,86 +362,67 @@ pub(crate) fn status_lines(config: &Config) -> Vec<String> {
     lines.push(format!(
         "SMCInvoke: {} ({})",
         SMCINVOKE,
-        if Path::new(SMCINVOKE).exists() {
+        if diagnosis.device_present {
             "存在 present"
         } else {
             "缺失 missing"
         }
     ));
-    let fingerprint = getprop("ro.build.fingerprint");
     lines.push(format!(
         "Fingerprint: {}",
-        if fingerprint.is_empty() {
+        if diagnosis.fingerprint.is_empty() {
             "(缺失 missing)"
         } else {
-            &fingerprint
+            &diagnosis.fingerprint
         }
     ));
-    match prerequisites() {
-        Ok(_) => lines.push("结论 Result: 可用 [available]".to_owned()),
-        Err(error) => lines.push(format!("结论 Result: 不可用 [unavailable]: {error}")),
+    match diagnosis.blockers.first() {
+        Some((_, detail)) => lines.push(format!("结论 Result: 不可用 [unavailable]: {detail}")),
+        None => lines.push("结论 Result: 可用 [available]".to_owned()),
     }
+    let artifacts = config.rkp_dir.join("keybox.xml");
+    lines.push(format!(
+        "产物 Artifacts: {} ({})",
+        config.rkp_dir.display(),
+        if artifacts.is_file() {
+            "已生成 present"
+        } else {
+            "未生成 absent"
+        }
+    ));
     lines
 }
 
 pub(crate) fn available() -> bool {
-    prerequisites().is_ok()
+    diagnose().blockers.is_empty()
 }
 
-/// 厂商调用路径只在 arm64 Android 编译；其余 ABI 直接走远程，不产生无意义告警。
-/// The vendor path only exists on arm64 Android; other ABIs go straight to remote.
+/// 厂商调用路径只在 arm64 Android 编译；其余 ABI 无法进行设备端签发。
+/// The vendor path only exists on arm64 Android.
 pub(crate) fn device_path_supported() -> bool {
     cfg!(all(target_os = "android", target_arch = "aarch64"))
 }
 
-/// 复用窗口内的本地 RKP keybox；文件被替换后摘要不符则不复用。
-pub(crate) fn cached(config: &Config) -> Option<Vec<u8>> {
-    if config.rkp_refresh_days == 0 {
-        return None;
-    }
-    let bytes = fs::read(config.keybox_dir.join("keybox.xml")).ok()?;
-    let marker = fs::read_to_string(config.keybox_dir.join(MARKER)).ok()?;
-    let mut parts = marker.split_whitespace();
-    let issued = parts.next()?.parse::<u64>().ok()?;
-    let digest = parts.next()?;
-    let age = now().checked_sub(issued)?;
-    if age > config.rkp_refresh_days.saturating_mul(86_400) {
-        return None;
-    }
-    if hex_sha256(&bytes) != digest {
-        return None;
-    }
-    logging::log(
-        Level::Info,
-        format!(
-            "复用本地 RKP keybox [reusing local RKP keybox]: {} 天前 [days ago]",
-            age / 86_400
-        ),
-    );
-    Some(bytes)
-}
-
-/// 记录本次设备签发，供复用窗口判定。
-pub(crate) fn mark_issued(config: &Config, xml: &[u8]) -> Result<()> {
-    create_private_dir(&config.keybox_dir)?;
-    let marker = format!("{} {}\n", now(), hex_sha256(xml));
-    crate::atomic_file::write(&config.keybox_dir.join(MARKER), marker.as_bytes())
-}
-
-/// 远程回退成功后清除标记，避免把池子 keybox 当成设备签发结果复用。
-pub(crate) fn clear_marker(config: &Config) {
-    match fs::remove_file(config.keybox_dir.join(MARKER)) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => logging::log(
-            Level::Warn,
-            format!("清除 RKP 标记失败 [failed to clear RKP marker]: {error}"),
-        ),
-    }
-}
-
 pub(crate) fn execute_worker(directory: &Path) -> Result<()> {
     worker::execute(directory)
+}
+
+fn read_meta(config: &Config) -> Value {
+    fs::read_to_string(config.rkp_dir.join("meta.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(Value::Null)
+}
+
+fn directory_size(directory: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| entry.metadata().ok())
+        .map(|metadata| metadata.len())
+        .sum()
 }
 
 fn generate_key() -> Result<SecretKey> {
@@ -356,28 +544,33 @@ mod tests {
     }
 
     #[test]
-    fn marker_roundtrip_controls_reuse() {
-        let root = std::env::temp_dir().join(format!("teeforge-rkp-cache-{}", std::process::id()));
-        create_private_dir(&root).unwrap();
-        let mut config = Config {
-            keybox_dir: root.clone(),
-            rkp_refresh_days: 30,
+    fn artifacts_are_written_owner_only_and_removed() {
+        let root = std::env::temp_dir().join(format!("teeforge-rkp-store-{}", std::process::id()));
+        let config = Config {
+            rkp_dir: root.clone(),
             ..Config::default()
         };
+        let issued = Issued {
+            keybox_xml: "<AndroidAttestation/>".into(),
+            chain_pem: "-----BEGIN CERTIFICATE-----\n".into(),
+            device_id: "1A2B".into(),
+            certificates: 2,
+            fingerprint: "brand/device".into(),
+            duration_ms: 12,
+        };
+        let saved = save(&config, &issued).unwrap();
+        assert!(saved.keybox.is_file() && saved.chain.is_file() && saved.meta.is_file());
 
-        assert!(cached(&config).is_none());
-        fs::write(root.join("keybox.xml"), b"<AndroidAttestation/>").unwrap();
-        mark_issued(&config, b"<AndroidAttestation/>").unwrap();
-        assert_eq!(cached(&config).unwrap(), b"<AndroidAttestation/>".to_vec());
+        let value = artifacts_value(&config);
+        assert_eq!(value["exists"], json!(true));
+        assert_eq!(value["meta"]["certificates"], json!(2));
+        assert_eq!(value["meta"]["device_id"], json!("1A2B"));
 
-        fs::write(root.join("keybox.xml"), b"other").unwrap();
-        assert!(cached(&config).is_none(), "digest mismatch must not reuse");
-
-        config.rkp_refresh_days = 0;
-        assert!(cached(&config).is_none());
-        clear_marker(&config);
-        assert!(!root.join(MARKER).exists());
-        let _ = fs::remove_dir_all(root);
+        let removed = delete_artifacts(&config).unwrap();
+        assert_eq!(removed["deleted"], json!(true));
+        assert!(!root.exists());
+        // 目录不存在时删除仍然成功（幂等）。
+        assert!(delete_artifacts(&config).is_ok());
     }
 
     #[test]

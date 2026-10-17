@@ -364,15 +364,41 @@ fn validate_inputs(challenge: &[u8], key: &Value) -> Result<()> {
 /// 校验 TA 帧头并取出 payload。
 pub(crate) fn response_payload(response: &[u8]) -> Result<Vec<u8>> {
     if response.len() < 8 {
-        return Err(fail("TA 响应头截断 [truncated header]"));
+        return Err(crate::error::TfError::staged(
+            "frame",
+            "truncated_header",
+            "TA 响应头截断 [truncated header]",
+        )
+        .with_hint("rkp.frame.truncated_header")
+        .with_raw(serde_json::json!({ "response_len": response.len() })));
     }
     let status = i32::from_le_bytes(response[..4].try_into().unwrap());
     if status != 0 {
-        return Err(fail(format!("TA 返回状态 {status} [TA status {status}]")));
+        return Err(crate::rkp::explain::status_error(status));
     }
     let length = u32::from_le_bytes(response[4..8].try_into().unwrap()) as usize;
     if length == 0 || length > BUFFER_SIZE - 8 || length > response.len() - 8 {
-        return Err(fail("TA 响应长度无效 [invalid payload length]"));
+        // 这个分支通常意味着厂商 send_cmd 的返回结构与我们的假设不一致，
+        // 而不是 TA 拒绝了请求；把原始帧头一并带出去，便于区分两者。
+        // This usually means the vendor response layout differs from our assumption.
+        let head = response
+            .iter()
+            .take(32)
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        return Err(crate::error::TfError::staged(
+            "frame",
+            "payload_length",
+            "TA 响应长度无效 [invalid payload length]",
+        )
+        .with_hint("rkp.frame.payload_length")
+        .with_raw(serde_json::json!({
+            "status": status,
+            "length": length,
+            "buffer": BUFFER_SIZE,
+            "response_len": response.len(),
+            "head_hex": head,
+        })));
     }
     Ok(response[8..8 + length].to_vec())
 }

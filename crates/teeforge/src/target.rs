@@ -1,10 +1,10 @@
 use crate::atomic_file;
-use crate::config::Config;
+use crate::config::{Config, TargetMode};
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::omk;
 use crate::process;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,8 @@ use std::time::Duration;
 
 const TARGET_BEGIN: &str = "# BEGIN TeeForge-CD managed targets";
 const TARGET_END: &str = "# END TeeForge-CD managed targets";
-const PACKAGE_LIST_TIMEOUT: Duration = Duration::from_secs(30);
+const PACKAGE_LIST_TIMEOUT: Duration = Duration::from_secs(12);
+const PACKAGE_LIST_FALLBACK_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_PACKAGE_LIST_BYTES: usize = 4 * 1024 * 1024;
 const TEESIM_PROFILE: &str = "teeforge";
 const TEESIM_MARKER: &str = "_teeforgeManaged";
@@ -534,10 +535,10 @@ fn generate_with(
     );
     logging::log(
         Level::Info,
-        "正在获取已安装包列表，最多等待 30 秒... [Listing installed packages; timeout: 30s]",
+        "正在获取已安装包列表，最多等待 12 秒... [Listing installed packages; timeout: 12s]",
     );
     let text = list_packages()?;
-    let packages = parse_user_packages(&text)?;
+    let packages = apply_target_mode(config, parse_user_packages(&text)?)?;
     logging::log(
         Level::Info,
         format!(
@@ -620,22 +621,281 @@ fn generate_with(
 }
 
 pub(crate) fn generate(config: &Config) -> Result<GenerateOutcome> {
-    generate_with(config, || {
-        let context = "获取包列表失败 [Failed to list packages]";
-        let output = process::output_bounded(
-            "cmd",
-            ["package", "list", "packages", "-f", "-U", "--user", "0"],
-            PACKAGE_LIST_TIMEOUT,
-            MAX_PACKAGE_LIST_BYTES,
-            context,
-        )?;
-        let text = process::stdout_text(output, context)?;
+    generate_with(config, list_installed_packages)
+}
+
+/// 长步骤心跳：静默超过 3 秒就打印一行，避免用户以为卡死而关掉面板。
+/// Heartbeat for long silent steps so the UI never looks frozen.
+fn with_heartbeat<T>(label: &'static str, task: impl FnOnce() -> Result<T>) -> Result<T> {
+    use std::sync::mpsc::{RecvTimeoutError, channel};
+    use std::time::{Duration, Instant};
+
+    let (stop, receiver) = channel::<()>();
+    let handle = std::thread::spawn(move || {
+        let started = Instant::now();
+        loop {
+            match receiver.recv_timeout(Duration::from_secs(3)) {
+                Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => {
+                    logging::log(
+                        Level::Info,
+                        format!(
+                            "…仍在等待{label}（已 {} 秒）[still waiting: {}s]",
+                            started.elapsed().as_secs(),
+                            started.elapsed().as_secs()
+                        ),
+                    );
+                }
+            }
+        }
+    });
+    let result = task();
+    let _ = stop.send(());
+    let _ = handle.join();
+    result
+}
+
+/// 读取已安装包列表：`cmd` 超时或失败后退回 `pm`，两者都失败才报错。
+fn list_installed_packages() -> Result<String> {
+    with_heartbeat("包列表 [package list]", list_installed_packages_inner)
+}
+
+fn list_installed_packages_inner() -> Result<String> {
+    let context = "获取包列表失败 [Failed to list packages]";
+    let primary = process::output_bounded(
+        "cmd",
+        ["package", "list", "packages", "-f", "-U", "--user", "0"],
+        PACKAGE_LIST_TIMEOUT,
+        MAX_PACKAGE_LIST_BYTES,
+        context,
+    )
+    .and_then(|output| process::stdout_text(output, context));
+
+    let text = match primary {
+        Ok(text) => text,
+        Err(error) => {
+            logging::log(
+                Level::Warn,
+                format!("cmd 包列表失败，改用 pm 兜底 [falling back to pm]: {error}"),
+            );
+            let output = process::output_bounded(
+                "pm",
+                ["list", "packages", "-f", "-U", "--user", "0"],
+                PACKAGE_LIST_FALLBACK_TIMEOUT,
+                MAX_PACKAGE_LIST_BYTES,
+                context,
+            )?;
+            process::stdout_text(output, context)?
+        }
+    };
+    logging::log(
+        Level::Info,
+        "包列表获取完成，正在解析... [Package listing received; parsing...]",
+    );
+    Ok(text)
+}
+
+/// manual 模式只保留选择集合中的包；集合缺失时拒绝写入，避免清空目标列表。
+fn apply_target_mode(config: &Config, packages: Vec<PackageRecord>) -> Result<Vec<PackageRecord>> {
+    if config.target_mode != TargetMode::Manual {
+        return Ok(packages);
+    }
+    let Some(selection) = read_selection(config)? else {
+        return Err(TfError::staged(
+            "target",
+            "selection_missing",
+            "手动模式缺少选择集合，请重新应用目标作用域 [manual selection missing]",
+        )
+        .with_hint("target.error.selection_missing")
+        .with_raw(json!({ "path": config.target_selection.display().to_string() })));
+    };
+    let installed = packages
+        .iter()
+        .map(|package| package.name.clone())
+        .collect::<HashSet<_>>();
+    let mut missing = selection
+        .iter()
+        .filter(|name| !installed.contains(*name))
+        .cloned()
+        .collect::<Vec<_>>();
+    missing.sort();
+    if !missing.is_empty() {
         logging::log(
-            Level::Info,
-            "包列表获取完成，正在解析... [Package listing received; parsing...]",
+            Level::Warn,
+            format!(
+                "选择集合中有 {} 个应用已卸载，已忽略 [{} selected apps are no longer installed]: {}",
+                missing.len(),
+                missing.len(),
+                missing.join(", ")
+            ),
         );
-        Ok(text)
-    })
+    }
+    Ok(packages
+        .into_iter()
+        .filter(|package| selection.contains(&package.name))
+        .collect())
+}
+
+fn read_selection(config: &Config) -> Result<Option<HashSet<String>>> {
+    let text = match fs::read_to_string(&config.target_selection) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(TfError::from(error).context(config.target_selection.display()));
+        }
+    };
+    let value = serde_json::from_str::<Value>(&text).map_err(|error| {
+        TfError::staged(
+            "target",
+            "selection_invalid",
+            format!("选择集合不是合法 JSON [selection is not valid JSON]: {error}"),
+        )
+        .with_raw(json!({ "path": config.target_selection.display().to_string() }))
+    })?;
+    let packages = value
+        .get("packages")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|name| valid_package_name(name))
+                .map(str::to_owned)
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+    Ok(Some(packages))
+}
+
+/// 当前实际存在的后端名称，供列表页展示。
+pub(crate) fn backend_names(config: &Config) -> Vec<&'static str> {
+    let mut names = Vec::new();
+    if config
+        .target_txt
+        .parent()
+        .is_some_and(|parent| parent.is_dir())
+    {
+        names.push("tricky");
+    }
+    if config.teesim_config.is_file() {
+        names.push("teesim");
+    }
+    if config.omk_enabled && fs::symlink_metadata(&config.omk_injector_config).is_ok() {
+        names.push("omk");
+    }
+    names
+}
+
+/// 二级页列表数据：已安装应用 + 当前是否被选中。
+pub(crate) fn list_value(config: &Config) -> Result<Value> {
+    let text = list_installed_packages()?;
+    let packages = parse_user_packages(&text)?;
+    let selection = read_selection(config)?;
+    let auto = config.target_mode == TargetMode::Auto;
+    let items = packages
+        .iter()
+        .map(|package| {
+            let selected = auto
+                || selection
+                    .as_ref()
+                    .is_some_and(|names| names.contains(&package.name));
+            json!({
+                "name": package.name,
+                "uids": package.uids,
+                "selected": selected,
+            })
+        })
+        .collect::<Vec<_>>();
+    let selected_count = items
+        .iter()
+        .filter(|item| item["selected"] == json!(true))
+        .count();
+    Ok(json!({
+        "mode": config.target_mode.label(),
+        "backends": backend_names(config),
+        "packages": items,
+        "counts": { "installed": packages.len(), "selected": selected_count },
+    }))
+}
+
+/// 保存手动选择并立即应用。`user_config` 是写入 `target_mode` 的配置文件。
+pub(crate) fn apply_selection(
+    config: &Config,
+    user_config: &Path,
+    names: Vec<String>,
+) -> Result<Value> {
+    for name in &names {
+        if !valid_package_name(name) {
+            return Err(TfError::staged(
+                "target",
+                "invalid_package",
+                format!("包名非法 [invalid package name]: {name}"),
+            ));
+        }
+    }
+    let mut unique = names;
+    unique.sort();
+    unique.dedup();
+    let payload = json!({
+        "version": 1,
+        "updated_at": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_secs())
+            .unwrap_or(0),
+        "packages": unique,
+    });
+    let text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&payload).unwrap_or_default()
+    );
+    crate::atomic_file::write(&config.target_selection, text.as_bytes())?;
+    crate::config::update_key(user_config, "target_mode", "manual")?;
+
+    let mut manual = config.clone();
+    manual.target_mode = TargetMode::Manual;
+    let outcome = generate(&manual)?;
+    outcome.log();
+    Ok(json!({
+        "mode": "manual",
+        "selected": unique.len(),
+        "outcome": outcome_value(&outcome),
+        "selection": config.target_selection.display().to_string(),
+    }))
+}
+
+/// 切换回全量模式并立即应用。
+pub(crate) fn switch_mode(config: &Config, user_config: &Path, mode: TargetMode) -> Result<Value> {
+    crate::config::update_key(user_config, "target_mode", mode.label())?;
+    let mut updated = config.clone();
+    updated.target_mode = mode;
+    let outcome = generate(&updated)?;
+    outcome.log();
+    Ok(json!({
+        "mode": mode.label(),
+        "outcome": outcome_value(&outcome),
+    }))
+}
+
+fn outcome_value(outcome: &GenerateOutcome) -> Value {
+    match outcome {
+        GenerateOutcome::SkippedNoBackend => json!({ "state": "skipped", "reason": "no_backend" }),
+        GenerateOutcome::Unchanged {
+            package_count,
+            backend_count,
+        } => json!({
+            "state": "unchanged",
+            "packages": package_count,
+            "backends": backend_count,
+        }),
+        GenerateOutcome::Updated {
+            package_count,
+            backend_count,
+        } => json!({
+            "state": "updated",
+            "packages": package_count,
+            "backends": backend_count,
+        }),
+    }
 }
 
 #[cfg(test)]

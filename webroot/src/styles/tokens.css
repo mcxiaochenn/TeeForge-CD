@@ -1,0 +1,146 @@
+/* ============================================================
+ * TeeForge WebUI — 设计令牌 / Design tokens
+ *
+ * 视觉模型：色调分层（tonal layers）。页面是最低一层容器色，
+ * 卡片高一层，浮层再高一层，因此容器之间不需要描边或阴影去"分隔"。
+ * 色相只保留给品牌强调与状态，不做装饰性撞色。
+ *
+ * 兼容性：全部使用显式色值，不依赖 oklch() / color-mix()，
+ * 以便在系统 WebView 版本较旧的设备上仍能正确渲染。
+ * ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* --- 字体 --- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Roboto', 'Noto Sans SC',
+    'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Roboto Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /* --- 圆角：单向递增的 shape scale --- */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* --- 间距 --- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+
+  /* --- 动效：Material 3 的标准缓动 --- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+
+  /* --- 安全区：KernelSU 注入 --window-inset-*，浏览器退回 env() --- */
+  --inset-top: var(--window-inset-top, env(safe-area-inset-top, 0px));
+  --inset-bottom: var(--window-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --inset-left: var(--window-inset-left, env(safe-area-inset-left, 0px));
+  --inset-right: var(--window-inset-right, env(safe-area-inset-right, 0px));
+
+  /* --- 浅色调色板 --- */
+  --bg: #eef2f1;
+  --bg-wash: rgba(13, 125, 108, 0.07);
+  --surface: #ffffff;
+  --surface-alt: #e7edeb;
+  --surface-sunken: #f4f7f6;
+  --fg: #0d1c19;
+  --fg-muted: #576a65;
+  --fg-faint: #7b8b86;
+  --line: rgba(9, 32, 28, 0.1);
+  --line-strong: rgba(9, 32, 28, 0.18);
+  --accent: #0d7d6c;
+  --accent-press: #0a6355;
+  --accent-soft: rgba(13, 125, 108, 0.1);
+  --accent-soft-strong: rgba(13, 125, 108, 0.16);
+  --on-accent: #ffffff;
+  --success: #0d7d6c;
+  --warning: #8a5b00;
+  --warning-soft: rgba(138, 91, 0, 0.12);
+  --danger: #b02a1f;
+  --danger-soft: rgba(176, 42, 31, 0.1);
+  --scrim: rgba(6, 20, 18, 0.4);
+  --bar-bg: rgba(238, 242, 241, 0.88);
+  --shadow-1: 0 1px 2px rgba(9, 32, 28, 0.06);
+  --shadow-2: 0 8px 28px -12px rgba(9, 32, 28, 0.28);
+  --shadow-3: 0 -8px 40px -16px rgba(9, 32, 28, 0.32);
+  --seg-track: #e5ebe9;
+  --seg-thumb: #ffffff;
+}
+
+/* --- 深色调色板 --- */
+[data-mode='dark'] {
+  color-scheme: dark;
+
+  --bg: #0c1211;
+  --bg-wash: rgba(82, 214, 189, 0.08);
+  --surface: #161e1d;
+  --surface-alt: #1f2928;
+  --surface-sunken: #111817;
+  --fg: #e7f0ee;
+  --fg-muted: #9bada8;
+  --fg-faint: #7d8f8a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --accent: #52d6bd;
+  --accent-press: #78e3ce;
+  --accent-soft: rgba(82, 214, 189, 0.14);
+  --accent-soft-strong: rgba(82, 214, 189, 0.22);
+  --on-accent: #06110f;
+  --success: #52d6bd;
+  --warning: #e3b45c;
+  --warning-soft: rgba(227, 180, 92, 0.14);
+  --danger: #f0837a;
+  --danger-soft: rgba(240, 131, 122, 0.14);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --bar-bg: rgba(12, 18, 17, 0.84);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 10px 32px -14px rgba(0, 0, 0, 0.7);
+  --shadow-3: 0 -8px 40px -16px rgba(0, 0, 0, 0.75);
+  --seg-track: #101716;
+  --seg-thumb: #293533;
+}
+
+/* 跟随系统：与深色令牌保持一致，单独列出以便 media query 生效 */
+@media (prefers-color-scheme: dark) {
+  [data-mode='auto'] {
+    color-scheme: dark;
+
+    --bg: #0c1211;
+    --bg-wash: rgba(82, 214, 189, 0.08);
+    --surface: #161e1d;
+    --surface-alt: #1f2928;
+    --surface-sunken: #111817;
+    --fg: #e7f0ee;
+    --fg-muted: #9bada8;
+    --fg-faint: #7d8f8a;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --accent: #52d6bd;
+    --accent-press: #78e3ce;
+    --accent-soft: rgba(82, 214, 189, 0.14);
+    --accent-soft-strong: rgba(82, 214, 189, 0.22);
+    --on-accent: #06110f;
+    --success: #52d6bd;
+    --warning: #e3b45c;
+    --warning-soft: rgba(227, 180, 92, 0.14);
+    --danger: #f0837a;
+    --danger-soft: rgba(240, 131, 122, 0.14);
+    --scrim: rgba(0, 0, 0, 0.6);
+    --bar-bg: rgba(12, 18, 17, 0.84);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 10px 32px -14px rgba(0, 0, 0, 0.7);
+    --shadow-3: 0 -8px 40px -16px rgba(0, 0, 0, 0.75);
+    --seg-track: #101716;
+    --seg-thumb: #293533;
+  }
+}

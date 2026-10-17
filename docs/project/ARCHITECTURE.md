@@ -13,7 +13,38 @@ Android boot
       └─ OMK（安装时启用）：injector.toml scoop
 ```
 
-WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级为 `ksu.exec()`；两者都显式使用模块目录和 `/data/adb/teeforge/config.conf`。
+WebUI 通过 `ksu.spawn()` 流式读取进度、`ksu.exec()` 读取一次性结果；所有命令都带 `--config /data/adb/teeforge/config.conf` 与 `--json`。
+
+## WebUI 层
+
+```text
+index.html            主题在首帧前确定；挂载点
+main.ts               i18n → createApp → router → 首屏数据
+App.vue               应用栏 + router-view（无页面级过渡，避免低端 WebView 空白帧）
+router.ts             hash 路由：/ /target /keybox /rkp /update
+lib/
+  ksu.ts              宿主探测、exec/spawn、应用名与图标
+  api.ts              唯一的命令出口：拼参数、解析 {ok,data} / {ok,error}
+  i18n.ts             字典加载与 t()；缺键回落键名
+state/session.ts      首屏数据单例（--bootstrap 只调一次）
+components/ui/        按钮、浮层、分段控件、徽章、图标、空态
+components/layout/    应用栏、设备信息栏、分组卡、入口行、偏好浮层
+pages/                五个页面
+styles/tokens.css     色彩、圆角、间距、动效、安全区令牌（明/暗两套）
+styles/tailwind.css   Tailwind 入口与全局基样式
+```
+
+技术栈为 Vite + Vue 3 + vue-router（hash）+ Tailwind 3.4，构建目标 `chrome87`，产物使用相对路径。放弃 Astro 的原因是它只承担静态壳，路由与跨页状态仍需自建。
+
+数据与契约：
+
+- 首屏只发一条 `--bootstrap --json`，一次拿到设备、Root、模块版本、配置与能力位；`getprop` 全量输出在 Rust 侧解析。
+- 页面动作分别调用 `--target-list`、`--target-apply`、`--target-mode`、`--keybox --source`、`--rkp-status`、`--rkp-issue`、`--rkp-artifacts`、`--rkp-delete`、`--self-update`。
+- `--json` 成功返回 `{"ok":true,"data":...}`，失败返回 `{"ok":false,"error":{stage,code,message,hint,raw}}`；日志固定走 stderr，不污染 JSON。
+- 错误按阶段透传：`prerequisite` / `transport` / `frame` / `ta` / `server` / `keybox` / `target` / `update`。TA 状态码保留原始值，页面按 `rkp.code.<code>` 查解释，未收录的码只显示原值。
+- 主题与语言持久化键仍为 `tf-theme` / `tf-lang`。
+
+样式为本项目自行实现；视觉模型（色调分层、分组列表、底部浮层）参考 [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)（MIT）与 Tricky-Addon 的列表交互，未复制其代码、资源或样式表。
 
 ## Rust 核心模块
 
@@ -23,8 +54,10 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 | `config` | 默认值、系统/用户配置优先级和兼容回退 |
 | `target` | 调用 `cmd package list packages -f -U --user 0`，筛选用户应用/UID，并适配三种配置格式后原子事务写入 |
 | `omk` | 用锁定的 toml_edit 定位 scoop，保留手动项、注释及扩展表头，更新受管区块 |
-| `keybox` | 下载后备、严格有界解码、内容标记校验和按实际后端多目标回滚 |
-| `rkp` | 设备端 RKP：前置检查、CSR_V2 帧、TA 隔离子进程、服务交互、证书链校验与 Keybox 生成 |
+| `keybox` | 按 `keybox_source` 取远程池或本机 RKP 产物、严格解码和按实际后端多目标回滚 |
+| `rkp` | 设备端 RKP：前置检查、CSR_V2 帧、TA 隔离子进程、服务交互、证书链校验、产物落盘与删除、错误码解释 |
+| `update` | 更新清单解析、单一 CDN 端点、sha256/大小/ZIP 头校验、按 root 管理器调用安装器 |
+| `info` | `--bootstrap` 单次采集（getprop 全量、内核、SELinux、模块版本、能力位） |
 | `blhide` | 参数数组调用 resetprop，逐项收集失败 |
 | `rootdetect` | 环境变量和 `/data/adb/*` 路径检测 |
 | `volume` | 动态扫描 input event，封装设备输入 unsafe 适配 |
@@ -55,23 +88,29 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 ## Keybox 数据流
 
 ```text
-自建 CDN
-  → wget / curl / 管理器 busybox 后备
-  → 有界下载
-  → 严格解码和 AndroidAttestation 标记校验
-  → 本地 keybox.xml
+keybox_source=remote
+  自建 CDN → wget / curl / 管理器 busybox 后备 → 有界下载
+  → 严格解码和 AndroidAttestation 标记校验 → 本地 keybox.xml
+
+keybox_source=rkp
+  /data/adb/teeforge/RKP/keybox.xml（--rkp-issue 产出）→ XML 结构检查
+
+两条来源汇合：
   → 已存在的 Tricky Store/TEESimulator-RS 目录和/或 TEESimulator 目录中的 keybox.xml
 ```
 
-每个已存在的目标采用原子写入；任一目标失败时恢复本轮已写目标和本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
+两条来源互不回退：远程下载失败不会改用本机产物，本机产物缺失也不会联网。每个已存在的目标采用原子写入；任一目标失败时恢复本轮已写目标和本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
 
 `target.txt` 只属于 Tricky Store/TEESimulator-RS 兼容接口；当前 TEESimulator 使用独立的 JSON profile。目标适配器只处理真实存在的配置，不创建目标目录。
 
 ## 设备端 RKP 签发
 
 ```text
-rkp_mode=auto/device
+--rkp-status（只读）
   → 前置检查：arm64 / 高通 SoC / libkeymasterdeviceutils.so / /dev/smcinvoke / fingerprint
+  → 输出 blockers[] 与 evidence[]，不联网
+
+--rkp-issue（独立功能，不碰后端）
   → /dev/urandom 生成 P-256 密钥
   → POST :fetchEekChain（curl / wget）→ challenge（≤64 字节）
   → CBOR {4: challenge, 57: bstr([COSE_Key])} + 小端命令头 0x3122
@@ -79,17 +118,20 @@ rkp_mode=auto/device
   → 本地校验 CSR 结构、challenge 与 keysToSign 绑定
   → POST :signCertificates?challenge=<base64url> → shared + unique DER
   → 校验唯一 leaf→root 路径、叶子公钥 == 本机私钥公钥
-  → 生成 keybox.xml → 复用 install_keyboxes 事务
+  → 写入 /data/adb/teeforge/RKP/{keybox.xml, cert-chain.pem, meta.json}（0600）
+
+--keybox --source rkp
+  → 读取 RKP/keybox.xml → 安装事务（与远程池共用）
 ```
 
 设计边界：
 
 - 仅实现 V2（`CSR_V2`）。V1 AIDL 需要 JDK/D8 构建链，原生 V1 只服务 PureSoft 零 HBK 固件，均未纳入。
-- HTTP 使用设备已有 `curl` / `wget` / 管理器 busybox，不引入 reqwest 与异步运行时；三者都不可用时按失败处理并回退。
-- 本地只做结构与绑定校验。DICE 链和 COSE 签名的密码学校验由 Google RKP 服务端完成，非法 CSR 不会签发证书；这是相对上游的裁剪，需在真机验收时确认。
-- TA 调用在隔离子进程中执行，父进程 30 秒超时后 kill 并回收；厂商库崩溃不会影响主进程。
-- 签发成功且 keybox 安装成功后才写 `.rkp-issued`（时间 + 内容 SHA-256）；复用窗口由 `rkp_refresh_days` 控制。远程回退成功会删除标记，避免把池子文件当成设备签发结果复用。
-- `rkp` 只在 `aarch64-linux-android` 编译出厂商调用路径，其余 ABI 直接返回不可用并走回退。
+- HTTP 使用设备已有 `curl` / `wget` / 管理器 busybox，不引入 reqwest 与异步运行时。
+- 本地只做结构与绑定校验。DICE 链和 COSE 签名的密码学校验由 Google RKP 服务端完成，非法 CSR 不会签发证书。
+- TA 调用在隔离子进程中执行，父进程超时后 kill 并回收；厂商库崩溃不会影响主进程。
+- 错误按阶段结构化：TA 状态码走 `explain` 映射（AOSP `ErrorCode.aidl`），帧结构异常单独归类并带出 `status`、`len`、缓冲区大小与前 32 字节 hex。
+- `rkp` 只在 `aarch64-linux-android` 编译出厂商调用路径，其余 ABI 的 `--rkp-status` 直接给出 `arch` 阻断项。
 
 上游来源：Duck-ToolBox `fb6b1e427f2773ac6139d2eba27068fbdfd089de`，MIT，见 `module/licenses/duck-toolbox.txt`。
 

@@ -4,6 +4,8 @@ mod cli;
 mod config;
 mod description;
 mod error;
+mod info;
+mod json;
 mod keybox;
 mod logging;
 mod omk;
@@ -11,6 +13,7 @@ mod process;
 mod rkp;
 mod rootdetect;
 mod target;
+mod update;
 mod volume;
 
 pub use cli::run;

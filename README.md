@@ -16,8 +16,10 @@
 
 - **自动维护目标配置**：一次扫描用户安装的应用并分别更新已存在的兼容目标配置，失败时保留旧文件。
 - **弱化 BL 相关属性**：通过 resetprop 处理 bootloader、Verified Boot、调试和厂商相关属性，可按类别关闭。
-- **按需同步 Keybox**：通过模块 Action、WebUI 或 CLI 获取并校验内容，更新失败时保留已有文件。
-- **设备端 RKP 签发（可选）**：在高通 arm64 设备上调用本机 Keymint TA 向 Google RKP 申请本机专属 Keybox；条件不满足或签发失败时自动回退远程 Keybox。
+- **按需同步 Keybox**：来源由你显式选择——本机 RKP 产物或远程公共密钥池；不再自动回退，更新失败时保留已有文件。
+- **设备端 RKP 签发（独立功能）**：在高通 arm64 设备上调用本机 Keymint TA 向 Google RKP 申请本机专属证书链，产物单独保存在 `/data/adb/teeforge/RKP/`，与 Keybox 安装解耦。
+- **目标作用域可细调**：支持全量模式与手动模式；手动选择保存在本机，重启后保持，不会被开机全量覆盖。
+- **模块更新**：WebUI 内置更新检查，优先使用中国大陆可直连的自建 CDN，并校验清单中的 sha256。
 - **安装时架构选择**：模块包内置四种 ABI，安装器按设备 ABI 选择并校验对应 ELF，不使用其他架构兜底。
 - **配置与 Root 检测**：识别 Magisk、KernelSU 或 APatch 环境，用户配置在升级时默认保留。
 - **WebUI 与命令行**：支持模块 Action、兼容的模块 WebUI 以及设备端 CLI。
@@ -34,8 +36,9 @@
 | 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS；Oh My Keymint 仅应用作用域 |
 | 目标配置 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/target.txt`；TEESimulator：`/data/adb/teesim/config.json` 的 `profiles.teeforge.apps` |
 | OMK 作用域 | 安装时检测并固化；更新 `/data/misc/keystore/omk/injector.toml` 的 `scoop`；OMK 自身要求 Android 12+，真机待验收 |
-| Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml` |
-| 设备端 RKP | 仅 `arm64-v8a` + 高通 SoC + `/vendor/lib64/libkeymasterdeviceutils.so` + `/dev/smcinvoke`；其余环境自动使用远程 Keybox |
+| Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml`；来源可选远程池或本机 RKP |
+| RKP 产物 | `/data/adb/teeforge/RKP/`（`keybox.xml`、`cert-chain.pem`、`meta.json`，权限 0600） |
+| 设备端 RKP | 仅 `arm64-v8a` + 高通 SoC + `/vendor/lib64/libkeymasterdeviceutils.so` + `/dev/smcinvoke`；其余环境只能使用远程 Keybox |
 | 属性工具 | 全架构统一使用 Root 环境提供的 standard resetprop |
 | WebUI | 需要支持 KernelSU 模块 WebUI 接口的管理器；其他环境可使用 Action 或终端 |
 
@@ -95,8 +98,8 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
 ### 常用入口
 
 - **开机自动执行**：更新模块描述、执行 BL 弱化、更新已存在的目标配置。
-- **模块 Action**：同步 Keybox 并重新更新目标配置，无需重启。
-- **WebUI**：在支持模块 WebUI 的管理器中运行对应操作并查看输出。
+- **模块 Action**：音量键两级菜单。音量下切换高亮、音量上确认、15 秒无操作取消；先询问是否执行，再选择“更新 Keybox”（本机 RKP / 远程池）或“更新目标作用域”。全过程写入 `/data/adb/teeforge/logs/action-*.log`。
+- **WebUI**：顶部是设备信息栏，下面是“更新目标作用域”“Keybox 配置”“本机 RKP 签发”“模块与更新”四个入口。
 - **CLI**：适用于终端操作和问题定位。
 
 常用 CLI 命令需要 Root：
@@ -104,12 +107,16 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
 ```sh
 su -c '/data/adb/modules/teeforge_cd/teeforge --generate'
 su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
-su -c '/data/adb/modules/teeforge_cd/teeforge --keybox'
+su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote'
 su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-status'
+su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-issue'
+su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source rkp'
+su -c '/data/adb/modules/teeforge_cd/teeforge --target-list --json'
+su -c '/data/adb/modules/teeforge_cd/teeforge --self-update check'
 su -c '/data/adb/modules/teeforge_cd/teeforge --help'
 ```
 
-`--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。
+`--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
 
 CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](docs/project/OVERVIEW.md)。
 
@@ -118,9 +125,10 @@ CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](d
 设备端 RKP 用本机高通 Keymint TA 向 Google RKP 服务申请一把**本机专属**的证书链，输出仍是标准 Keybox，因此后续写入流程与远程 Keybox 完全一致。
 
 - 先运行 `--rkp-status` 确认条件；不满足时不会发起任何网络请求。
-- 默认 `rkp_mode=auto`：设备端成功即使用；任一步失败都会记录原因并回退远程 Keybox，不会写坏现有文件。
-- 签发成功后在 `/data/adb/teeforge/keybox/.rkp-issued` 记录时间与摘要，`rkp_refresh_days` 内直接复用，不会每次 Action 都重新签发。
-- 仅部分高通设备与固件支持；TA 返回非零状态、厂商库符号不匹配或网络不可达都会进入回退路径。
+- `--rkp-issue` 只产出产物，不改动任何后端 Keybox：`/data/adb/teeforge/RKP/` 下保存 `keybox.xml`、`cert-chain.pem`、`meta.json`（含生成时间、证书数量、device id、sha256），权限 0600。
+- 安装由 Keybox 一侧负责：`--keybox --source rkp` 读取上述产物并写入后端；`--source remote` 走远程池。两条路径不再互相回退。
+- 失败时透传阶段与原始码（例如 TA 返回 `-18`），WebUI 会给出对应原因与建议；`--rkp-delete` 删除整个 RKP 目录。
+- 仅部分高通设备与固件支持；TA 返回非零状态、厂商库符号不匹配或网络不可达都会如实报错。
 
 > [!NOTE]
 > 该功能移植自 [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox) 的 Device RKP Issuer（MIT），并裁剪为 V2 路径。成功签发只代表获得了一把 RKP 证书链，不代表通过任何外部检测。
@@ -131,7 +139,7 @@ CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](d
 
 TeeForge 保留 `scoop` 中原有手动条目，只维护 `# BEGIN TeeForge-CD managed scoop` 与 `# END TeeForge-CD managed scoop` 之间的自动条目。需要长期固定的条目请放在区块外；自动条目会随应用安装、卸载更新。数组以外的配置保持原样，更新前备份为 `injector.toml.teeforge.bak`。
 
-使用 WebUI 的目标更新按钮或 CLI `--generate`。OMK 作用域更新不需要运行 Keybox 操作，模块 Action 仍会执行既有的 Keybox 步骤。成功输出只代表文件更新；OMK 加载和应用实际行为需另行确认。TeeForge 不自动重启 OMK；旧格式迁移由 OMK 完成。
+使用 WebUI 的“更新目标作用域”或 CLI `--generate`。OMK 作用域更新不需要运行 Keybox 操作；模块 Action 会先询问操作类型，选择“更新目标作用域”时不会触碰 Keybox。成功输出只代表文件更新；OMK 加载和应用实际行为需另行确认。TeeForge 不自动重启 OMK；旧格式迁移由 OMK 完成。
 
 ### 配置
 
@@ -140,14 +148,18 @@ TeeForge 保留 `scoop` 中原有手动条目，只维护 `# BEGIN TeeForge-CD m
 ```ini
 debug=0
 blhide=1
-rkp_mode=auto
+keybox_source=remote
+target_mode=auto
+update_channel=stable
 ```
 
 - `debug=1`：将运行日志写入 `/data/adb/teeforge/logs/`。
 - `blhide=0`：关闭全部 BL 弱化操作。
-- `rkp_mode=auto`：设备端 RKP 优先，失败后回退远程 Keybox；`device` 只用设备端（失败即报错），`remote` 只用远程。
+- `keybox_source=remote|rkp`：Keybox 来源。`remote` 从 CDN 获取公共池，`rkp` 使用 `RKP/` 下的本机产物；默认 `remote` 保持旧行为。
+- `target_mode=auto|manual`：`auto` 每次写入全部已安装用户应用；`manual` 只写入 `/data/adb/teeforge/target-selection.json` 中的集合，WebUI 的手动勾选会写这里。
+- `update_channel=stable|dev`：WebUI 更新检查使用的通道；`update_base` 默认 `https://teeforge.mcxiaochen.top/files/update`。
 - `rkp_server`：默认 `https://remoteprovisioning.googleapis.com/v1`，仅用于调试或自建代理。
-- `rkp_refresh_days`：设备签发的 Keybox 复用窗口，默认 30 天；`0` 表示每次都重新签发。
+- 旧 `rkp_mode`、`rkp_refresh_days` 仍可解析但不再生效，升级后统一由 `keybox_source` 决定来源。
 - 安装器生成的分类开关可分别设为 `0` 或 `1`。
 - `omk_enabled` 由安装器在系统配置中固化，默认 `0`；用户配置可覆盖，设为 `0` 停止更新 OMK。
 - `omk_injector_config` 默认 `/data/misc/keystore/omk/injector.toml`，仅覆盖作用域文件路径。
@@ -223,6 +235,6 @@ TeeForge-CD 采用 [GNU GPL v3 或更高版本](LICENSE)发布。
 - [TEESimulator](https://github.com/JingMatrix/TEESimulator)
 - [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
 - [Oh My Keymint](https://github.com/qwq233/OhMyKeymint)
-- [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)：设备端 RKP 签发流程、CSR_V2 帧格式与证书链校验（MIT，见 `module/licenses/duck-toolbox.txt`）
+- [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)：设备端 RKP 签发流程、CSR_V2 帧格式与证书链校验（MIT，见 `module/licenses/duck-toolbox.txt`）；WebUI 的 Material 3 分层与列表行布局参考其设计思路，代码与样式为独立实现
 
 第三方项目名称仅用于说明依赖与兼容关系，不代表官方合作或背书。

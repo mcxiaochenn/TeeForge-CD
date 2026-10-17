@@ -69,15 +69,28 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let mut child = Command::new(program)
-        .args(args)
+    let mut command = Command::new(program);
+    command.args(args);
+    run_bounded(command, program, timeout, stdout_limit, context)
+}
+
+/// 运行已配置好的命令，并保留超时、输出上限与双管道排空行为。
+/// Runs a preconfigured command with the same timeout, output cap and pipe draining.
+pub(crate) fn run_bounded(
+    mut command: Command,
+    label: &str,
+    timeout: Duration,
+    stdout_limit: usize,
+    context: &str,
+) -> Result<Output> {
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| {
             TfError::new(format!(
-                "{context}，无法启动 {program} [failed to start {program}]: {error}"
+                "{context}，无法启动 {label} [failed to start {label}]: {error}"
             ))
         })?;
     let Some(stdout) = child.stdout.take() else {

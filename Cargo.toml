@@ -9,10 +9,14 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 base64 = "0.22.1"
+ciborium = "0.2.2"
 libc = "0.2.189"
+libloading = "0.8.9"
+p256 = { version = "0.13.2", default-features = false, features = ["arithmetic", "pkcs8", "std"] }
 sha2 = "0.10.9"
 serde_json = "1.0.140"
 toml_edit = { version = "=0.22.24", default-features = false, features = ["parse"] }
+x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 
 [profile.release]
 codegen-units = 1

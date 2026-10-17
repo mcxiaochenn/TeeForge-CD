@@ -8,6 +8,7 @@ mod keybox;
 mod logging;
 mod omk;
 mod process;
+mod rkp;
 mod rootdetect;
 mod target;
 mod volume;

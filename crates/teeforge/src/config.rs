@@ -5,6 +5,36 @@ use std::path::{Path, PathBuf};
 
 pub(crate) const SYS_CONFIG: &str = "/data/adb/teeforge/sys.conf";
 pub(crate) const USER_CONFIG: &str = "/data/adb/teeforge/config.conf";
+pub(crate) const DEFAULT_RKP_SERVER: &str = "https://remoteprovisioning.googleapis.com/v1";
+pub(crate) const DEFAULT_RKP_REFRESH_DAYS: u64 = 30;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RkpMode {
+    /// 先尝试设备端签发，失败后回退远程 [device first, fall back to remote]
+    Auto,
+    /// 只允许设备端签发 [device issuance only]
+    Device,
+    /// 只使用远程 keybox 源 [remote only]
+    Remote,
+}
+
+impl RkpMode {
+    fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "device" => Self::Device,
+            "remote" => Self::Remote,
+            _ => Self::Auto,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Device => "device",
+            Self::Remote => "remote",
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Config {
@@ -14,6 +44,9 @@ pub(crate) struct Config {
     pub(crate) omk_enabled: bool,
     pub(crate) omk_injector_config: PathBuf,
     pub(crate) keybox_dir: PathBuf,
+    pub(crate) rkp_mode: RkpMode,
+    pub(crate) rkp_server: String,
+    pub(crate) rkp_refresh_days: u64,
     pub(crate) sources_conf: PathBuf,
     pub(crate) log_dir: PathBuf,
     pub(crate) root_method: String,
@@ -42,6 +75,9 @@ impl Default for Config {
             omk_enabled: false,
             omk_injector_config: "/data/misc/keystore/omk/injector.toml".into(),
             keybox_dir: "/data/adb/teeforge/keybox".into(),
+            rkp_mode: RkpMode::Auto,
+            rkp_server: DEFAULT_RKP_SERVER.into(),
+            rkp_refresh_days: DEFAULT_RKP_REFRESH_DAYS,
             sources_conf: "/data/adb/teeforge/sources.conf".into(),
             log_dir: "/data/adb/teeforge/logs".into(),
             root_method: "Unknown".into(),
@@ -105,6 +141,16 @@ impl Config {
             "omk_enabled" => self.omk_enabled = parse_bool(value),
             "omk_injector_config" => self.omk_injector_config = value.into(),
             "keybox_dir" => self.keybox_dir = value.into(),
+            "rkp_mode" => self.rkp_mode = RkpMode::parse(value),
+            "rkp_server" => {
+                let server = value.trim();
+                if !server.is_empty() {
+                    self.rkp_server = server.into();
+                }
+            }
+            "rkp_refresh_days" => {
+                self.rkp_refresh_days = value.trim().parse().unwrap_or(DEFAULT_RKP_REFRESH_DAYS);
+            }
             "sources_conf" => self.sources_conf = value.into(),
             "log_dir" => self.log_dir = value.into(),
             "root_method" => self.root_method = value.into(),
@@ -202,6 +248,28 @@ mod tests {
         );
         config.apply("omk_enabled", "0");
         assert!(!config.omk_enabled);
+    }
+
+    #[test]
+    fn rkp_defaults_and_overrides_are_validated() {
+        let mut config = Config::default();
+        assert_eq!(config.rkp_mode, RkpMode::Auto);
+        assert_eq!(config.rkp_refresh_days, DEFAULT_RKP_REFRESH_DAYS);
+
+        config.apply("rkp_mode", "device");
+        assert_eq!(config.rkp_mode, RkpMode::Device);
+        config.apply("rkp_mode", "remote");
+        assert_eq!(config.rkp_mode, RkpMode::Remote);
+        config.apply("rkp_mode", "nonsense");
+        assert_eq!(config.rkp_mode, RkpMode::Auto, "unknown values stay safe");
+
+        config.apply("rkp_refresh_days", "0");
+        assert_eq!(config.rkp_refresh_days, 0);
+        config.apply("rkp_refresh_days", "invalid");
+        assert_eq!(config.rkp_refresh_days, DEFAULT_RKP_REFRESH_DAYS);
+
+        config.apply("rkp_server", "  ");
+        assert_eq!(config.rkp_server, DEFAULT_RKP_SERVER);
     }
 
     #[test]

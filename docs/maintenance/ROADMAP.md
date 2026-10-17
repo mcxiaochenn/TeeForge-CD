@@ -18,10 +18,12 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 - 同轮四 ABI/WebUI 打包通过，ZIP 为 1,365,361 字节；21 项归档校验和、5 个 Shell 文件 LF 检查通过，归档无 resetprop-rs 路径。
 - Dev 配置模板同步删除废弃的 blhide_compact；用户将使用 Dev 包进行后续真机验收，自动化通过不替代设备结论。
 - WebUI、Shell 生命周期和公开架构文档同步到 Rust 实现。
+- 设备端 RKP 签发（移植自 Duck-ToolBox，MIT）：高通/arm64 前置检查、CSR_V2 帧、TA 隔离子进程、Google RKP 交互、证书链校验、keybox 生成与 `rkp_mode` 回退链；主机侧 90 项测试与四 ABI 编译通过。
 
 ## 待验证
 
 - arm64-v8a 主力设备安装、升级保留配置、音量键选择和开机服务。
+- 设备端 RKP：`--rkp-status` 判定、真实签发、`-18` 等 TA 错误码、Google 服务端签发结果、`rkp_refresh_days` 复用、回退远程行为；小米 17 Pro 等社区成功机型优先。
 - ARMv7、x86、x86_64 对应环境的安装和运行行为。
 - Tricky Store：在真机上对带注释、`!`、`?` 的现有 `target.txt` 连续执行两次 `--generate`，确认本地自动化结论与设备行为一致。
 - TEESimulator-RS：含 `[custom.xml]` 分段的 `target.txt` 归属保持与新增包更新。
@@ -41,4 +43,4 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 2. 取得授权后执行分层设备验收。
 3. 验收通过后单独评估删除旧 C 实现、提交稳定版本和发布流程。
 
-最近更新：2026-09-14
+最近更新：2026-10-17

@@ -1,0 +1,114 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    @apply bg-bg font-sans text-fg;
+    min-height: 100vh;
+    min-height: 100dvh;
+    line-height: 1.55;
+    overscroll-behavior-y: none;
+    background-image: radial-gradient(120% 55% at 50% -10%, var(--bg-wash), transparent 70%);
+    background-repeat: no-repeat;
+    -webkit-font-smoothing: antialiased;
+    transition:
+      background-color var(--dur-3) var(--ease),
+      color var(--dur-3) var(--ease);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: var(--accent-soft-strong);
+  }
+
+  /* 滚动条细一点，避免在窄屏上占宽度 */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 2px;
+  }
+}
+
+@layer utilities {
+  .safe-top {
+    padding-top: var(--inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: calc(var(--sp-4) + var(--inset-bottom));
+  }
+  .safe-x {
+    padding-left: var(--inset-left);
+    padding-right: var(--inset-right);
+  }
+  .tap {
+    @apply transition-colors duration-150 ease-standard;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* 页面切换的轻量过渡 */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 180ms var(--ease),
+    transform 180ms var(--ease);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 浮层过渡：遮罩淡入 + 面板轻微上移 */
+.sheet-enter-active,
+.sheet-leave-active {
+  transition: opacity 200ms var(--ease);
+}
+.sheet-enter-from,
+.sheet-leave-to {
+  opacity: 0;
+}
+.sheet-enter-active .sheet-panel,
+.sheet-leave-active .sheet-panel {
+  transition: transform 240ms var(--ease-out);
+}
+.sheet-enter-from .sheet-panel,
+.sheet-leave-to .sheet-panel {
+  transform: translateY(16px);
+}

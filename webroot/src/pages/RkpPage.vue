@@ -49,6 +49,9 @@ const certificates = computed(() => Number(meta.value?.certificates ?? 0));
 const deviceId = computed(() => String(meta.value?.device_id ?? ''));
 
 const explain = computed(() => {
+  // hint 是后端给出的解释入口，优先于错误码；帧类错误没有数字码，只能走 hint。
+  const hint = issueError.value?.hint;
+  if (hint && hasKey(hint)) return t(hint);
   const code = issueError.value?.code;
   if (!code) return '';
   const key = `rkp.code.${code}`;
@@ -220,6 +223,10 @@ onMounted(load);
             <div class="flex items-center justify-between gap-3 py-2">
               <dt class="text-[12px] text-muted">{{ t('rkp.artifact.certificates') }}</dt>
               <dd class="text-[12px] font-medium">{{ certificates }}</dd>
+            </div>
+            <div v-if="meta?.frame_layout" class="flex items-center justify-between gap-3 py-2">
+              <dt class="text-[12px] text-muted">{{ t('rkp.frame.layout') }}</dt>
+              <dd class="font-mono text-[11px]">{{ meta.frame_layout }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3 py-2">
               <dt class="text-[12px] text-muted">{{ t('rkp.artifact.deviceId') }}</dt>

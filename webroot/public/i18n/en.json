@@ -128,6 +128,12 @@
   "rkp.code.-100": "The firmware does not implement this command.",
   "rkp.code.-101": "The command version does not match the TA.",
   "rkp.code.-1000": "The TA reported an internal error.",
+  "rkp.frame.unparsed": "The TA reply matches no known frame layout. head_hex below is the first 64 bytes of the buffer and shows the vendor's actual wrapper.",
+  "rkp.frame.abi": "The response buffer was never written: send_cmd accepted the call but produced no data, which usually means the ABI or argument contract differs on this firmware.",
+  "rkp.frame.payload_length": "Length field disagreed with the actual data (legacy diagnostic).",
+  "rkp.frame.truncated_header": "Response header shorter than 8 bytes (legacy diagnostic).",
+  "rkp.ta.status": "The TA returned an error code directly; see the raw code above. The full table is AOSP ErrorCode.",
+  "rkp.frame.layout": "Response frame layout",
 
   "update.section.module": "Module",
   "update.section.latest": "Available update",

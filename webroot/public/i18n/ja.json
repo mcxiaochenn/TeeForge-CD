@@ -128,6 +128,12 @@
   "rkp.code.-100": "このコマンドはファームウェアに実装されていません。",
   "rkp.code.-101": "コマンド版と TA が一致しません。",
   "rkp.code.-1000": "TA 内部エラーです。",
+  "rkp.frame.unparsed": "TA の応答が既知のフレーム形式に一致しません。下の head_hex はバッファ先頭 64 バイトで、ファームウェア固有のラップ形式を示します。",
+  "rkp.frame.abi": "応答バッファが書き込まれていません。send_cmd は成功を返したがデータが無く、ABI か引数の取り決めがこのファームウェアと一致しない可能性があります。",
+  "rkp.frame.payload_length": "長さフィールドが実データと一致しません（旧診断）。",
+  "rkp.frame.truncated_header": "応答ヘッダが 8 バイト未満です（旧診断）。",
+  "rkp.ta.status": "TA がエラーコードを直接返しました。上の生コードを参照してください。完全な表は AOSP ErrorCode にあります。",
+  "rkp.frame.layout": "応答フレーム形式",
 
   "update.section.module": "モジュール",
   "update.section.latest": "利用可能な更新",

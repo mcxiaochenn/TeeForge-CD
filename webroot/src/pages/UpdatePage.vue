@@ -9,7 +9,7 @@ import AppSheet from '../components/ui/AppSheet.vue';
 import SegmentedControl from '../components/ui/SegmentedControl.vue';
 import { ApiError, api, type UpdateInfo, type UpdateInstall } from '../lib/api';
 import { copyText } from '../lib/clipboard';
-import { formatBytes } from '../lib/format';
+import { formatBytes, formatVersion } from '../lib/format';
 import { t } from '../lib/i18n';
 import { loadSession, session } from '../state/session';
 
@@ -93,7 +93,7 @@ onMounted(async () => {
         <div class="min-w-0">
           <p class="text-[15px] font-semibold">
             {{ t('update.current') }}
-            <span class="font-mono">{{ info?.current.version ?? session.data?.module.version ?? '—' }}</span>
+            <span class="font-mono">{{ formatVersion(info?.current?.version ?? session.data?.module.version) }}</span>
           </p>
           <p class="mt-0.5 text-xs text-muted">
             versionCode {{ info?.current.version_code ?? session.data?.module.version_code ?? '—' }}
@@ -132,7 +132,7 @@ onMounted(async () => {
     <SectionCard v-if="available && info" :title="t('update.section.latest')">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <p class="text-[15px] font-semibold">{{ info.latest.version }}</p>
+          <p class="text-[15px] font-semibold">{{ formatVersion(info.latest.version) }}</p>
           <p class="mt-0.5 text-xs text-muted">
             versionCode {{ info.latest.version_code }} · {{ latestSize }}
           </p>
@@ -206,7 +206,11 @@ onMounted(async () => {
       </p>
     </section>
 
-    <AppSheet v-model:open="confirmOpen" :title="t('update.confirm.title')" :subtitle="info?.latest?.version">
+    <AppSheet
+      v-model:open="confirmOpen"
+      :title="t('update.confirm.title')"
+      :subtitle="formatVersion(info?.latest?.version)"
+    >
       <p class="text-sm leading-relaxed text-muted">
         {{ info?.latest.sha256 ? t('update.confirm.body') : t('update.confirm.unverified') }}
       </p>

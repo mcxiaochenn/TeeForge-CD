@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.6.0-2132d6c
+## TeeForge-CD Dev v0.6.0-3811f4c
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-2132d6c`
-- Version Code: `146`
-- Commit: `2132d6c`
+- Version: `v0.6.0-3811f4c`
+- Version Code: `147`
+- Commit: `3811f4c`
 
 ### 最近提交 Recent Commits
+- 3811f4c chore(git): 忽略 .workbuddy 工具目录
 - 2132d6c docs(omk): 更新兼容说明与分层验收记录
 - 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护
 - 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具
@@ -25,4 +26,3 @@
 - 4f9ba5c fix: 修复 Linux 模块归档校验
 - 310922b refactor: 使用 Rust 重构四架构核心
 - a7fd758 docs: 脱敏公开文档中的 keybox 加解密细节
-- fc25eea docs: CLAUDE.md 的 backup/ 描述更新为加解密维护指南

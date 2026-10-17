@@ -4,6 +4,7 @@ use crate::description;
 use crate::error::{Result, TfError};
 use crate::keybox;
 use crate::logging::{self, Level};
+use crate::rkp;
 use crate::rootdetect;
 use crate::target;
 use crate::volume;
@@ -14,6 +15,7 @@ struct Options {
     generate: bool,
     hide_bl: bool,
     keybox: bool,
+    rkp_status: bool,
     rootdetect: bool,
     update_desc: bool,
     skip_rootdetect: bool,
@@ -31,6 +33,7 @@ fn parse(args: &[String]) -> Result<Options> {
             "--generate" => options.generate = true,
             "--hide-bl" => options.hide_bl = true,
             "--keybox" => options.keybox = true,
+            "--rkp-status" => options.rkp_status = true,
             "--rootdetect" => options.rootdetect = true,
             "--update-desc" => options.update_desc = true,
             "--no-rootdetect" => options.skip_rootdetect = true,
@@ -75,6 +78,7 @@ fn usage(program: &str) {
     println!("  --generate      更新目标应用配置 [Update target app configuration]");
     println!("  --hide-bl       弱隐 bootloader [Weak bootloader hiding]");
     println!("  --keybox        获取并更新 keybox [Fetch and update keybox]");
+    println!("  --rkp-status    检查设备端 RKP 条件 [Check device RKP prerequisites]");
     println!("  --rootdetect    检测 root 方式并输出 [Detect root method]");
     println!("  --update-desc   更新模块描述 [Update module description]");
     println!("  --no-rootdetect 跳过 root 检测 [Skip root detection]");
@@ -97,6 +101,21 @@ fn record(result: Result<()>, failed: &mut bool) {
 
 pub fn run(args: Vec<String>) -> i32 {
     let program = args.first().map_or("teeforge", String::as_str);
+    // 内部入口：TA 子进程只做一次厂商调用，不初始化配置、日志或 root 检测。
+    // Internal entry: the TA child performs one vendor call only.
+    if let Some(index) = args.iter().position(|arg| arg == "--rkp-ta-worker") {
+        let Some(directory) = args.get(index + 1) else {
+            eprintln!("--rkp-ta-worker 需要目录路径 [requires a directory]");
+            return 2;
+        };
+        return match rkp::execute_worker(std::path::Path::new(directory)) {
+            Ok(()) => 0,
+            Err(error) => {
+                eprintln!("{error}");
+                1
+            }
+        };
+    }
     let options = match parse(&args) {
         Ok(options) => options,
         Err(error) => {
@@ -116,6 +135,13 @@ pub fn run(args: Vec<String>) -> i32 {
         .unwrap_or_else(|| PathBuf::from(USER_CONFIG));
     let config = Config::load(&user_config);
     logging::init(&config, options.verbose);
+
+    if options.rkp_status {
+        for line in rkp::status_lines(&config) {
+            println!("{line}");
+        }
+        return if rkp::available() { 0 } else { 1 };
+    }
 
     let no_action = !options.generate
         && !options.hide_bl

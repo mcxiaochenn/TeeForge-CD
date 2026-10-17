@@ -7,10 +7,18 @@ rust-version.workspace = true
 
 [dependencies]
 base64.workspace = true
+ciborium.workspace = true
 libc.workspace = true
+p256.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
 toml_edit.workspace = true
+x509-cert.workspace = true
+
+# 仅 arm64 Android 存在 KeymasterUtils 厂商 ABI。
+# The KeymasterUtils vendor ABI exists only on arm64 Android.
+[target.'cfg(all(target_os = "android", target_arch = "aarch64"))'.dependencies]
+libloading.workspace = true
 
 [lib]
 name = "teeforge"

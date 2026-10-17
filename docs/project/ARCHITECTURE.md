@@ -24,6 +24,7 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 | `target` | 调用 `cmd package list packages -f -U --user 0`，筛选用户应用/UID，并适配三种配置格式后原子事务写入 |
 | `omk` | 用锁定的 toml_edit 定位 scoop，保留手动项、注释及扩展表头，更新受管区块 |
 | `keybox` | 下载后备、严格有界解码、内容标记校验和按实际后端多目标回滚 |
+| `rkp` | 设备端 RKP：前置检查、CSR_V2 帧、TA 隔离子进程、服务交互、证书链校验与 Keybox 生成 |
 | `blhide` | 参数数组调用 resetprop，逐项收集失败 |
 | `rootdetect` | 环境变量和 `/data/adb/*` 路径检测 |
 | `volume` | 动态扫描 input event，封装设备输入 unsafe 适配 |
@@ -41,6 +42,8 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 /data/adb/teeforge/config.conf
 /data/adb/teeforge/logs/
 /data/adb/teeforge/keybox/
+/data/adb/teeforge/keybox/.rkp-issued
+/data/adb/teeforge/keybox/tmp/
 /data/adb/tricky_store/target.txt
 /data/adb/tricky_store/keybox.xml
 /data/adb/teesim/config.json
@@ -63,6 +66,32 @@ WebUI 通过 `ksu.spawn()` 优先使用流式输出，缺少该接口时降级�
 每个已存在的目标采用原子写入；任一目标失败时恢复本轮已写目标和本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
 
 `target.txt` 只属于 Tricky Store/TEESimulator-RS 兼容接口；当前 TEESimulator 使用独立的 JSON profile。目标适配器只处理真实存在的配置，不创建目标目录。
+
+## 设备端 RKP 签发
+
+```text
+rkp_mode=auto/device
+  → 前置检查：arm64 / 高通 SoC / libkeymasterdeviceutils.so / /dev/smcinvoke / fingerprint
+  → /dev/urandom 生成 P-256 密钥
+  → POST :fetchEekChain（curl / wget）→ challenge（≤64 字节）
+  → CBOR {4: challenge, 57: bstr([COSE_Key])} + 小端命令头 0x3122
+  → 子进程 dlopen 厂商库 → send_cmd
+  → 本地校验 CSR 结构、challenge 与 keysToSign 绑定
+  → POST :signCertificates?challenge=<base64url> → shared + unique DER
+  → 校验唯一 leaf→root 路径、叶子公钥 == 本机私钥公钥
+  → 生成 keybox.xml → 复用 install_keyboxes 事务
+```
+
+设计边界：
+
+- 仅实现 V2（`CSR_V2`）。V1 AIDL 需要 JDK/D8 构建链，原生 V1 只服务 PureSoft 零 HBK 固件，均未纳入。
+- HTTP 使用设备已有 `curl` / `wget` / 管理器 busybox，不引入 reqwest 与异步运行时；三者都不可用时按失败处理并回退。
+- 本地只做结构与绑定校验。DICE 链和 COSE 签名的密码学校验由 Google RKP 服务端完成，非法 CSR 不会签发证书；这是相对上游的裁剪，需在真机验收时确认。
+- TA 调用在隔离子进程中执行，父进程 30 秒超时后 kill 并回收；厂商库崩溃不会影响主进程。
+- 签发成功且 keybox 安装成功后才写 `.rkp-issued`（时间 + 内容 SHA-256）；复用窗口由 `rkp_refresh_days` 控制。远程回退成功会删除标记，避免把池子文件当成设备签发结果复用。
+- `rkp` 只在 `aarch64-linux-android` 编译出厂商调用路径，其余 ABI 直接返回不可用并走回退。
+
+上游来源：Duck-ToolBox `fb6b1e427f2773ac6139d2eba27068fbdfd089de`，MIT，见 `module/licenses/duck-toolbox.txt`。
 
 ## 目标配置事务
 
@@ -99,5 +128,7 @@ ZIP 内置四个 ABI，`customize.sh` 根据 `ro.product.cpu.abi` 选择一个�
 
 - `.sha256` 用于发现损坏或不完整，不等同于签名，也不能阻止重新制作 ZIP。
 - 下载内容必须检查真实工具退出码、大小和格式，不能只检查非空。
+- Keybox 内嵌私钥，本地副本与目标文件统一按 `0600` 写入（含备份与回滚路径）。
+- 设备端 RKP 的临时请求/回执目录为 `0700`，文件为 `0600`，退出时清理；日志不输出私钥、challenge 原文或服务端响应体。
 - 日志不得输出派生密钥、解码内容或私密维护信息。
 - Android 设备不依赖 `openssl`；Rust 使用锁定的 `sha2`，安装校验使用 toybox `sha256sum`。

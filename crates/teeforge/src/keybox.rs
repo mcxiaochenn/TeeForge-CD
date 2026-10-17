@@ -1,8 +1,9 @@
 use crate::atomic_file;
-use crate::config::Config;
+use crate::config::{Config, RkpMode};
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::process;
+use crate::rkp;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::{Digest, Sha256};
@@ -261,16 +262,18 @@ fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<()> {
     }
     let mut written: Vec<&KeyboxUpdate> = Vec::new();
     for update in &updates {
+        // Keybox 内嵌私钥，落盘权限固定为属主可读写。
+        // A keybox embeds a private key, so it is written owner-only.
         let result = if update.original.is_some() {
-            atomic_file::write_with_backup(&update.path, decoded)
+            atomic_file::write_private_with_backup(&update.path, decoded)
         } else {
-            atomic_file::write(&update.path, decoded)
+            atomic_file::write_private(&update.path, decoded)
         };
         if let Err(error) = result {
             let mut rollback_errors = Vec::new();
             for previous in written.into_iter().rev() {
                 let rollback = match &previous.original {
-                    Some(old) => atomic_file::write(&previous.path, old),
+                    Some(old) => atomic_file::write_private(&previous.path, old),
                     None => match fs::remove_file(&previous.path) {
                         Ok(()) => Ok(()),
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -299,13 +302,91 @@ fn install_keybox(local: &Path, destination: &Path, decoded: &[u8]) -> Result<()
     install_keyboxes(&[local.to_path_buf(), destination.to_path_buf()], decoded)
 }
 
+/// keybox 来源，决定成功后的标记维护 [Source decides post-install marker handling].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Source {
+    Cached,
+    Device,
+    Remote,
+}
+
 pub(crate) fn fetch(config: &Config) -> Result<()> {
     logging::log(Level::Info, "开始获取 keybox [Starting keybox fetch]...");
+    let (decoded, source) = acquire(config)?;
+    install(config, &decoded)?;
+    match source {
+        Source::Device => {
+            if let Err(error) = rkp::mark_issued(config, &decoded) {
+                // 标记只影响复用窗口，写入失败不应否定已完成的 Keybox 更新。
+                // The marker only controls reuse; failing to write it must not fail the update.
+                logging::log(
+                    Level::Warn,
+                    format!("写入 RKP 复用标记失败 [failed to write RKP marker]: {error}"),
+                );
+            }
+        }
+        Source::Remote => rkp::clear_marker(config),
+        Source::Cached => {}
+    }
+    logging::log(
+        Level::Info,
+        "Keybox 已更新并同步 [Keybox updated and synchronized]",
+    );
+    Ok(())
+}
+
+/// 设备端优先，失败时按 `rkp_mode` 决定是否回退远程。
+/// Device issuance first; failures fall back to the remote source unless mode is `device`.
+fn acquire(config: &Config) -> Result<(Vec<u8>, Source)> {
+    let mut device_error = None;
+    if config.rkp_mode != RkpMode::Remote {
+        if !rkp::device_path_supported() {
+            if config.rkp_mode == RkpMode::Device {
+                return Err(TfError::new(
+                    "设备端 RKP 仅支持 Android arm64 [device RKP requires Android arm64]",
+                ));
+            }
+        } else {
+            if let Some(bytes) = rkp::cached(config) {
+                return Ok((bytes, Source::Cached));
+            }
+            match rkp::issue(config) {
+                Ok(bytes) => return Ok((bytes, Source::Device)),
+                Err(error) if config.rkp_mode == RkpMode::Device => return Err(error),
+                Err(error) => {
+                    logging::log(
+                        Level::Warn,
+                        format!(
+                            "设备端 RKP 签发失败，回退远程 [device RKP failed; falling back to remote]: {error}"
+                        ),
+                    );
+                    device_error = Some(error.to_string());
+                }
+            }
+        }
+    }
+    match remote_keybox() {
+        Ok(bytes) => Ok((bytes, Source::Remote)),
+        Err(error) => {
+            let message = match device_error {
+                Some(device) => format!(
+                    "设备端 RKP 失败 [device RKP failed]: {device}; 远程 Keybox 失败 [remote failed]: {error}"
+                ),
+                None => error.to_string(),
+            };
+            Err(TfError::new(message))
+        }
+    }
+}
+
+fn remote_keybox() -> Result<Vec<u8>> {
     let (cdn, public_key) = endpoints()?;
     let url = format!("{cdn}{}", month_filename()?);
     let encrypted = download(&url)?;
-    let decoded = decrypt(&encrypted, &public_key)?;
+    decrypt(&encrypted, &public_key)
+}
 
+fn install(config: &Config, decoded: &[u8]) -> Result<()> {
     let mut destinations = Vec::new();
     if config
         .target_txt
@@ -331,12 +412,7 @@ pub(crate) fn fetch(config: &Config) -> Result<()> {
     destinations.insert(0, local);
     destinations.sort();
     destinations.dedup();
-    install_keyboxes(&destinations, &decoded)?;
-    logging::log(
-        Level::Info,
-        "Keybox 已更新并同步 [Keybox updated and synchronized]",
-    );
-    Ok(())
+    install_keyboxes(&destinations, decoded)
 }
 
 #[cfg(test)]
@@ -496,6 +572,35 @@ mod tests {
         install_keyboxes(std::slice::from_ref(&path), b"same").expect("skip unchanged keybox");
         assert!(!path.with_extension("xml.bak").exists());
         assert_eq!(fs::read(&path).expect("read keybox"), b"same");
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[cfg(not(all(target_os = "android", target_arch = "aarch64")))]
+    #[test]
+    fn device_mode_on_unsupported_arch_fails_without_network() {
+        let config = Config {
+            rkp_mode: RkpMode::Device,
+            ..Config::default()
+        };
+        let error = acquire(&config).expect_err("unsupported arch must not attempt remote");
+        assert!(error.to_string().contains("arm64"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keybox_is_written_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory =
+            std::env::temp_dir().join(format!("teeforge-keybox-mode-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("create keybox fixture");
+        let path = directory.join("keybox.xml");
+        install_keyboxes(std::slice::from_ref(&path), b"<AndroidAttestation/>")
+            .expect("write keybox");
+        let mode = fs::metadata(&path)
+            .expect("keybox metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
         let _ = fs::remove_dir_all(directory);
     }
 }

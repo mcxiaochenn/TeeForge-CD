@@ -158,6 +158,16 @@ fn temp_path(path: &Path, attempt: u32) -> Result<PathBuf> {
 }
 
 pub(crate) fn write(path: &Path, data: &[u8]) -> Result<()> {
+    write_with_mode(path, data, false)
+}
+
+/// Keybox 内嵌私钥，必须只对属主可读。
+/// A keybox embeds a private key, so the result must be owner-only.
+pub(crate) fn write_private(path: &Path, data: &[u8]) -> Result<()> {
+    write_with_mode(path, data, true)
+}
+
+fn write_with_mode(path: &Path, data: &[u8], private: bool) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| TfError::new("目标路径没有父目录 [Target path has no parent]"))?;
@@ -167,10 +177,16 @@ pub(crate) fn write(path: &Path, data: &[u8]) -> Result<()> {
     // Create the temporary file exclusively and replace the target only after a synced write.
     for attempt in 0..32 {
         let temporary = temp_path(path, attempt)?;
-        let opened = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary);
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        if private {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+        }
+        let opened = options.open(&temporary);
         let mut file = match opened {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -196,14 +212,22 @@ pub(crate) fn write(path: &Path, data: &[u8]) -> Result<()> {
 }
 
 pub(crate) fn write_with_backup(path: &Path, data: &[u8]) -> Result<()> {
+    write_backup_with_mode(path, data, false)
+}
+
+pub(crate) fn write_private_with_backup(path: &Path, data: &[u8]) -> Result<()> {
+    write_backup_with_mode(path, data, true)
+}
+
+fn write_backup_with_mode(path: &Path, data: &[u8], private: bool) -> Result<()> {
     if path.is_file() {
         // 备份保存替换前的完整内容，供上层事务在后续目标失败时恢复。
         // The backup preserves the full pre-replacement content for higher-level rollback.
         let old = fs::read(path).map_err(|e| TfError::from(e).context(path.display()))?;
         let backup = PathBuf::from(format!("{}.bak", path.display()));
-        write(&backup, &old)?;
+        write_with_mode(&backup, &old, private)?;
     }
-    write(path, data)
+    write_with_mode(path, data, private)
 }
 
 #[cfg(test)]

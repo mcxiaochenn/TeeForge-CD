@@ -1,12 +1,14 @@
-## TeeForge-CD Dev v0.6.0-3811f4c
+## TeeForge-CD Dev v0.6.0-11c4e31
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-3811f4c`
-- Version Code: `147`
-- Commit: `3811f4c`
+- Version: `v0.6.0-11c4e31`
+- Version Code: `149`
+- Commit: `11c4e31`
 
 ### 最近提交 Recent Commits
+- 11c4e31 feat: Merge pull request #2 from mcxiaochenn/feat/rkp-device-issuance
 - 3811f4c chore(git): 忽略 .workbuddy 工具目录
+- 9bcec88 feat(rkp): 移植设备端 RKP 签发并保留远程回退
 - 2132d6c docs(omk): 更新兼容说明与分层验收记录
 - 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护
 - 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具
@@ -24,5 +26,3 @@
 - 8acde42 docs: 添加 README 编写规范
 - 535fd39 docs: 重组 AI 引导与项目文档
 - 4f9ba5c fix: 修复 Linux 模块归档校验
-- 310922b refactor: 使用 Rust 重构四架构核心
-- a7fd758 docs: 脱敏公开文档中的 keybox 加解密细节

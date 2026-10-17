@@ -5,6 +5,7 @@ import DeviceHeader from '../components/layout/DeviceHeader.vue';
 import NavRow from '../components/layout/NavRow.vue';
 import SectionCard from '../components/layout/SectionCard.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
+import { formatVersion } from '../lib/format';
 import { t } from '../lib/i18n';
 import { hasHost } from '../lib/ksu';
 import { loadSession, session } from '../state/session';
@@ -66,7 +67,7 @@ const modeLabel = computed(() => {
           icon="download"
           :title="t('entry.update.title')"
           :description="t('entry.update.desc')"
-          :badge="session.data ? 'v' + session.data.module.version : undefined"
+          :badge="session.data ? formatVersion(session.data.module.version) : undefined"
           :disabled="hostMissing"
           to="/update"
         />
@@ -93,7 +94,7 @@ const modeLabel = computed(() => {
           <dt class="text-[13px] text-muted">{{ t('status.module') }}</dt>
           <dd class="text-right text-[13px] font-semibold">
             <template v-if="session.data">
-              {{ session.data.module.version }} ({{ session.data.module.version_code }})
+              {{ formatVersion(session.data.module.version) }} ({{ session.data.module.version_code }})
             </template>
             <template v-else>—</template>
           </dd>

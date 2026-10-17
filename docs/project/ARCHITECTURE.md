@@ -43,6 +43,8 @@ styles/tailwind.css   Tailwind 入口与全局基样式
 - `--json` 成功返回 `{"ok":true,"data":...}`，失败返回 `{"ok":false,"error":{stage,code,message,hint,raw}}`；日志固定走 stderr，不污染 JSON。
 - 错误按阶段透传：`prerequisite` / `transport` / `frame` / `ta` / `server` / `keybox` / `target` / `update`。TA 状态码保留原始值，页面按 `rkp.code.<code>` 查解释，未收录的码只显示原值。
 - 主题与语言持久化键仍为 `tf-theme` / `tf-lang`。
+- 版本展示统一走 `formatVersion()`：`module.prop` 不带 `v`、CDN 清单带 `v`，调用点不再各自拼前缀。
+- 视口约定：`body` 只用 `min-height: 100%`（不锁 `vh`/`dvh`），横向用 `overflow-x: clip`（`@supports` 兜底 `hidden`，避免破坏 sticky），viewport 禁止缩放。导航栏不使用相对容器的负外边距——那会让块级自动宽度增加 32px 并撑出横向滚动。
 
 样式为本项目自行实现；视觉模型（色调分层、分组列表、底部浮层）参考 [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)（MIT）与 Tricky-Addon 的列表交互，未复制其代码、资源或样式表。
 
@@ -114,7 +116,8 @@ keybox_source=rkp
   → /dev/urandom 生成 P-256 密钥
   → POST :fetchEekChain（curl / wget）→ challenge（≤64 字节）
   → CBOR {4: challenge, 57: bstr([COSE_Key])} + 小端命令头 0x3122
-  → 子进程 dlopen 厂商库 → send_cmd
+  → 子进程 dlopen 厂商库 → send_cmd（回执只回原始缓冲区，不解析帧）
+  → decode_frame：按 5 种候选布局切片，用 CSR 结构校验判定命中
   → 本地校验 CSR 结构、challenge 与 keysToSign 绑定
   → POST :signCertificates?challenge=<base64url> → shared + unique DER
   → 校验唯一 leaf→root 路径、叶子公钥 == 本机私钥公钥
@@ -130,7 +133,10 @@ keybox_source=rkp
 - HTTP 使用设备已有 `curl` / `wget` / 管理器 busybox，不引入 reqwest 与异步运行时。
 - 本地只做结构与绑定校验。DICE 链和 COSE 签名的密码学校验由 Google RKP 服务端完成，非法 CSR 不会签发证书。
 - TA 调用在隔离子进程中执行，父进程超时后 kill 并回收；厂商库崩溃不会影响主进程。
-- 错误按阶段结构化：TA 状态码走 `explain` 映射（AOSP `ErrorCode.aidl`），帧结构异常单独归类并带出 `status`、`len`、缓冲区大小与前 32 字节 hex。
+- **帧只解析一次**：`ta` 层只调用、只返回原始缓冲区；`protocol::decode_frame` 是唯一的帧解析入口，按 `status+len` → `status+total` → `len` → `status` → `bare` 顺序尝试，并要求业务解析（`unwrap_csr`）成功才采纳。曾经在 `ta` 层与编排层各剥一次帧，导致合法的 CBOR payload 被当成帧头，报出误导性的“长度无效”。
+- **帧布局由业务结构判定，不由长度字段判定**：长度字段可以自洽但语义不同，能解出合法 `AuthenticatedRequest` 才是真的；命中布局写入 `meta.json.frame_layout`，便于回溯固件差异。
+- 错误按阶段结构化，且**跨 worker 进程保留** `stage` / `code` / `hint` / `raw`。帧类失败额外带 `head_hex`（前 64 字节）、`written`（最后一个非零字节位置）与 `status_le`，用于区分“TA 拒绝”“空成功”“封装不同”“ABI 不匹配”。
+- TA 状态码走 `explain` 映射（AOSP `ErrorCode.aidl`）；未收录的码保留原始数值。
 - `rkp` 只在 `aarch64-linux-android` 编译出厂商调用路径，其余 ABI 的 `--rkp-status` 直接给出 `arch` 阻断项。
 
 上游来源：Duck-ToolBox `fb6b1e427f2773ac6139d2eba27068fbdfd089de`，MIT，见 `module/licenses/duck-toolbox.txt`。

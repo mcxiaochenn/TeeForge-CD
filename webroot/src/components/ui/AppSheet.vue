@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
           tabindex="-1"
           role="dialog"
           aria-modal="true"
-          class="sheet-panel flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-sheet bg-surface shadow-sheet outline-none sm:rounded-sheet"
+          class="sheet-panel flex w-full max-w-[560px] flex-col overflow-hidden rounded-t-sheet bg-surface shadow-sheet outline-none sm:rounded-sheet"
         >
           <div class="mx-auto mt-2.5 h-1 w-9 rounded-full bg-line-strong sm:hidden" aria-hidden="true" />
           <header class="flex items-start gap-3 px-5 pb-2 pt-3">

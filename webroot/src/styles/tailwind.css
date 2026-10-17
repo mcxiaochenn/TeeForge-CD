@@ -10,6 +10,7 @@
   }
 
   html {
+    height: 100%;
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -18,16 +19,28 @@
 
   body {
     @apply bg-bg font-sans text-fg;
-    min-height: 100vh;
-    min-height: 100dvh;
+
+    /* 高度跟随宿主容器，不锁 100vh：KernelSU 的 WebUI 容器高度不等于最大视口高度，
+       一旦强制撑满就会凭空多出一截可滚动区域。 */
+    /* Follow the host container: the WebUI viewport is smaller than 100vh. */
+    min-height: 100%;
     line-height: 1.55;
-    overscroll-behavior-y: none;
+    overflow-x: clip;
+    overscroll-behavior: none;
     background-image: radial-gradient(120% 55% at 50% -10%, var(--bg-wash), transparent 70%);
     background-repeat: no-repeat;
     -webkit-font-smoothing: antialiased;
     transition:
       background-color var(--dur-3) var(--ease),
       color var(--dur-3) var(--ease);
+  }
+
+  /* 旧 WebView 没有 overflow: clip，退回 hidden。clip 不创建滚动容器，
+     因此不会让 sticky 吸顶/吸底失效。 */
+  @supports not (overflow: clip) {
+    body {
+      overflow-x: hidden;
+    }
   }
 
   :focus-visible {
@@ -64,6 +77,10 @@
   }
   .tap {
     @apply transition-colors duration-150 ease-standard;
+  }
+  /* 浮层高度：dvh 不可用时退回 vh，避免没有上限。 */
+  .sheet-panel {
+    max-height: 86vh;
   }
   .text-balance {
     text-wrap: balance;
@@ -111,4 +128,11 @@
 .sheet-enter-from .sheet-panel,
 .sheet-leave-to .sheet-panel {
   transform: translateY(16px);
+}
+
+/* dvh 可用时用动态视口高度，浮层底部不会被系统栏遮住。 */
+@supports (height: 100dvh) {
+  .sheet-panel {
+    max-height: 86dvh;
+  }
 }

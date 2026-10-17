@@ -128,6 +128,12 @@
   "rkp.code.-100": "固件未实现该命令。",
   "rkp.code.-101": "命令版本与 TA 不匹配。",
   "rkp.code.-1000": "TA 内部错误。",
+  "rkp.frame.unparsed": "TA 返回的字节流不符合任何已知帧布局。下方原始数据里的 head_hex 是缓冲区开头 64 字节，可据此判断厂商实际的封装格式。",
+  "rkp.frame.abi": "响应缓冲区完全没有被写入：厂商 send_cmd 接受了调用却没有落数据，通常是 ABI 或参数约定与该固件不匹配。",
+  "rkp.frame.payload_length": "长度字段与真实数据不一致（旧版诊断）。",
+  "rkp.frame.truncated_header": "响应头不足 8 字节（旧版诊断）。",
+  "rkp.ta.status": "TA 直接返回了错误码，见上方原始码；完整码表见 AOSP ErrorCode。",
+  "rkp.frame.layout": "响应帧布局",
 
   "update.section.module": "模块",
   "update.section.latest": "可用更新",

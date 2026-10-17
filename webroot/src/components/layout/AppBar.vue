@@ -19,10 +19,10 @@ function goBack() {
 
 <template>
   <header
-    class="sticky top-0 z-30 -mx-4 px-4 backdrop-blur-xl backdrop-saturate-150 safe-top"
+    class="sticky top-0 z-30 backdrop-blur-xl backdrop-saturate-150 safe-top"
     :style="{ background: 'var(--bar-bg)' }"
   >
-    <div class="mx-auto flex h-14 w-full max-w-[560px] items-center gap-2">
+    <div class="mx-auto flex h-14 w-full max-w-[560px] items-center gap-2 px-4">
       <button
         v-if="props.showBack"
         type="button"

@@ -11,7 +11,7 @@ const isHome = computed(() => route.name === 'home');
 </script>
 
 <template>
-  <div class="shell safe-x min-h-dvh">
+  <div class="shell safe-x">
     <AppBar :title="title" :show-back="!isHome" />
     <main class="mx-auto w-full max-w-[560px] px-4 pb-10">
       <router-view />

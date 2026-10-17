@@ -45,6 +45,27 @@ impl TfError {
         }
     }
 
+    /// 从跨进程回执还原结构化错误。
+    ///
+    /// `stage` 在 JSON 里是字符串，只能映射回已知阶段；未知阶段按无阶段处理，
+    /// 避免为了传递一个标签而泄漏内存或放宽类型。
+    /// Restores a structured error from a worker reply; unknown stages degrade to `None`.
+    pub(crate) fn from_parts(
+        stage: Option<&str>,
+        code: Option<String>,
+        message: impl Into<String>,
+        hint: Option<String>,
+        raw: Option<serde_json::Value>,
+    ) -> Self {
+        Self {
+            message: message.into(),
+            stage: stage.and_then(known_stage),
+            code,
+            hint,
+            raw,
+        }
+    }
+
     /// 附加 i18n 提示键，供 WebUI 直接查表。
     pub(crate) fn with_hint(mut self, hint: impl Into<String>) -> Self {
         self.hint = Some(hint.into());
@@ -93,3 +114,20 @@ impl From<std::io::Error> for TfError {
 }
 
 pub type Result<T> = std::result::Result<T, TfError>;
+
+/// 已知错误阶段。只用于把回执里的字符串映射回 `&'static str`。
+const STAGES: [&str; 9] = [
+    "prerequisite",
+    "transport",
+    "frame",
+    "ta",
+    "server",
+    "keybox",
+    "target",
+    "update",
+    "cli",
+];
+
+fn known_stage(value: &str) -> Option<&'static str> {
+    STAGES.iter().copied().find(|stage| *stage == value)
+}

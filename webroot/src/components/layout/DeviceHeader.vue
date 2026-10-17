@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 
 import type { Bootstrap } from '../../lib/api';
+import { formatVersion } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import AppBadge from '../ui/AppBadge.vue';
 import AppIcon from '../ui/AppIcon.vue';
@@ -56,7 +57,7 @@ const androidLine = computed(() => {
           </p>
           <p class="truncate text-[13px] text-muted">{{ androidLine }}</p>
         </div>
-        <AppBadge tone="neutral">v{{ props.data.module.version }}</AppBadge>
+        <AppBadge tone="neutral">{{ formatVersion(props.data.module.version) }}</AppBadge>
       </div>
 
       <div class="mt-3 flex flex-wrap gap-1.5">

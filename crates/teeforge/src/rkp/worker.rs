@@ -11,10 +11,11 @@
 use crate::error::{Result, TfError};
 use crate::process;
 use crate::rkp::protocol;
+use crate::rkp::ta::RawFrame;
 use crate::rkp::{unique_dir, write_private};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -22,13 +23,15 @@ use std::process::Command;
 use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_REPLY_BYTES: usize = 64 * 1024;
+/// 0xa000 字节的 base64 约 54 KB，回执还带诊断字段，留足余量。
+/// A 0xa000-byte frame is ~54 KB in base64; leave room for diagnostics.
+const MAX_REPLY_BYTES: usize = 96 * 1024;
 /// Bionic 在 main 之前读取该值；保留默认命名空间以继续解析系统依赖。
 /// Bionic reads this before main; the default namespace keeps system dependency links.
 const VENDOR_LIBRARY_PATH: &str =
     "/system/lib64:/vendor/lib64:/odm/lib64:/vendor/lib64/hw:/odm/lib64/hw";
 
-pub(crate) fn sign(tmp_root: &Path, request: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn sign(tmp_root: &Path, request: &[u8]) -> Result<RawFrame> {
     let directory = unique_dir(tmp_root)?;
     let result = (|| {
         write_private(&directory.join("request.bin"), request)?;
@@ -63,6 +66,10 @@ pub(crate) fn sign(tmp_root: &Path, request: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// 子进程入口：读取请求、调用 TA、写回执。
+///
+/// 回执必须保留结构化错误：早期用 `to_string()` 传字符串，父进程无法还原
+/// `stage/code/hint/raw`，诊断信息（hex、长度）全部丢失。
+/// Structured errors must survive the process boundary.
 pub(crate) fn execute(directory: &Path) -> Result<()> {
     let result = (|| {
         let request = read_bounded(&directory.join("request.bin"), protocol::MAX_REQUEST_SIZE)?;
@@ -70,37 +77,78 @@ pub(crate) fn execute(directory: &Path) -> Result<()> {
         crate::rkp::ta::request(&request)
     })();
     let reply = match result {
-        Ok(payload) => json!({ "ok": true, "payload": STANDARD.encode(payload) }),
-        Err(error) => json!({ "ok": false, "error": error.to_string() }),
+        Ok(frame) => json!({
+            "ok": true,
+            "status": frame.status,
+            "head_hex": protocol::head_hex(&frame.bytes),
+            "frame": STANDARD.encode(&frame.bytes),
+        }),
+        Err(error) => json!({ "ok": false, "error": describe(&error) }),
     };
     let encoded = serde_json::to_vec(&reply)
         .map_err(|error| TfError::new(format!("编码 worker 回执失败 [encode reply]: {error}")))?;
     write_private(&directory.join("reply.json"), &encoded)
 }
 
-fn parse_reply(bytes: &[u8]) -> Result<Vec<u8>> {
-    let value: serde_json::Value = serde_json::from_slice(bytes)
-        .map_err(|error| TfError::new(format!("解析 worker 回执失败 [decode reply]: {error}")))?;
-    if value.get("ok").and_then(serde_json::Value::as_bool) != Some(true) {
-        let reason = value
-            .get("error")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("未知错误 [unknown error]");
-        return Err(TfError::new(reason.to_owned()));
+/// 把 `TfError` 拆成可跨进程传输的对象。
+fn describe(error: &TfError) -> Value {
+    let mut payload = json!({ "message": error.message() });
+    if let Some(value) = error.stage() {
+        payload["stage"] = json!(value);
     }
-    let payload = value
-        .get("payload")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| TfError::new("worker 回执缺少 payload [missing payload]"))?;
+    if let Some(value) = error.code() {
+        payload["code"] = json!(value);
+    }
+    if let Some(value) = error.hint() {
+        payload["hint"] = json!(value);
+    }
+    if let Some(value) = error.raw() {
+        payload["raw"] = value.clone();
+    }
+    payload
+}
+
+fn parse_reply(bytes: &[u8]) -> Result<RawFrame> {
+    let value: Value = serde_json::from_slice(bytes)
+        .map_err(|error| TfError::new(format!("解析 worker 回执失败 [decode reply]: {error}")))?;
+    if value.get("ok").and_then(Value::as_bool) != Some(true) {
+        return Err(restore_error(value.get("error")));
+    }
+    let frame = value
+        .get("frame")
+        .and_then(Value::as_str)
+        .ok_or_else(|| TfError::new("worker 回执缺少 frame [missing frame]"))?;
     let decoded = STANDARD
-        .decode(payload)
-        .map_err(|_| TfError::new("worker 回执 payload 解码失败 [payload decode failed]"))?;
+        .decode(frame)
+        .map_err(|_| TfError::new("worker 回执 frame 解码失败 [frame decode failed]"))?;
     if decoded.len() > protocol::BUFFER_SIZE {
         return Err(TfError::new(
             "worker 回执超过 TA 缓冲区 [reply exceeds TA buffer]",
         ));
     }
-    Ok(decoded)
+    let status = value.get("status").and_then(Value::as_i64).unwrap_or(0) as i32;
+    Ok(RawFrame {
+        bytes: decoded,
+        status,
+    })
+}
+
+/// 还原子进程错误；兼容旧版纯字符串回执。
+fn restore_error(value: Option<&Value>) -> TfError {
+    let Some(value) = value else {
+        return TfError::new("worker 回执缺少错误信息 [missing error]");
+    };
+    if let Some(text) = value.as_str() {
+        return TfError::new(text.to_owned());
+    }
+    let text = |key: &str| value.get(key).and_then(Value::as_str);
+    TfError::from_parts(
+        text("stage"),
+        text("code").map(str::to_owned),
+        text("message").unwrap_or("未知错误 [unknown error]"),
+        text("hint").map(str::to_owned),
+        value.get("raw").cloned(),
+    )
 }
 
 fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
@@ -146,23 +194,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reply_without_payload_is_rejected() {
+    fn reply_without_frame_is_rejected() {
         assert!(parse_reply(br#"{"ok":true}"#).is_err());
     }
 
     #[test]
-    fn failed_reply_keeps_its_message() {
+    fn legacy_string_error_is_accepted() {
         let error =
             parse_reply(r#"{"ok":false,"error":"TA 返回状态 -18"}"#.as_bytes()).unwrap_err();
         assert!(error.to_string().contains("-18"));
     }
 
     #[test]
-    fn payload_is_base64_decoded() {
-        assert_eq!(
-            parse_reply(br#"{"ok":true,"payload":"YWJj"}"#).unwrap(),
-            b"abc"
-        );
+    fn structured_error_keeps_stage_and_raw() {
+        let reply = br#"{"ok":false,"error":{"stage":"frame","code":"unparsed","message":"x","hint":"rkp.frame.unparsed","raw":{"head_hex":"00"}}}"#;
+        let error = parse_reply(reply).unwrap_err();
+        assert_eq!(error.stage(), Some("frame"));
+        assert_eq!(error.code(), Some("unparsed"));
+        assert_eq!(error.hint(), Some("rkp.frame.unparsed"));
+        assert!(error.raw().is_some());
+    }
+
+    #[test]
+    fn frame_is_decoded() {
+        let frame = parse_reply(br#"{"ok":true,"status":0,"frame":"YWJj"}"#).unwrap();
+        assert_eq!(frame.bytes, b"abc");
+        assert_eq!(frame.status, 0);
     }
 
     #[test]

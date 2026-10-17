@@ -55,6 +55,8 @@ pub(crate) struct Issued {
     pub(crate) certificates: usize,
     pub(crate) fingerprint: String,
     pub(crate) duration_ms: u128,
+    /// 命中的响应帧布局，写入 `meta.json` 便于回溯固件差异。
+    pub(crate) frame_layout: &'static str,
 }
 
 /// 落盘后的产物路径。
@@ -104,8 +106,14 @@ pub(crate) fn issue(config: &Config) -> Result<Issued> {
 
     let cose_key = protocol::cose_key(&key.public_key())?;
     let request = protocol::build_request(&challenge, &cose_key)?;
-    let response = worker::sign(&tmp, &request)?;
-    let csr = protocol::unwrap_csr(&protocol::response_payload(&response)?)?;
+    let frame = worker::sign(&tmp, &request)?;
+    // 帧只在这里解一次。worker 返回原始缓冲区，布局由业务结构判定。
+    // The frame is decoded exactly once here; the worker returns raw bytes.
+    let (layout, csr) = protocol::decode_frame(&frame.bytes, protocol::unwrap_csr)?;
+    logging::log(
+        Level::Debug,
+        format!("TA 帧布局 [frame layout]: {}", layout.label()),
+    );
     let info = protocol::validate_csr(&csr, &challenge, &cose_key)?;
     logging::log(
         Level::Debug,
@@ -124,6 +132,7 @@ pub(crate) fn issue(config: &Config) -> Result<Issued> {
         certificates: built.certificates,
         fingerprint: diagnosis.fingerprint,
         duration_ms: started.elapsed().as_millis(),
+        frame_layout: layout.label(),
     })
 }
 
@@ -146,6 +155,7 @@ fn save(config: &Config, issued: &Issued) -> Result<SavedArtifacts> {
         "device_id": issued.device_id,
         "certificates": issued.certificates,
         "protocol": "csr_v2",
+        "frame_layout": issued.frame_layout,
         "duration_ms": issued.duration_ms,
         "ta_status": 0,
         "tool_version": crate::VERSION,
@@ -557,6 +567,7 @@ mod tests {
             certificates: 2,
             fingerprint: "brand/device".into(),
             duration_ms: 12,
+            frame_layout: "status+len",
         };
         let saved = save(&config, &issued).unwrap();
         assert!(saved.keybox.is_file() && saved.chain.is_file() && saved.meta.is_file());

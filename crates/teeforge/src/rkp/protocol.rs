@@ -361,46 +361,250 @@ fn validate_inputs(challenge: &[u8], key: &Value) -> Result<()> {
     Ok(())
 }
 
-/// 校验 TA 帧头并取出 payload。
-pub(crate) fn response_payload(response: &[u8]) -> Result<Vec<u8>> {
-    if response.len() < 8 {
-        return Err(crate::error::TfError::staged(
-            "frame",
-            "truncated_header",
-            "TA 响应头截断 [truncated header]",
-        )
-        .with_hint("rkp.frame.truncated_header")
-        .with_raw(serde_json::json!({ "response_len": response.len() })));
+/// 厂商 `send_cmd` 可能使用的响应帧布局。
+///
+/// 不同固件对帧头的约定不一致：有的带 status，有的长度含头，有的干脆直接回 CBOR。
+/// 只靠长度字段无法可靠区分，因此由 [`decode_frame`] 结合业务解析结果判定。
+/// Firmware disagrees on the frame header; the layout is confirmed by business parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Layout {
+    /// `[i32 status][u32 payload_len][payload]`
+    StatusLen,
+    /// `[i32 status][u32 total_len][payload]`，长度包含 8 字节头
+    StatusTotal,
+    /// `[u32 payload_len][payload]`，status 由 `send_cmd` 返回值给出
+    LenOnly,
+    /// `[i32 status][payload]`，无长度字段
+    StatusOnly,
+    /// 纯 payload
+    Bare,
+}
+
+impl Layout {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Layout::StatusLen => "status+len",
+            Layout::StatusTotal => "status+total",
+            Layout::LenOnly => "len",
+            Layout::StatusOnly => "status",
+            Layout::Bare => "bare",
+        }
     }
-    let status = i32::from_le_bytes(response[..4].try_into().unwrap());
-    if status != 0 {
-        return Err(crate::rkp::explain::status_error(status));
+
+    /// 按布局切出候选区间；只做边界判断，不判断内容。
+    fn slice(self, buf: &[u8]) -> Option<&[u8]> {
+        match self {
+            Layout::StatusLen => {
+                let length = read_u32(buf, 4)? as usize;
+                bounded(buf, 8, length)
+            }
+            Layout::StatusTotal => {
+                let total = read_u32(buf, 4)? as usize;
+                bounded(buf, 8, total.checked_sub(8)?)
+            }
+            Layout::LenOnly => {
+                let length = read_u32(buf, 0)? as usize;
+                bounded(buf, 4, length)
+            }
+            Layout::StatusOnly => {
+                if buf.len() <= 4 {
+                    return None;
+                }
+                Some(&buf[4..])
+            }
+            Layout::Bare => Some(buf),
+        }
     }
-    let length = u32::from_le_bytes(response[4..8].try_into().unwrap()) as usize;
-    if length == 0 || length > BUFFER_SIZE - 8 || length > response.len() - 8 {
-        // 这个分支通常意味着厂商 send_cmd 的返回结构与我们的假设不一致，
-        // 而不是 TA 拒绝了请求；把原始帧头一并带出去，便于区分两者。
-        // This usually means the vendor response layout differs from our assumption.
-        let head = response
-            .iter()
-            .take(32)
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        return Err(crate::error::TfError::staged(
+}
+
+/// 依次尝试候选布局，返回第一个能被 `accept` 完整解析的结果。
+///
+/// `accept` 必须是业务解析器（例如 [`unwrap_csr`]）：长度字段可以骗人，
+/// 能解出合法业务结构才是真的。命中布局会一路带到日志与 `meta.json`。
+/// Tries every candidate layout and keeps the first one `accept` can parse.
+pub(crate) fn decode_frame<T>(
+    buf: &[u8],
+    accept: impl Fn(&[u8]) -> Result<T>,
+) -> Result<(Layout, T)> {
+    const LAYOUTS: [Layout; 5] = [
+        Layout::StatusLen,
+        Layout::StatusTotal,
+        Layout::LenOnly,
+        Layout::StatusOnly,
+        Layout::Bare,
+    ];
+
+    // 先严格匹配（长度字段正好等于真实 item 长度），再放宽到"长度字段含 padding"。
+    // 严格轮保证 `Layout` 标签可信；宽松轮保证异常固件也能解析。
+    // Strict pass first so the reported layout is trustworthy, then a lenient pass.
+    for strict in [true, false] {
+        for layout in LAYOUTS {
+            let Some(candidate) = layout.slice(buf) else {
+                continue;
+            };
+            // 收紧到真实 item 边界：去掉长度字段里的 padding 与缓冲区尾部的零填充。
+            // Trim to the real CBOR item so trailing zero padding never reaches the server.
+            let Some(length) = cbor_item_len(candidate) else {
+                continue;
+            };
+            if strict && length != candidate.len() {
+                continue;
+            }
+            let payload = &candidate[..length];
+            if let Ok(value) = accept(payload) {
+                return Ok((layout, value));
+            }
+        }
+    }
+
+    // 所有布局都失败后才看头部数值：落在 KeyMint 错误码区间说明 TA 明确拒绝，
+    // 比"无法识别帧"更能定位问题。放在最后避免干扰正常解析。
+    // A negative header in the KeyMint range means the TA rejected the call.
+    if let Some(code) = read_status(buf) {
+        if (-1000..=-1).contains(&code) {
+            return Err(crate::rkp::explain::status_error(code));
+        }
+    }
+    Err(frame_error(buf))
+}
+
+/// 无法识别帧时的诊断错误：带上原始字节，便于区分"TA 拒绝"与"ABI 漂移"。
+fn frame_error(buf: &[u8]) -> TfError {
+    let sentinel = i32::MIN.to_le_bytes();
+    if buf.starts_with(&sentinel) {
+        return TfError::staged(
             "frame",
-            "payload_length",
-            "TA 响应长度无效 [invalid payload length]",
+            "abi",
+            "TA 未写入响应缓冲区 [TA never wrote a response]",
         )
-        .with_hint("rkp.frame.payload_length")
+        .with_hint("rkp.frame.abi")
         .with_raw(serde_json::json!({
-            "status": status,
-            "length": length,
             "buffer": BUFFER_SIZE,
-            "response_len": response.len(),
-            "head_hex": head,
-        })));
+            "buffer_len": buf.len(),
+            "head_hex": head_hex(buf),
+        }));
     }
-    Ok(response[8..8 + length].to_vec())
+    TfError::staged(
+        "frame",
+        "unparsed",
+        "无法识别 TA 响应帧 [unrecognized TA response frame]",
+    )
+    .with_hint("rkp.frame.unparsed")
+    .with_raw(serde_json::json!({
+        "buffer": BUFFER_SIZE,
+        "buffer_len": buf.len(),
+        "written": written_len(buf),
+        "status_le": read_status(buf),
+        "head_hex": head_hex(buf),
+    }))
+}
+
+fn read_u32(buf: &[u8], offset: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(
+        buf.get(offset..offset + 4)?.try_into().ok()?,
+    ))
+}
+
+fn read_status(buf: &[u8]) -> Option<i32> {
+    Some(i32::from_le_bytes(buf.get(..4)?.try_into().ok()?))
+}
+
+fn bounded(buf: &[u8], start: usize, length: usize) -> Option<&[u8]> {
+    if length == 0 || length > BUFFER_SIZE.saturating_sub(8) {
+        return None;
+    }
+    buf.get(start..start.checked_add(length)?)
+}
+
+/// 前 64 字节的 hex；用于把真实字节带回诊断界面。
+pub(crate) fn head_hex(buf: &[u8]) -> String {
+    buf.iter()
+        .take(64)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// 最后一个非零字节之后的长度；只作为"厂商写了多少"的粗略证据。
+fn written_len(buf: &[u8]) -> usize {
+    buf.iter()
+        .rposition(|byte| *byte != 0)
+        .map(|index| index + 1)
+        .unwrap_or(0)
+}
+
+/// 缓冲区开头一个完整 CBOR item 的字节长度，不做语义解析。
+///
+/// 只需要覆盖厂商可能返回的结构（数组、映射、tag、字节串、整数），
+/// indefinite length 不支持——本项目的请求与响应都不会产生它。
+fn cbor_item_len(buf: &[u8]) -> Option<usize> {
+    const MAX_ITEMS: u64 = 4096;
+
+    fn header(buf: &[u8], pos: &mut usize) -> Option<(u8, u64)> {
+        let first = *buf.get(*pos)?;
+        *pos += 1;
+        let major = first >> 5;
+        let info = first & 0x1f;
+        let value = match info {
+            0..=23 => u64::from(info),
+            24 => {
+                let value = u64::from(*buf.get(*pos)?);
+                *pos += 1;
+                value
+            }
+            25 => {
+                let value = u64::from(u16::from_be_bytes(
+                    buf.get(*pos..*pos + 2)?.try_into().ok()?,
+                ));
+                *pos += 2;
+                value
+            }
+            26 => {
+                let value = u64::from(u32::from_be_bytes(
+                    buf.get(*pos..*pos + 4)?.try_into().ok()?,
+                ));
+                *pos += 4;
+                value
+            }
+            27 => {
+                let value = u64::from_be_bytes(buf.get(*pos..*pos + 8)?.try_into().ok()?);
+                *pos += 8;
+                value
+            }
+            _ => return None,
+        };
+        Some((major, value))
+    }
+
+    fn item(buf: &[u8], pos: &mut usize, depth: usize) -> Option<()> {
+        if depth > MAX_DEPTH {
+            return None;
+        }
+        let (major, value) = header(buf, pos)?;
+        match major {
+            0 | 1 => Some(()),
+            2 | 3 => {
+                let length = usize::try_from(value).ok()?;
+                *pos = pos.checked_add(length)?;
+                (*pos <= buf.len()).then_some(())
+            }
+            4 | 5 => {
+                if value > MAX_ITEMS {
+                    return None;
+                }
+                let items = if major == 5 { value * 2 } else { value };
+                for _ in 0..items {
+                    item(buf, pos, depth + 1)?;
+                }
+                Some(())
+            }
+            6 => item(buf, pos, depth + 1),
+            _ => Some(()),
+        }
+    }
+
+    let mut pos = 0;
+    item(buf, &mut pos, 0)?;
+    (pos > 0).then_some(pos)
 }
 
 /// 固件可能返回裸 AuthenticatedRequest，也可能包在字段 61 中。
@@ -527,20 +731,103 @@ mod tests {
         assert!(ta_payload(&request).is_err());
     }
 
-    #[test]
-    fn response_header_rejects_nonzero_status() {
-        let mut response = vec![0u8; 12];
-        response[..4].copy_from_slice(&(-18i32).to_le_bytes());
-        let error = response_payload(&response).unwrap_err().to_string();
-        assert!(error.contains("-18"));
+    /// 固定 CBOR 样本：数组 `[1, 2, 3]`。
+    fn sample_cbor() -> Vec<u8> {
+        encode(&Value::Array(vec![cb(1), cb(2), cb(3)])).expect("cbor")
+    }
+
+    fn accept_sample(payload: &[u8]) -> Result<Vec<u8>> {
+        if payload == sample_cbor() {
+            Ok(payload.to_vec())
+        } else {
+            Err(fail("not the sample"))
+        }
+    }
+
+    fn buffer_with(payload: &[u8], header: &[u8]) -> Vec<u8> {
+        let mut buffer = vec![0u8; BUFFER_SIZE];
+        buffer[..header.len()].copy_from_slice(header);
+        let start = header.len();
+        buffer[start..start + payload.len()].copy_from_slice(payload);
+        buffer
     }
 
     #[test]
-    fn response_header_returns_bounded_payload() {
-        let mut response = vec![0u8; 12];
-        response[4..8].copy_from_slice(&4u32.to_le_bytes());
-        response[8..12].copy_from_slice(b"data");
-        assert_eq!(response_payload(&response).unwrap(), b"data");
+    fn status_len_layout_is_detected() {
+        let payload = sample_cbor();
+        let header = [0u8, 0, 0, 0, payload.len() as u8, 0, 0, 0];
+        let buffer = buffer_with(&payload, &header);
+        let (layout, value) = decode_frame(&buffer, accept_sample).expect("decode");
+        assert_eq!(layout, Layout::StatusLen);
+        assert_eq!(value, payload);
+    }
+
+    #[test]
+    fn status_total_layout_is_detected() {
+        let payload = sample_cbor();
+        let total = (payload.len() + 8) as u8;
+        let header = [0u8, 0, 0, 0, total, 0, 0, 0];
+        let buffer = buffer_with(&payload, &header);
+        let (layout, _) = decode_frame(&buffer, accept_sample).expect("decode");
+        assert_eq!(layout, Layout::StatusTotal);
+    }
+
+    #[test]
+    fn len_only_layout_is_detected() {
+        let payload = sample_cbor();
+        let header = [payload.len() as u8, 0, 0, 0];
+        let buffer = buffer_with(&payload, &header);
+        let (layout, _) = decode_frame(&buffer, accept_sample).expect("decode");
+        assert_eq!(layout, Layout::LenOnly);
+    }
+
+    #[test]
+    fn status_only_layout_is_detected() {
+        let payload = sample_cbor();
+        let header = [0u8, 0, 0, 0];
+        let buffer = buffer_with(&payload, &header);
+        let (layout, _) = decode_frame(&buffer, accept_sample).expect("decode");
+        assert_eq!(layout, Layout::StatusOnly);
+    }
+
+    #[test]
+    fn bare_layout_ignores_zero_padding() {
+        let payload = sample_cbor();
+        let mut buffer = vec![0u8; BUFFER_SIZE];
+        buffer[..payload.len()].copy_from_slice(&payload);
+        let (layout, value) = decode_frame(&buffer, accept_sample).expect("decode");
+        assert_eq!(layout, Layout::Bare);
+        assert_eq!(value, payload);
+    }
+
+    #[test]
+    fn untouched_buffer_reports_abi() {
+        let mut buffer = vec![0u8; BUFFER_SIZE];
+        buffer[..4].copy_from_slice(&i32::MIN.to_le_bytes());
+        let error = decode_frame(&buffer, accept_sample).expect_err("must fail");
+        assert_eq!(error.stage(), Some("frame"));
+        assert_eq!(error.code(), Some("abi"));
+        assert!(error.raw().is_some());
+    }
+
+    #[test]
+    fn negative_header_maps_to_keymint_status() {
+        let mut buffer = vec![0u8; BUFFER_SIZE];
+        buffer[..4].copy_from_slice(&(-18i32).to_le_bytes());
+        let error = decode_frame(&buffer, accept_sample).expect_err("must fail");
+        assert_eq!(error.stage(), Some("ta"));
+        assert_eq!(error.code(), Some("-18"));
+    }
+
+    #[test]
+    fn unrecognized_buffer_keeps_head_hex() {
+        let mut buffer = vec![0x00u8; BUFFER_SIZE];
+        buffer[..4].copy_from_slice(&[0xfe, 0xfe, 0xfe, 0xfe]);
+        let error = decode_frame(&buffer, accept_sample).expect_err("must fail");
+        assert_eq!(error.code(), Some("unparsed"));
+        let raw = error.raw().expect("raw");
+        assert!(raw.get("head_hex").is_some());
+        assert!(raw.get("written").is_some());
     }
 
     /// 构造一个结构合法、绑定正确的 CSR，用于验证本地检查逻辑。

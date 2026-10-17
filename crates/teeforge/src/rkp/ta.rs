@@ -6,13 +6,29 @@
 //! 对象布局与符号随固件变化，存在性检查不能证明 ABI 兼容；调用一律在隔离子进程
 //! 中进行，崩溃与厂商输出不会污染主进程。
 //! Layout and symbols vary by firmware; calls always run in an isolated child.
+//!
+//! 本层只负责调用，**不解释响应**：返回原始缓冲区，帧布局由 `protocol::decode_frame`
+//! 结合业务结构判定。早期实现在这里剥帧、上层又剥一次，导致 CBOR 被当成帧头解析。
+//! This layer does not interpret the reply; framing is resolved exactly once upstream.
 
 use crate::error::Result;
+
+/// 原始响应缓冲区与 `send_cmd` 返回码。
+///
+/// 保留整块缓冲区（而不是解析后的 payload），是为了让上层能在不同帧布局之间尝试，
+/// 并在全部失败时把首字节 hex 透出给诊断界面。
+/// The whole buffer is kept so the caller can try several layouts and report raw bytes.
+#[derive(Debug, Clone)]
+pub(crate) struct RawFrame {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) status: i32,
+}
 
 #[cfg(all(target_os = "android", target_arch = "aarch64"))]
 mod imp {
     use crate::error::{Result, TfError};
-    use crate::rkp::protocol::{BUFFER_SIZE, response_payload};
+    use crate::rkp::protocol::BUFFER_SIZE;
+    use crate::rkp::ta::RawFrame;
     use std::ffi::c_void;
     use std::mem::MaybeUninit;
 
@@ -81,7 +97,7 @@ mod imp {
             })
         }
 
-        fn request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        fn request(&mut self, request: &[u8]) -> Result<RawFrame> {
             let mut request = request.to_vec();
             let mut response = vec![0u8; BUFFER_SIZE];
             // 非零哨兵避免未写入的响应被误判为有效。
@@ -101,19 +117,22 @@ mod imp {
             if status != 0 {
                 return Err(crate::rkp::explain::status_error(status));
             }
-            response_payload(&response)
+            Ok(RawFrame {
+                bytes: response,
+                status,
+            })
         }
     }
 
     impl Drop for Session {
         fn drop(&mut self) {
             // SAFETY: 析构只执行一次，且对象与库在调用期间均存活。
-            // SAFETY: the destructor runs once while both object and library are live.
+            // SAFETY: the destructor runs once while both the object and library are live.
             unsafe { (self.destructor)(self.object.as_mut() as *mut VendorObject as *mut c_void) };
         }
     }
 
-    pub(super) fn request(bytes: &[u8]) -> Result<Vec<u8>> {
+    pub(super) fn request(bytes: &[u8]) -> Result<RawFrame> {
         Session::open()?.request(bytes)
     }
 }
@@ -121,14 +140,15 @@ mod imp {
 #[cfg(not(all(target_os = "android", target_arch = "aarch64")))]
 mod imp {
     use crate::error::{Result, TfError};
+    use crate::rkp::ta::RawFrame;
 
-    pub(super) fn request(_bytes: &[u8]) -> Result<Vec<u8>> {
+    pub(super) fn request(_bytes: &[u8]) -> Result<RawFrame> {
         Err(TfError::new(
-            "设备端 RKP 仅支持 Android arm64 [device RKP requires Android arm64]",
+            "设备端 RKP 只能由 Android arm64 触发 [device RKP requires Android arm64]",
         ))
     }
 }
 
-pub(crate) fn request(bytes: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn request(bytes: &[u8]) -> Result<RawFrame> {
     imp::request(bytes)
 }

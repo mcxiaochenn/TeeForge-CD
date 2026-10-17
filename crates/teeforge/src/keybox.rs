@@ -1,9 +1,8 @@
 use crate::atomic_file;
-use crate::config::{Config, RkpMode};
+use crate::config::{Config, KeyboxSource};
 use crate::error::{Result, TfError};
 use crate::logging::{self, Level};
 use crate::process;
-use crate::rkp;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::{Digest, Sha256};
@@ -245,7 +244,7 @@ struct KeyboxUpdate {
     original: Option<Vec<u8>>,
 }
 
-fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<()> {
+fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
     let mut updates = Vec::new();
     for path in paths {
         let original = match fs::read(path) {
@@ -294,89 +293,79 @@ fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<()> {
         }
         written.push(update);
     }
-    Ok(())
+    // updates 记录了需要写入的目标；未变化的路径单独标记为 false。
+    let changed = updates
+        .iter()
+        .map(|update| (update.path.clone(), true))
+        .collect::<Vec<_>>();
+    Ok(changed)
 }
 
 #[cfg(test)]
 fn install_keybox(local: &Path, destination: &Path, decoded: &[u8]) -> Result<()> {
-    install_keyboxes(&[local.to_path_buf(), destination.to_path_buf()], decoded)
+    install_keyboxes(&[local.to_path_buf(), destination.to_path_buf()], decoded).map(|_| ())
 }
 
-/// keybox 来源，决定成功后的标记维护 [Source decides post-install marker handling].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Source {
-    Cached,
-    Device,
-    Remote,
+/// 安装结果：来源与每个目标的写入状态，供 JSON 输出使用。
+pub(crate) struct InstallReport {
+    pub(crate) source: KeyboxSource,
+    /// (路径, 是否发生写入) [path and whether it changed]
+    pub(crate) targets: Vec<(PathBuf, bool)>,
 }
 
-pub(crate) fn fetch(config: &Config) -> Result<()> {
+pub(crate) fn fetch(config: &Config) -> Result<InstallReport> {
     logging::log(Level::Info, "开始获取 keybox [Starting keybox fetch]...");
-    let (decoded, source) = acquire(config)?;
-    install(config, &decoded)?;
-    match source {
-        Source::Device => {
-            if let Err(error) = rkp::mark_issued(config, &decoded) {
-                // 标记只影响复用窗口，写入失败不应否定已完成的 Keybox 更新。
-                // The marker only controls reuse; failing to write it must not fail the update.
-                logging::log(
-                    Level::Warn,
-                    format!("写入 RKP 复用标记失败 [failed to write RKP marker]: {error}"),
-                );
-            }
-        }
-        Source::Remote => rkp::clear_marker(config),
-        Source::Cached => {}
-    }
+    let decoded = match config.keybox_source {
+        KeyboxSource::Remote => remote_keybox()?,
+        KeyboxSource::Rkp => rkp_keybox(config)?,
+    };
+    let targets = install(config, &decoded)?;
     logging::log(
         Level::Info,
         "Keybox 已更新并同步 [Keybox updated and synchronized]",
     );
-    Ok(())
+    Ok(InstallReport {
+        source: config.keybox_source,
+        targets,
+    })
 }
 
-/// 设备端优先，失败时按 `rkp_mode` 决定是否回退远程。
-/// Device issuance first; failures fall back to the remote source unless mode is `device`.
-fn acquire(config: &Config) -> Result<(Vec<u8>, Source)> {
-    let mut device_error = None;
-    if config.rkp_mode != RkpMode::Remote {
-        if !rkp::device_path_supported() {
-            if config.rkp_mode == RkpMode::Device {
-                return Err(TfError::new(
-                    "设备端 RKP 仅支持 Android arm64 [device RKP requires Android arm64]",
-                ));
-            }
-        } else {
-            if let Some(bytes) = rkp::cached(config) {
-                return Ok((bytes, Source::Cached));
-            }
-            match rkp::issue(config) {
-                Ok(bytes) => return Ok((bytes, Source::Device)),
-                Err(error) if config.rkp_mode == RkpMode::Device => return Err(error),
-                Err(error) => {
-                    logging::log(
-                        Level::Warn,
-                        format!(
-                            "设备端 RKP 签发失败，回退远程 [device RKP failed; falling back to remote]: {error}"
-                        ),
-                    );
-                    device_error = Some(error.to_string());
-                }
-            }
+/// 读取本机 RKP 产物；不联网、不回退。
+fn rkp_keybox(config: &Config) -> Result<Vec<u8>> {
+    let path = config.rkp_dir.join("keybox.xml");
+    let bytes = match fs::read(&path) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(TfError::staged(
+                "keybox",
+                "rkp_missing",
+                "本机 RKP 产物不存在，请先在 RKP 页面签发 [RKP artifacts missing]",
+            )
+            .with_hint("keybox.error.rkp_missing")
+            .with_raw(serde_json::json!({ "path": path.display().to_string() })));
         }
-    }
-    match remote_keybox() {
-        Ok(bytes) => Ok((bytes, Source::Remote)),
         Err(error) => {
-            let message = match device_error {
-                Some(device) => format!(
-                    "设备端 RKP 失败 [device RKP failed]: {device}; 远程 Keybox 失败 [remote failed]: {error}"
-                ),
-                None => error.to_string(),
-            };
-            Err(TfError::new(message))
+            return Err(TfError::staged(
+                "keybox",
+                "rkp_unreadable",
+                format!("无法读取 RKP 产物 [cannot read RKP artifacts]: {error}"),
+            )
+            .with_raw(serde_json::json!({ "path": path.display().to_string() })));
         }
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    if !text.contains("<AndroidAttestation") || !text.contains("<Keybox") {
+        return Err(TfError::staged(
+            "keybox",
+            "rkp_invalid",
+            "RKP 产物不是有效的 keybox.xml [RKP artifact is not a valid keybox]",
+        )
+        .with_hint("keybox.error.rkp_invalid")
+        .with_raw(
+            serde_json::json!({ "path": path.display().to_string(), "bytes": bytes.len() }),
+        ));
     }
+    Ok(bytes)
 }
 
 fn remote_keybox() -> Result<Vec<u8>> {
@@ -386,7 +375,7 @@ fn remote_keybox() -> Result<Vec<u8>> {
     decrypt(&encrypted, &public_key)
 }
 
-fn install(config: &Config, decoded: &[u8]) -> Result<()> {
+fn install(config: &Config, decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
     let mut destinations = Vec::new();
     if config
         .target_txt
@@ -575,15 +564,24 @@ mod tests {
         let _ = fs::remove_dir_all(directory);
     }
 
-    #[cfg(not(all(target_os = "android", target_arch = "aarch64")))]
     #[test]
-    fn device_mode_on_unsupported_arch_fails_without_network() {
+    fn rkp_source_without_artifacts_fails_without_network() {
+        let directory =
+            std::env::temp_dir().join(format!("teeforge-keybox-rkp-{}", std::process::id()));
         let config = Config {
-            rkp_mode: RkpMode::Device,
+            keybox_source: KeyboxSource::Rkp,
+            rkp_dir: directory.clone(),
             ..Config::default()
         };
-        let error = acquire(&config).expect_err("unsupported arch must not attempt remote");
-        assert!(error.to_string().contains("arm64"));
+        let error = rkp_keybox(&config).expect_err("missing artifacts must fail");
+        assert_eq!(error.stage(), Some("keybox"));
+        assert_eq!(error.code(), Some("rkp_missing"));
+
+        std::fs::create_dir_all(&directory).expect("create fixture");
+        std::fs::write(directory.join("keybox.xml"), b"<html/>").expect("write bad artifact");
+        let error = rkp_keybox(&config).expect_err("invalid artifact must fail");
+        assert_eq!(error.code(), Some("rkp_invalid"));
+        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[cfg(unix)]

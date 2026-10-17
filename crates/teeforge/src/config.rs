@@ -6,32 +6,90 @@ use std::path::{Path, PathBuf};
 pub(crate) const SYS_CONFIG: &str = "/data/adb/teeforge/sys.conf";
 pub(crate) const USER_CONFIG: &str = "/data/adb/teeforge/config.conf";
 pub(crate) const DEFAULT_RKP_SERVER: &str = "https://remoteprovisioning.googleapis.com/v1";
-pub(crate) const DEFAULT_RKP_REFRESH_DAYS: u64 = 30;
+pub(crate) const DEFAULT_UPDATE_BASE: &str = "https://teeforge.mcxiaochen.top/files/update";
 
+/// Keybox 来源 [Where the installed keybox comes from].
+///
+/// 由用户显式选择，不再隐式回退；`Remote` 是升级后的默认值，保持旧行为。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RkpMode {
-    /// 先尝试设备端签发，失败后回退远程 [device first, fall back to remote]
-    Auto,
-    /// 只允许设备端签发 [device issuance only]
-    Device,
-    /// 只使用远程 keybox 源 [remote only]
+pub(crate) enum KeyboxSource {
+    /// 远程公共密钥池 [Shared keybox pool from the CDN]
     Remote,
+    /// 本机 RKP 产物 [Artifacts produced by this device]
+    Rkp,
 }
 
-impl RkpMode {
-    fn parse(value: &str) -> Self {
+impl KeyboxSource {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "device" => Self::Device,
-            "remote" => Self::Remote,
-            _ => Self::Auto,
+            "remote" => Some(Self::Remote),
+            "rkp" | "device" | "local" => Some(Self::Rkp),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Remote => "remote",
+            Self::Rkp => "rkp",
+        }
+    }
+}
+
+/// 目标作用域模式 [How the target list is produced].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TargetMode {
+    /// 每次扫描全部已安装用户应用 [Every installed user app]
+    Auto,
+    /// 只使用 `target-selection.json` 中的集合 [Only the saved selection]
+    Manual,
+}
+
+impl TargetMode {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "manual" => Some(Self::Manual),
+            _ => None,
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Auto => "auto",
-            Self::Device => "device",
-            Self::Remote => "remote",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+/// 更新通道 [Update channel].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UpdateChannel {
+    Stable,
+    Dev,
+}
+
+impl UpdateChannel {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "stable" | "release" => Some(Self::Stable),
+            "dev" | "canary" => Some(Self::Dev),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Dev => "dev",
+        }
+    }
+
+    /// 通道对应的清单文件名 [Manifest file name for this channel].
+    pub(crate) fn manifest(self) -> &'static str {
+        match self {
+            Self::Stable => "release.json",
+            Self::Dev => "dev.json",
         }
     }
 }
@@ -44,9 +102,14 @@ pub(crate) struct Config {
     pub(crate) omk_enabled: bool,
     pub(crate) omk_injector_config: PathBuf,
     pub(crate) keybox_dir: PathBuf,
-    pub(crate) rkp_mode: RkpMode,
+    pub(crate) rkp_dir: PathBuf,
+    pub(crate) keybox_source: KeyboxSource,
+    pub(crate) target_mode: TargetMode,
+    pub(crate) target_selection: PathBuf,
     pub(crate) rkp_server: String,
-    pub(crate) rkp_refresh_days: u64,
+    pub(crate) update_base: String,
+    pub(crate) update_dir: PathBuf,
+    pub(crate) update_channel: UpdateChannel,
     pub(crate) sources_conf: PathBuf,
     pub(crate) log_dir: PathBuf,
     pub(crate) root_method: String,
@@ -75,9 +138,14 @@ impl Default for Config {
             omk_enabled: false,
             omk_injector_config: "/data/misc/keystore/omk/injector.toml".into(),
             keybox_dir: "/data/adb/teeforge/keybox".into(),
-            rkp_mode: RkpMode::Auto,
+            rkp_dir: "/data/adb/teeforge/RKP".into(),
+            keybox_source: KeyboxSource::Remote,
+            target_mode: TargetMode::Auto,
+            target_selection: "/data/adb/teeforge/target-selection.json".into(),
             rkp_server: DEFAULT_RKP_SERVER.into(),
-            rkp_refresh_days: DEFAULT_RKP_REFRESH_DAYS,
+            update_base: DEFAULT_UPDATE_BASE.into(),
+            update_dir: "/data/adb/teeforge/update".into(),
+            update_channel: UpdateChannel::Stable,
             sources_conf: "/data/adb/teeforge/sources.conf".into(),
             log_dir: "/data/adb/teeforge/logs".into(),
             root_method: "Unknown".into(),
@@ -141,15 +209,38 @@ impl Config {
             "omk_enabled" => self.omk_enabled = parse_bool(value),
             "omk_injector_config" => self.omk_injector_config = value.into(),
             "keybox_dir" => self.keybox_dir = value.into(),
-            "rkp_mode" => self.rkp_mode = RkpMode::parse(value),
+            "rkp_dir" => self.rkp_dir = value.into(),
+            "keybox_source" => {
+                if let Some(source) = KeyboxSource::parse(value) {
+                    self.keybox_source = source;
+                }
+            }
+            // 旧键：1.0 之前用自动优先设备端；升级后统一按 keybox_source 处理，
+            // 这里仅解析不生效，避免用户配置报错。
+            "rkp_mode" => {}
+            "target_mode" => {
+                if let Some(mode) = TargetMode::parse(value) {
+                    self.target_mode = mode;
+                }
+            }
+            "target_selection" => self.target_selection = value.into(),
             "rkp_server" => {
                 let server = value.trim();
                 if !server.is_empty() {
                     self.rkp_server = server.into();
                 }
             }
-            "rkp_refresh_days" => {
-                self.rkp_refresh_days = value.trim().parse().unwrap_or(DEFAULT_RKP_REFRESH_DAYS);
+            "update_base" => {
+                let base = value.trim().trim_end_matches('/');
+                if !base.is_empty() {
+                    self.update_base = base.into();
+                }
+            }
+            "update_dir" => self.update_dir = value.into(),
+            "update_channel" => {
+                if let Some(channel) = UpdateChannel::parse(value) {
+                    self.update_channel = channel;
+                }
             }
             "sources_conf" => self.sources_conf = value.into(),
             "log_dir" => self.log_dir = value.into(),
@@ -251,22 +342,47 @@ mod tests {
     }
 
     #[test]
-    fn rkp_defaults_and_overrides_are_validated() {
+    fn keybox_source_defaults_to_remote_and_accepts_overrides() {
         let mut config = Config::default();
-        assert_eq!(config.rkp_mode, RkpMode::Auto);
-        assert_eq!(config.rkp_refresh_days, DEFAULT_RKP_REFRESH_DAYS);
+        assert_eq!(config.keybox_source, KeyboxSource::Remote);
 
+        config.apply("keybox_source", "rkp");
+        assert_eq!(config.keybox_source, KeyboxSource::Rkp);
+        config.apply("keybox_source", "remote");
+        assert_eq!(config.keybox_source, KeyboxSource::Remote);
+        config.apply("keybox_source", "nonsense");
+        assert_eq!(
+            config.keybox_source,
+            KeyboxSource::Remote,
+            "unknown values stay safe"
+        );
+    }
+
+    #[test]
+    fn legacy_rkp_mode_is_ignored_without_error() {
+        let mut config = Config::default();
         config.apply("rkp_mode", "device");
-        assert_eq!(config.rkp_mode, RkpMode::Device);
-        config.apply("rkp_mode", "remote");
-        assert_eq!(config.rkp_mode, RkpMode::Remote);
-        config.apply("rkp_mode", "nonsense");
-        assert_eq!(config.rkp_mode, RkpMode::Auto, "unknown values stay safe");
+        assert_eq!(config.keybox_source, KeyboxSource::Remote);
+    }
 
-        config.apply("rkp_refresh_days", "0");
-        assert_eq!(config.rkp_refresh_days, 0);
-        config.apply("rkp_refresh_days", "invalid");
-        assert_eq!(config.rkp_refresh_days, DEFAULT_RKP_REFRESH_DAYS);
+    #[test]
+    fn target_mode_and_update_settings_are_validated() {
+        let mut config = Config::default();
+        assert_eq!(config.target_mode, TargetMode::Auto);
+        assert_eq!(config.update_channel, UpdateChannel::Stable);
+        assert_eq!(config.update_base, DEFAULT_UPDATE_BASE);
+
+        config.apply("target_mode", "manual");
+        assert_eq!(config.target_mode, TargetMode::Manual);
+        config.apply("target_mode", "bogus");
+        assert_eq!(config.target_mode, TargetMode::Manual);
+
+        config.apply("update_channel", "dev");
+        assert_eq!(config.update_channel, UpdateChannel::Dev);
+        config.apply("update_base", "https://example.test/update/");
+        assert_eq!(config.update_base, "https://example.test/update");
+        config.apply("update_base", "  ");
+        assert_eq!(config.update_base, "https://example.test/update");
 
         config.apply("rkp_server", "  ");
         assert_eq!(config.rkp_server, DEFAULT_RKP_SERVER);

@@ -99,9 +99,7 @@ mod imp {
                 )
             };
             if status != 0 {
-                return Err(TfError::new(format!(
-                    "TA 返回状态 {status} [TA status {status}]"
-                )));
+                return Err(crate::rkp::explain::status_error(status));
             }
             response_payload(&response)
         }

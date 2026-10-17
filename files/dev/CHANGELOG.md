@@ -1,11 +1,15 @@
-## TeeForge-CD Dev v0.6.0-b0dfdab
+## TeeForge-CD Dev v0.6.0-66cdc0f
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-b0dfdab`
-- Version Code: `154`
-- Commit: `b0dfdab`
+- Version: `v0.6.0-66cdc0f`
+- Version Code: `158`
+- Commit: `66cdc0f`
 
 ### 最近提交 Recent Commits
+- 66cdc0f Merge pull request #4 from mcxiaochenn/fix/rkp-frame-and-viewport
+- d28ca1f docs: 记录帧诊断、视口约定与本次真机问题
+- 0d4db16 fix(webui): 消除视口溢出并统一版本号格式
+- 6f7facd fix(rkp): 帧只解析一次并按业务结构判定布局
 - b0dfdab Merge pull request #3 from mcxiaochenn/feat/webui-v2
 - a10360a docs: 同步 WebUI v2、RKP 拆分与 Action 交互
 - 5bfd530 feat(action): 音量键两级菜单与日志落盘
@@ -22,7 +26,3 @@
 - e2c4315 fix(module): 输出 Action 子任务退出状态
 - ad8d3b7 fix(runtime): 收紧下载文本与包列表执行边界
 - 7d56070 docs(maintenance): 记录运行期回归与验证状态
-- 33fb32c build(module): 强制 Shell 使用 LF 并校验产物
-- 504d299 fix(core): 修复运行期解码与目标更新状态
-- edddba0 docs: 补充多后端配置与验收说明
-- d56290c chore(ui): 统一目标配置操作文案

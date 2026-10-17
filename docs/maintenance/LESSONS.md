@@ -1,5 +1,28 @@
 # 可复用踩坑记录
 
+## 2026-10-18：同一个帧不要解析两次，也不要假设只有一种帧
+
+- 范围：设备端 RKP 签发（`crates/teeforge/src/rkp/`）。
+- 现象：小米 17 Pro 上 `--rkp-issue` 报 `TA 响应长度无效 [invalid payload length]`，`--json` 信封里只有 `message`，没有 `stage` 与 `raw`。
+- 根因有两层：
+  1. `ta::request` 内部已经调用 `response_payload` 返回 payload，`worker` 把它 base64 回传，编排层又对 payload 调用了一次同一个函数，把 CBOR 的前 8 字节当成 `[status][len]`。
+  2. 厂商 `send_cmd` 的响应布局并非只有 `[status][len][payload]` 一种；长度字段不符合假设时，第一次解析就会失败。
+  另外 `worker` 用 `error.to_string()` 传错误，跨进程后 `stage/code/hint/raw` 全部丢失，界面上只剩一句中文，无法判断是哪一层出的问题。
+- 正确处理：`ta` 层只调用、只返回原始缓冲区；`protocol::decode_frame` 是唯一帧解析入口，按五种候选布局依次切片，并要求业务解析（`unwrap_csr`）成功才采纳；worker 回执改为结构化错误对象，并带回 `head_hex`、`written`、`status_le`。
+- 验证方式：五种布局各一个夹具，加上哨兵未写入、负 status、不可解析三类错误分支，全部在主机侧断言；`--json` 信封里必须能看到 `stage` 与 `raw`。
+- 防止复发：一个数据格式只允许有一个解析入口；跨进程传递错误必须传结构，不传 `Display` 字符串；对"长度字段"这类自洽但语义可变的数据，用业务结构判定而不是数值范围。
+- 状态：已修复，真机待验收。
+
+## 2026-10-18：WebUI 溢出先查负外边距，再查视口高度
+
+- 范围：`webroot/` 的全局布局。
+- 现象：小米 17 Pro 上页面左右上下都能拖动，边缘内容被裁。
+- 根因：导航栏写了 `-mx-4 px-4`，但它是 `.shell` 的直接子元素、而 `.shell` 没有 `px-4`，负外边距让块级自动宽度增加 32px，直接撑出横向滚动；纵向则是 `body` 同时设了 `min-height: 100vh` 与 `100dvh`，在 KernelSU 的 WebUI 容器里 `100vh` 取的是最大视口高度，比 iframe 实际高度大一截。
+- 正确处理：负外边距只在"父容器确实有对应内边距"时使用；`body` 改为 `min-height: 100%` 并由内容决定高度；横向兜底用 `overflow-x: clip`（不创建滚动容器，不破坏 sticky），旧 WebView 用 `@supports` 退回 `hidden`；viewport 加 `user-scalable=no`。
+- 验证方式：用同源 iframe 逐页测量 `scrollWidth - clientWidth`、遍历元素找越界项、滚动后确认 `header` 的 `top` 仍为 0。不要用 `--window-size` 直接截图判断，窗口尺寸与视口尺寸不等价，截图会带缩放伪影。
+- 防止复发：新增固定宽度或负边距前先确认父容器的 padding；不用 `vh` 表达"铺满一屏"；截图结论必须与几何测量互相印证。
+- 状态：已修复，真机待验收。
+
 ## 2026-10-17：设备端 RKP 不能把“文件存在”当成 ABI 兼容
 
 - 范围：设备端 RKP 签发（`crates/teeforge/src/rkp/`）。

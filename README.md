@@ -127,7 +127,7 @@ CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](d
 - 先运行 `--rkp-status` 确认条件；不满足时不会发起任何网络请求。
 - `--rkp-issue` 只产出产物，不改动任何后端 Keybox：`/data/adb/teeforge/RKP/` 下保存 `keybox.xml`、`cert-chain.pem`、`meta.json`（含生成时间、证书数量、device id、sha256），权限 0600。
 - 安装由 Keybox 一侧负责：`--keybox --source rkp` 读取上述产物并写入后端；`--source remote` 走远程池。两条路径不再互相回退。
-- 失败时透传阶段与原始码（例如 TA 返回 `-18`），WebUI 会给出对应原因与建议；`--rkp-delete` 删除整个 RKP 目录。
+- 失败时透传阶段与原始码（例如 TA 返回 `-18`），WebUI 会给出对应原因与建议；帧类失败额外带 `head_hex` 与 `written`，可直接判断厂商封装格式。`--rkp-delete` 删除整个 RKP 目录。
 - 仅部分高通设备与固件支持；TA 返回非零状态、厂商库符号不匹配或网络不可达都会如实报错。
 
 > [!NOTE]
@@ -196,7 +196,13 @@ update_channel=stable
 - **提示 ABI 不支持或 ELF 不匹配**：确认设备报告的主 ABI 属于支持列表，不要用其他架构二进制强行替换。
 - **目标配置没有更新**：确认目标模块使用 `/data/adb/tricky_store/target.txt` 或 `/data/adb/teesim/config.json`，检查 `teeforge` 管理标记和手动运行 `--generate` 的真实退出码。没有任何兼容后端时，命令成功但只记录 warning。
 - **Keybox 同步失败**：检查网络和命令输出；失败时程序会保留已有文件，不要把非空响应直接视为有效结果。
-- **设备端 RKP 没有生效**：先运行 `--rkp-status` 确认前置条件；确认 `rkp_mode` 不是 `remote`；日志中会记录 `设备端 RKP 签发失败，回退远程` 及具体原因（TA 状态、传输工具或 HTTP 状态）。复用窗口内的旧结果不会重签，需要重新签发时把 `rkp_refresh_days` 设为 `0`。
+- **设备端 RKP 没有生效**：先运行 `--rkp-status` 确认前置条件；日志与 WebUI 会给出失败阶段、原始码与建议，不再有隐式回退。
+- **报“无法识别 TA 响应帧”或“TA 未写入响应缓冲区”**：说明厂商 `send_cmd` 的返回封装与预期不同。`--rkp-issue --json` 的 `error.raw.head_hex` 是响应缓冲区开头 64 字节，`written` 是最后一个非零字节的位置：
+  - 前 8 位为 `00000080` 且 `written` 为 0：缓冲区完全未被写入，属于 ABI 或参数约定不匹配。
+  - 开头是 `82`、`a2`、`d2` 等 CBOR 首字节：厂商直接返回裸 payload。
+  - 前 4 字节全 `00`、随后才是长度：响应没有 status 字段。
+  - 前 4 字节是负值（如 `eeffffff`）：TA 明确返回了 KeyMint 错误码，按错误码排障。
+  签发成功时 `meta.json` 的 `frame_layout` 会记录实际命中的布局，可用来对比同型号固件。
 - **OMK 没有更新**：检查安装检测结果、`omk_enabled` 与活动配置是否已生成；无效 TOML、未知版本或文件元数据无法保留时会拒绝更新。不要将文件写入成功视为服务已加载。
 - **模块描述仍显示等待重启**：确认系统已经完成启动，运行 `--update-desc` 后检查退出码和日志。
 

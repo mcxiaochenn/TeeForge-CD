@@ -20,6 +20,7 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 - WebUI、Shell 生命周期和公开架构文档同步到 Rust 实现。
 - 设备端 RKP 签发（移植自 Duck-ToolBox，MIT）：高通/arm64 前置检查、CSR_V2 帧、TA 隔离子进程、Google RKP 交互、证书链校验、keybox 生成与 `rkp_mode` 回退链；主机侧 90 项测试与四 ABI 编译通过。
 - WebUI v2：Astro → Vite + Vue 3 + hash 路由 + Tailwind 3.4；五个页面（Home / 目标作用域 / Keybox 配置 / 本机 RKP / 模块与更新）、偏好浮层、统一 `--json` 契约。
+- 真机问题修复（2026-10-18）：RKP 帧解析改为「原始缓冲区 + 业务判定布局」并删除重复解帧，worker 错误结构化跨进程；WebUI 消除负外边距导致的横向溢出与 `100vh` 导致的纵向溢出；版本号统一去掉 `v` 前缀。
 - 二进制拆分：RKP 独立为 `--rkp-issue/-status/-artifacts/-delete`，产物写入 `/data/adb/teeforge/RKP/`；`--keybox` 恢复为纯远程，新增 `--source`。
 - 目标作用域手动模式：`target_mode` + `target-selection.json`，新增 `--target-list/-apply/-target-mode`。
 - 更新：`--self-update check/install`，自建 CDN 清单 + sha256/大小/ZIP 头校验，按 root 管理器选择安装器。
@@ -30,7 +31,9 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 
 - arm64-v8a 主力设备安装、升级保留配置、音量键选择和开机服务。
 - 设备端 RKP：`--rkp-status` 判定、`--rkp-issue` 真实签发、`-18` 等 TA 错误码的透传与解释、产物落盘/删除、`--keybox --source rkp` 安装；小米 17 Pro 等社区成功机型优先。
+- RKP 帧布局：小米 17 Pro 实测 `--rkp-issue` 在旧版报 `invalid payload length`，需确认 `decode_frame` 命中的 `frame_layout`（预期为 `bare` 或 `status`），并提供 `error.raw.head_hex` 用于比对。
 - WebUI v2：五个页面在真机 WebView 下的布局与滚动、`ksu.spawn` 流式日志、`ksu.getPackagesInfo` / `ksu://icon` 缺失时的降级、手动选择重启后保持。
+- 视口：小米 17 Pro 上确认四边无溢出、首页不满一屏时不能上下拖动、双指缩放无效、吸顶与吸底正常。
 - Action：音量键在 Action 上下文可读、三个分支（RKP / 远程池 / 作用域）、超时取消不写文件、日志文件完整。
 - 更新：清单 sha256 校验、`ksud`/`apd`/`magisk` 安装器识别、无校验和时只保存到 Download。
 - ARMv7、x86、x86_64 对应环境的安装和运行行为。

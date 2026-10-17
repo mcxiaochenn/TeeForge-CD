@@ -12,6 +12,9 @@ node_modules/
 .vscode/
 .idea/
 
+# AI tooling
+.workbuddy/
+
 # OS
 .DS_Store
 Thumbs.db

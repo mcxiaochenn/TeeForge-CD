@@ -21,21 +21,28 @@ jobs:
         with:
           ref: master
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build format validator
+        run: cargo build --locked -p teeforge --bin teeforge
+
       - name: Fetch upstream keybox
         id: fetch
         run: |
           UPSTREAM_URL="https://github.com/MeowDump/Integrity-Box/releases/download/archive/Megatron"
           STATUS_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-status"
 
-          curl -fsSL "$UPSTREAM_URL" -o /tmp/megatron_raw --retry 3
-          curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3
+          for SLOT in 1 2 3; do
+            SUFFIX=""
+            if [ "$SLOT" != "1" ]; then SUFFIX="$SLOT"; fi
+            curl -fsSL "${UPSTREAM_URL}${SUFFIX}" -o "/tmp/megatron_raw_${SLOT}" --retry 3 --connect-timeout 15 --max-time 120 --max-filesize 2097152
+            test -s "/tmp/megatron_raw_${SLOT}"
+          done
+          curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3 --connect-timeout 15 --max-time 120 --max-filesize 2097152
+          test -s /tmp/key-status
 
-          if [ ! -s /tmp/megatron_raw ]; then
-            echo "error=Failed to fetch Megatron" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          CURRENT_HASH=$(sha256sum /tmp/megatron_raw | awk '{print $1}')
+          CURRENT_HASH=$(sha256sum /tmp/megatron_raw_1 /tmp/megatron_raw_2 /tmp/megatron_raw_3 | sha256sum | awk '{print $1}')
           echo "hash=$CURRENT_HASH" >> $GITHUB_OUTPUT
 
           if [ -f keybox/upstream_hash ]; then
@@ -79,53 +86,13 @@ jobs:
           echo "${{ steps.fetch.outputs.hash }}" > /tmp/status/upstream_hash
           echo "$(date +%Y-%m)" > /tmp/status/month
 
-          mkdir -p /tmp/omg_push/keybox
-
           MONTH=$(date +%Y-%m)
-          SEED=$(echo -n "$MONTH" | sha256sum | head -c 12)
-          REAL_FILE="/tmp/omg_push/keybox/${SEED}"
+          curl -fsSL "https://github.com/mcxiaochenn.keys" --retry 3 --connect-timeout 15 --max-time 120 -o /tmp/pubkeys.txt
+          sed -n '1p' /tmp/pubkeys.txt > /tmp/pubkey.txt
+          test -s /tmp/pubkey.txt
+          python3 .github/scripts/keybox_sync.py --input /tmp --output /tmp/omg_push/keybox --public-key /tmp/pubkey.txt --month "$MONTH" --validator target/debug/teeforge
 
-          PUBKEY=$(curl -fsSL "https://github.com/mcxiaochenn.keys" --retry 3 | head -1)
-          if [ -z "$PUBKEY" ]; then
-            echo "error=Failed to fetch pubkey" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          echo "$PUBKEY" > /tmp/pubkey.txt
-
-          REAL_FILE="$REAL_FILE" MONTH="$MONTH" python3 << 'PYEOF'
-          import base64, hashlib, os
-
-          with open('/tmp/pubkey.txt', 'r') as f:
-              pubkey = f.read().strip().encode()
-          noise_key = hashlib.sha256(pubkey).digest()
-
-          with open('/tmp/megatron_raw', 'rb') as f:
-              data = f.read()
-
-          real_file = os.environ['REAL_FILE']
-          encrypted = bytearray()
-          for i, byte in enumerate(data):
-              encrypted.append(byte ^ noise_key[i % len(noise_key)])
-
-          with open(real_file, 'wb') as f:
-              f.write(base64.b64encode(encrypted))
-
-          month = os.environ['MONTH']
-          data_len = len(data)
-          for i in range(1, 15):
-              fake_seed = hashlib.sha256(f"{month}_fake_{i}".encode()).hexdigest()[:12]
-              fake_file = f"/tmp/omg_push/keybox/{fake_seed}"
-              fake_data = os.urandom(data_len)
-              fake_encrypted = bytearray()
-              for j, byte in enumerate(fake_data):
-                  fake_encrypted.append(byte ^ noise_key[j % len(noise_key)])
-              with open(fake_file, 'wb') as f:
-                  f.write(base64.b64encode(fake_encrypted))
-          PYEOF
-
-          echo "real_file=$SEED" >> $GITHUB_OUTPUT
-
-      - name: Force push to page branch
+      - name: Push to page branch
         if: steps.fetch.outputs.need_update == 'true'
         run: |
           # 克隆 page 分支 Clone page branch
@@ -141,7 +108,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add files/keybox/
-          git commit -m "keybox: update $(date +%Y-%m-%d)"
+          if ! git diff --cached --quiet; then
+            git commit -m "keybox: update $(date +%Y-%m-%d)"
+          fi
           git push origin page
 
       - name: Sync status to master
@@ -152,6 +121,10 @@ jobs:
           cp /tmp/status/key-status keybox/
           cp /tmp/status/upstream_hash keybox/
           cp /tmp/status/month keybox/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add keybox/
-          git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]" || true
+          if ! git diff --cached --quiet; then
+            git commit -m "keybox: sync status $(date +%Y-%m-%d) [auto]"
+          fi
           git push origin master

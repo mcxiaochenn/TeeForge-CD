@@ -104,6 +104,7 @@ pub(crate) struct Config {
     pub(crate) keybox_dir: PathBuf,
     pub(crate) rkp_dir: PathBuf,
     pub(crate) keybox_source: KeyboxSource,
+    pub(crate) keybox_remote_slot: u8,
     pub(crate) target_mode: TargetMode,
     pub(crate) target_selection: PathBuf,
     pub(crate) rkp_server: String,
@@ -140,6 +141,7 @@ impl Default for Config {
             keybox_dir: "/data/adb/teeforge/keybox".into(),
             rkp_dir: "/data/adb/teeforge/RKP".into(),
             keybox_source: KeyboxSource::Remote,
+            keybox_remote_slot: 1,
             target_mode: TargetMode::Auto,
             target_selection: "/data/adb/teeforge/target-selection.json".into(),
             rkp_server: DEFAULT_RKP_SERVER.into(),
@@ -213,6 +215,11 @@ impl Config {
             "keybox_source" => {
                 if let Some(source) = KeyboxSource::parse(value) {
                     self.keybox_source = source;
+                }
+            }
+            "keybox_remote_slot" => {
+                if let Ok(slot @ 1..=3) = value.parse::<u8>() {
+                    self.keybox_remote_slot = slot;
                 }
             }
             // 旧键：1.0 之前用自动优先设备端；升级后统一按 keybox_source 处理，
@@ -345,9 +352,17 @@ mod tests {
     fn keybox_source_defaults_to_remote_and_accepts_overrides() {
         let mut config = Config::default();
         assert_eq!(config.keybox_source, KeyboxSource::Remote);
+        assert_eq!(config.keybox_remote_slot, 1);
+        config.apply("keybox_remote_slot", "3");
+        assert_eq!(config.keybox_remote_slot, 3);
+        for invalid in ["0", "4", "-1", "bad"] {
+            config.apply("keybox_remote_slot", invalid);
+            assert_eq!(config.keybox_remote_slot, 3);
+        }
 
         config.apply("keybox_source", "rkp");
         assert_eq!(config.keybox_source, KeyboxSource::Rkp);
+        assert_eq!(config.keybox_remote_slot, 3);
         config.apply("keybox_source", "remote");
         assert_eq!(config.keybox_source, KeyboxSource::Remote);
         config.apply("keybox_source", "nonsense");

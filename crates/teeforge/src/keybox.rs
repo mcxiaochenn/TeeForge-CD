@@ -89,15 +89,24 @@ fn validate_month(value: &str) -> Result<String> {
     )))
 }
 
-fn month_filename() -> Result<String> {
-    let digest = Sha256::digest(current_month()?.as_bytes());
+fn slot_filename(month: &str, slot: u8) -> Result<String> {
+    validate_month(month)?;
+    if !(1..=3).contains(&slot) {
+        return Err(TfError::new("远程槽位无效 [Invalid remote slot]"));
+    }
+    let input = if slot == 1 {
+        month.to_owned()
+    } else {
+        format!("{month}_slot_{slot}")
+    };
+    let digest = Sha256::digest(input.as_bytes());
     Ok(digest[..6]
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect())
 }
 
-fn read_limited(mut reader: impl Read) -> Result<Vec<u8>> {
+pub(crate) fn read_limited(mut reader: impl Read) -> Result<Vec<u8>> {
     let mut data = Vec::new();
     reader
         .by_ref()
@@ -227,78 +236,184 @@ fn decrypt(encrypted: &[u8], public_key: &str) -> Result<Vec<u8>> {
             _ => *byte,
         };
     }
-    if current.len() < 100
-        || !current
-            .windows(b"AndroidAttestation".len())
-            .any(|window| window == b"AndroidAttestation")
-    {
-        return Err(TfError::new(
-            "解码数据缺少 AndroidAttestation 标记 [Decoded data lacks AndroidAttestation marker]",
-        ));
-    }
+    crate::keybox_format::validate(&current)?;
     Ok(current)
+}
+
+struct SavedFile {
+    bytes: Option<Vec<u8>>,
+    metadata: Option<atomic_file::PreservedMetadata>,
+}
+
+impl SavedFile {
+    fn read(path: &Path) -> Result<Self> {
+        match fs::read(path) {
+            Ok(bytes) => Ok(Self {
+                bytes: Some(bytes),
+                metadata: Some(atomic_file::PreservedMetadata::read(path)?),
+            }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self {
+                bytes: None,
+                metadata: None,
+            }),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn restore(&self, path: &Path) -> Result<()> {
+        match (&self.bytes, &self.metadata) {
+            (Some(bytes), Some(metadata)) => atomic_file::write_preserved(path, bytes, metadata),
+            _ => match fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(error.into()),
+            },
+        }
+    }
 }
 
 struct KeyboxUpdate {
     path: PathBuf,
-    original: Option<Vec<u8>>,
+    data: Vec<u8>,
+    original: SavedFile,
+    backup: Option<(PathBuf, SavedFile)>,
+    private: bool,
 }
 
-fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
+fn selection_bytes(path: &Path, config: &Config) -> Result<Vec<u8>> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let mut lines: Vec<String> = text
+        .lines()
+        .filter(|line| {
+            !line.split_once('=').is_some_and(|(key, _)| {
+                matches!(key.trim(), "keybox_source" | "keybox_remote_slot")
+            })
+        })
+        .map(str::to_owned)
+        .collect();
+    lines.push(format!("keybox_source={}", config.keybox_source.label()));
+    lines.push(format!("keybox_remote_slot={}", config.keybox_remote_slot));
+    Ok(format!("{}\n", lines.join("\n")).into_bytes())
+}
+
+fn install_keyboxes_with(
+    paths: &[PathBuf],
+    decoded: &[u8],
+    force: bool,
+    selection: Option<(&Path, &Config)>,
+    mut write: impl FnMut(&Path, &[u8], bool, bool) -> Result<()>,
+) -> Result<Vec<(PathBuf, bool)>> {
     let mut updates = Vec::new();
+    let mut targets = Vec::new();
     for path in paths {
-        let original = match fs::read(path) {
-            Ok(value) => Some(value),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(TfError::from(error).context(path.display())),
-        };
-        if original.as_deref() != Some(decoded) {
+        let original = SavedFile::read(path)?;
+        let changed = force || original.bytes.as_deref() != Some(decoded);
+        targets.push((path.clone(), changed));
+        if changed {
+            let backup = if original.bytes.is_some() {
+                let path = PathBuf::from(format!("{}.bak", path.display()));
+                let saved = SavedFile::read(&path)?;
+                Some((path, saved))
+            } else {
+                None
+            };
             updates.push(KeyboxUpdate {
                 path: path.clone(),
+                data: decoded.to_vec(),
                 original,
+                backup,
+                private: true,
             });
         }
     }
-    let mut written: Vec<&KeyboxUpdate> = Vec::new();
-    for update in &updates {
-        // Keybox 内嵌私钥，落盘权限固定为属主可读写。
-        // A keybox embeds a private key, so it is written owner-only.
-        let result = if update.original.is_some() {
-            atomic_file::write_private_with_backup(&update.path, decoded)
-        } else {
-            atomic_file::write_private(&update.path, decoded)
-        };
+    if let Some((path, config)) = selection {
+        if paths.iter().any(|target| target == path) {
+            return Err(TfError::new(
+                "配置路径不能与 Keybox 目标相同 [Config overlaps keybox target]",
+            ));
+        }
+        let original = SavedFile::read(path)?;
+        let data = selection_bytes(path, config)?;
+        if original.bytes.as_deref() != Some(data.as_slice()) {
+            updates.push(KeyboxUpdate {
+                path: path.into(),
+                data,
+                original,
+                backup: None,
+                private: false,
+            });
+        }
+    }
+    for (index, update) in updates.iter().enumerate() {
+        let result = write(
+            &update.path,
+            &update.data,
+            update.private,
+            update.backup.is_some(),
+        )
+        .and_then(|()| {
+            let actual = fs::read(&update.path)?;
+            if actual != update.data {
+                return Err(TfError::staged(
+                    "keybox",
+                    "readback",
+                    "写入回读不一致 [Written file verification failed]",
+                ));
+            }
+            Ok(())
+        });
         if let Err(error) = result {
             let mut rollback_errors = Vec::new();
-            for previous in written.into_iter().rev() {
-                let rollback = match &previous.original {
-                    Some(old) => atomic_file::write_private(&previous.path, old),
-                    None => match fs::remove_file(&previous.path) {
-                        Ok(()) => Ok(()),
-                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                        Err(error) => Err(TfError::from(error)),
-                    },
-                };
-                if let Err(rollback_error) = rollback {
-                    rollback_errors.push(format!("{}: {rollback_error}", previous.path.display()));
+            // 包含本次失败的写入，因为文件可能已替换但回读失败。
+            // Include the failing write: replacement may have succeeded before readback.
+            for previous in updates[..=index].iter().rev() {
+                if let Err(e) = previous.original.restore(&previous.path) {
+                    rollback_errors.push(e.to_string());
+                }
+                if let Some((path, saved)) = &previous.backup {
+                    if let Err(e) = saved.restore(path) {
+                        rollback_errors.push(e.to_string());
+                    }
                 }
             }
             if !rollback_errors.is_empty() {
                 return Err(TfError::new(format!(
-                    "Keybox 同步失败且回滚失败 [Keybox sync and rollback failed]: {error}; {}",
+                    "Keybox 回滚失败 [Rollback failed]: {error}; {}",
                     rollback_errors.join("; ")
                 )));
             }
-            return Err(error.context(update.path.display()));
+            return Err(error);
         }
-        written.push(update);
     }
-    // updates 记录了需要写入的目标；未变化的路径单独标记为 false。
-    let changed = updates
-        .iter()
-        .map(|update| (update.path.clone(), true))
-        .collect::<Vec<_>>();
-    Ok(changed)
+    Ok(targets)
+}
+
+fn install_keyboxes_options(
+    paths: &[PathBuf],
+    decoded: &[u8],
+    force: bool,
+    selection: Option<(&Path, &Config)>,
+) -> Result<Vec<(PathBuf, bool)>> {
+    install_keyboxes_with(
+        paths,
+        decoded,
+        force,
+        selection,
+        |path, bytes, private, backup| match (private, backup) {
+            (true, true) => atomic_file::write_private_with_backup(path, bytes),
+            (true, false) => atomic_file::write_private(path, bytes),
+            (false, _) => atomic_file::write(path, bytes),
+        },
+    )
+}
+
+#[cfg(test)]
+fn install_keyboxes(paths: &[PathBuf], decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
+    install_keyboxes_options(paths, decoded, false, None)
 }
 
 #[cfg(test)]
@@ -309,23 +424,26 @@ fn install_keybox(local: &Path, destination: &Path, decoded: &[u8]) -> Result<()
 /// 安装结果：来源与每个目标的写入状态，供 JSON 输出使用。
 pub(crate) struct InstallReport {
     pub(crate) source: KeyboxSource,
+    pub(crate) remote_slot: Option<u8>,
     /// (路径, 是否发生写入) [path and whether it changed]
     pub(crate) targets: Vec<(PathBuf, bool)>,
 }
 
-pub(crate) fn fetch(config: &Config) -> Result<InstallReport> {
+pub(crate) fn fetch(config: &Config, force: bool, save: Option<&Path>) -> Result<InstallReport> {
     logging::log(Level::Info, "开始获取 keybox [Starting keybox fetch]...");
     let decoded = match config.keybox_source {
-        KeyboxSource::Remote => remote_keybox()?,
+        KeyboxSource::Remote => remote_keybox(config.keybox_remote_slot, force)?,
         KeyboxSource::Rkp => rkp_keybox(config)?,
     };
-    let targets = install(config, &decoded)?;
+    let targets = install(config, &decoded, force, save)?;
     logging::log(
         Level::Info,
         "Keybox 已更新并同步 [Keybox updated and synchronized]",
     );
     Ok(InstallReport {
         source: config.keybox_source,
+        remote_slot: (config.keybox_source == KeyboxSource::Remote)
+            .then_some(config.keybox_remote_slot),
         targets,
     })
 }
@@ -353,29 +471,38 @@ fn rkp_keybox(config: &Config) -> Result<Vec<u8>> {
             .with_raw(serde_json::json!({ "path": path.display().to_string() })));
         }
     };
-    let text = String::from_utf8_lossy(&bytes);
-    if !text.contains("<AndroidAttestation") || !text.contains("<Keybox") {
-        return Err(TfError::staged(
+    crate::keybox_format::validate(&bytes).map_err(|_| {
+        TfError::staged(
             "keybox",
             "rkp_invalid",
-            "RKP 产物不是有效的 keybox.xml [RKP artifact is not a valid keybox]",
+            "RKP 产物格式无效 [Invalid RKP artifact]",
         )
         .with_hint("keybox.error.rkp_invalid")
-        .with_raw(
-            serde_json::json!({ "path": path.display().to_string(), "bytes": bytes.len() }),
-        ));
-    }
+    })?;
     Ok(bytes)
 }
 
-fn remote_keybox() -> Result<Vec<u8>> {
+fn remote_keybox(slot: u8, force: bool) -> Result<Vec<u8>> {
     let (cdn, public_key) = endpoints()?;
-    let url = format!("{cdn}{}", month_filename()?);
+    let mut url = format!("{cdn}{}", slot_filename(&current_month()?, slot)?);
+    if force {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| TfError::new("系统时间无效 [Invalid system time]"))?
+            .as_nanos();
+        url.push_str(&format!("?refresh={nonce}"));
+    }
     let encrypted = download(&url)?;
     decrypt(&encrypted, &public_key)
 }
 
-fn install(config: &Config, decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
+fn install(
+    config: &Config,
+    decoded: &[u8],
+    force: bool,
+    save: Option<&Path>,
+) -> Result<Vec<(PathBuf, bool)>> {
+    crate::keybox_format::validate(decoded)?;
     let mut destinations = Vec::new();
     if config
         .target_txt
@@ -401,12 +528,208 @@ fn install(config: &Config, decoded: &[u8]) -> Result<Vec<(PathBuf, bool)>> {
     destinations.insert(0, local);
     destinations.sort();
     destinations.dedup();
-    install_keyboxes(&destinations, decoded)
+    install_keyboxes_options(
+        &destinations,
+        decoded,
+        force,
+        save.map(|path| (path, config)),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const VALID: &[u8] = include_bytes!("../../../tests/fixtures/keybox-valid.xml");
+
+    #[test]
+    fn slots_are_distinct_and_slot_one_is_backward_compatible() {
+        let month = "2026-10";
+        let legacy = format!("{:x}", Sha256::digest(month.as_bytes()));
+        assert_eq!(slot_filename(month, 1).unwrap(), &legacy[..12]);
+        let names = (1..=3)
+            .map(|slot| slot_filename(month, slot).unwrap())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(names.len(), 3);
+        assert!(slot_filename(month, 0).is_err());
+        assert!(slot_filename("2026-13", 1).is_err());
+    }
+
+    fn directory(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("teeforge-keybox-{label}-{}", std::process::id()));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn force_rewrites_identical_bytes_and_saves_selection_only_at_end() {
+        let dir = directory("force-selection");
+        let path = dir.join("keybox.xml");
+        let config_path = dir.join("config.conf");
+        fs::write(&path, VALID).unwrap();
+        fs::write(&config_path, "# keep\ndebug=1\nkeybox_remote_slot = 1\n").unwrap();
+        let config = Config {
+            keybox_remote_slot: 3,
+            ..Config::default()
+        };
+        let normal =
+            install_keyboxes_options(std::slice::from_ref(&path), VALID, false, None).unwrap();
+        assert_eq!(normal, vec![(path.clone(), false)]);
+        assert!(!path.with_extension("xml.bak").exists());
+        let forced = install_keyboxes_options(
+            std::slice::from_ref(&path),
+            VALID,
+            true,
+            Some((&config_path, &config)),
+        )
+        .unwrap();
+        assert_eq!(forced, vec![(path.clone(), true)]);
+        assert_eq!(fs::read(path.with_extension("xml.bak")).unwrap(), VALID);
+        assert_eq!(fs::read(&path).unwrap(), VALID);
+        let saved = fs::read_to_string(&config_path).unwrap();
+        assert!(saved.contains("# keep\ndebug=1"));
+        assert_eq!(saved.matches("keybox_remote_slot").count(), 1);
+        assert_eq!(Config::load(&config_path).keybox_remote_slot, 3);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn readback_or_config_failure_restores_targets_backups_and_selection() {
+        for corrupt in [false, true] {
+            let dir = directory(if corrupt {
+                "bad-readback"
+            } else {
+                "bad-config"
+            });
+            let first = dir.join("first.xml");
+            let second = dir.join("second.xml");
+            let backup = first.with_extension("xml.bak");
+            let config_path = dir.join("config.conf");
+            fs::write(&first, b"old-first").unwrap();
+            fs::write(&backup, b"older-backup").unwrap();
+            fs::write(&config_path, b"debug=1\nkeybox_remote_slot=1\n").unwrap();
+            let config = Config {
+                keybox_remote_slot: 2,
+                ..Config::default()
+            };
+            let result = install_keyboxes_with(
+                &[first.clone(), second.clone()],
+                VALID,
+                true,
+                Some((&config_path, &config)),
+                |path, data, private, needs_backup| {
+                    if needs_backup {
+                        atomic_file::write_private_with_backup(path, data)?;
+                    } else if private {
+                        atomic_file::write_private(path, data)?;
+                    } else {
+                        assert_eq!(fs::read(&first).unwrap(), VALID);
+                        assert_eq!(fs::read(&second).unwrap(), VALID);
+                        return Err(TfError::new("injected config failure"));
+                    }
+                    if corrupt && path == second {
+                        fs::write(path, b"corrupt")?;
+                    }
+                    Ok(())
+                },
+            );
+            assert!(result.is_err());
+            assert_eq!(fs::read(&first).unwrap(), b"old-first");
+            assert_eq!(fs::read(&backup).unwrap(), b"older-backup");
+            assert!(!second.exists());
+            assert_eq!(
+                fs::read(&config_path).unwrap(),
+                b"debug=1\nkeybox_remote_slot=1\n"
+            );
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn invalid_install_preserves_existing_files_and_config() {
+        let dir = directory("invalid-install");
+        let target = dir.join("backend");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("keybox.xml"), b"old").unwrap();
+        let config_path = dir.join("config.conf");
+        let config = Config {
+            target_txt: target.join("target.txt"),
+            keybox_dir: dir.join("local"),
+            teesim_config: dir.join("missing"),
+            ..Config::default()
+        };
+        assert!(
+            install(
+                &config,
+                b"<AndroidAttestation>broken",
+                true,
+                Some(&config_path)
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(target.join("keybox.xml")).unwrap(), b"old");
+        assert!(!config_path.exists());
+        assert!(!config.keybox_dir.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn ci_python_to_module_decode_install_and_readback() {
+        use std::io::Write;
+        let script =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/scripts/keybox_sync.py");
+        let dir = directory("ci-roundtrip");
+        let target = dir.join("backend");
+        fs::create_dir(&target).unwrap();
+        for slot in 1..=3 {
+            let xml = String::from_utf8(VALID.to_vec())
+                .unwrap()
+                .replace("synthetic-test", &format!("synthetic-slot-{slot}"));
+            let rotated: Vec<u8> = xml
+                .bytes()
+                .map(|b| match b {
+                    b'a'..=b'm' | b'A'..=b'M' => b + 13,
+                    b'n'..=b'z' | b'N'..=b'Z' => b - 13,
+                    _ => b,
+                })
+                .collect();
+            let mut raw = rotated
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+                .into_bytes();
+            for _ in 0..10 {
+                raw = STANDARD.encode(raw).into_bytes();
+            }
+            // 使用真正的 CI 包装函数，避免测试复制一份相同实现。
+            // Exercise the actual CI wrapper rather than duplicating it in the test.
+            let mut child = Command::new(if cfg!(windows) { "python" } else { "python3" })
+                .args(["-c", "import runpy,sys; m=runpy.run_path(sys.argv[1]); sys.stdout.buffer.write(m['wrap'](sys.stdin.buffer.read(), b'synthetic-key'))"])
+                .arg(&script).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            child.stdin.take().unwrap().write_all(&raw).unwrap();
+            let output = child.wait_with_output().unwrap();
+            assert!(output.status.success(), "CI wrapper failed");
+            let decoded = decrypt(&output.stdout, "synthetic-key").unwrap();
+            assert!(decoded == xml.as_bytes(), "decoded bytes differ");
+            let config = Config {
+                target_txt: target.join("target.txt"),
+                keybox_dir: dir.join("local"),
+                teesim_config: dir.join("missing"),
+                keybox_remote_slot: slot,
+                ..Config::default()
+            };
+            let config_path = dir.join("config.conf");
+            let report = install(&config, &decoded, false, Some(&config_path)).unwrap();
+            assert_eq!(report.len(), 2);
+            for (path, changed) in report {
+                assert!(changed);
+                assert!(fs::read(path).unwrap() == xml.as_bytes());
+            }
+            assert_eq!(Config::load(&config_path).keybox_remote_slot, slot);
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn strict_hex_rejects_partial_and_invalid_input() {
@@ -472,7 +795,7 @@ mod tests {
     #[test]
     fn decrypts_a_valid_contract_fixture() {
         let public_key = "ssh-ed25519 test-key";
-        let xml = b"<AndroidAttestation>abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz</AndroidAttestation>";
+        let xml = include_bytes!("../../../tests/fixtures/keybox-valid.xml");
         let mut encoded = xml
             .iter()
             .map(|byte| match *byte {
@@ -511,7 +834,7 @@ mod tests {
         }
 
         let public_key = "ssh-ed25519 test-key";
-        let xml = b"<AndroidAttestation>abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz</AndroidAttestation>";
+        let xml = include_bytes!("../../../tests/fixtures/keybox-valid.xml");
         let mut encoded = xml
             .iter()
             .map(|byte| match *byte {

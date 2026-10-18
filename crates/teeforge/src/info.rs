@@ -109,6 +109,7 @@ pub(crate) fn bootstrap_value(config: &Config) -> Value {
         },
         "config": {
             "keybox_source": config.keybox_source.label(),
+            "keybox_remote_slot": config.keybox_remote_slot,
             "target_mode": config.target_mode.label(),
             "update_channel": config.update_channel.label(),
         },
@@ -123,6 +124,7 @@ pub(crate) fn bootstrap_value(config: &Config) -> Value {
         },
         "defaults": {
             "keybox_source": KeyboxSource::Remote.label(),
+            "keybox_remote_slot": 1,
             "target_mode": TargetMode::Auto.label(),
         }
     })

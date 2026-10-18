@@ -44,6 +44,11 @@ jobs:
       - name: Host tests
         run: cargo test --workspace --locked
 
+      - name: Keybox publish gates
+        run: |
+          cargo build --locked -p teeforge --bin teeforge
+          python3 -m unittest discover -s .github/scripts -p test_keybox_sync.py -v
+
       - name: Four-ABI package
         run: cargo run --locked -p xtask -- package
 

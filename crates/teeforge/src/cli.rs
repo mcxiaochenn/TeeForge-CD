@@ -21,6 +21,10 @@ struct Options {
     hide_bl: bool,
     keybox: bool,
     source: Option<String>,
+    remote_slot: Option<u8>,
+    force: bool,
+    save_selection: bool,
+    keybox_validate: Option<PathBuf>,
     rkp_status: bool,
     rkp_issue: bool,
     rkp_artifacts: bool,
@@ -57,6 +61,24 @@ fn parse(args: &[String]) -> Result<Options> {
             "--source" => {
                 index += 1;
                 options.source = Some(need_value(index - 1, "--source")?.clone());
+            }
+            "--remote-slot" => {
+                index += 1;
+                options.remote_slot = Some(
+                    need_value(index - 1, "--remote-slot")?
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|v| (1..=3).contains(v))
+                        .ok_or_else(|| {
+                            TfError::new("--remote-slot 只支持 1/2/3 [expects 1/2/3]")
+                        })?,
+                );
+            }
+            "--force" => options.force = true,
+            "--save-selection" => options.save_selection = true,
+            "--keybox-validate" => {
+                index += 1;
+                options.keybox_validate = Some(need_value(index - 1, "--keybox-validate")?.into());
             }
             "--rkp-status" => options.rkp_status = true,
             "--rkp-issue" => options.rkp_issue = true,
@@ -116,7 +138,61 @@ fn parse(args: &[String]) -> Result<Options> {
         }
         index += 1;
     }
+    let modifiers = options.source.is_some()
+        || options.remote_slot.is_some()
+        || options.force
+        || options.save_selection;
+    if modifiers && !options.keybox {
+        return Err(TfError::new(
+            "Keybox 参数必须搭配 --keybox [Keybox arguments require --keybox]",
+        ));
+    }
+    let other_action = options.generate
+        || options.hide_bl
+        || options.rootdetect
+        || options.update_desc
+        || options.rkp_status
+        || options.rkp_issue
+        || options.rkp_artifacts
+        || options.rkp_delete
+        || options.rkp_probe
+        || options.target_list
+        || options.target_apply.is_some()
+        || options.target_mode.is_some()
+        || options.self_update.is_some()
+        || options.update_channel.is_some()
+        || options.bootstrap
+        || options.volume.is_some();
+    if (modifiers && other_action)
+        || (options.keybox_validate.is_some() && (other_action || options.keybox))
+    {
+        return Err(TfError::new(
+            "Keybox 操作不能混用其他命令 [Do not combine keybox with another command]",
+        ));
+    }
     Ok(options)
+}
+
+fn effective_keybox(options: &Options, config: &Config) -> Result<Config> {
+    let mut effective = config.clone();
+    if let Some(source) = &options.source {
+        effective.keybox_source = KeyboxSource::parse(source).ok_or_else(|| {
+            TfError::staged("cli", "source", "未知 Keybox 来源 [Unknown keybox source]")
+        })?;
+    }
+    if effective.keybox_source != KeyboxSource::Remote
+        && (options.remote_slot.is_some() || options.force)
+    {
+        return Err(TfError::staged(
+            "cli",
+            "remote_only",
+            "槽位与强制参数只用于远程池 [Slot/force require remote source]",
+        ));
+    }
+    if let Some(slot) = options.remote_slot {
+        effective.keybox_remote_slot = slot;
+    }
+    Ok(effective)
 }
 
 fn usage(program: &str) {
@@ -127,6 +203,10 @@ fn usage(program: &str) {
     println!("  --target-apply FILE 应用手动选择集合 [Apply a selection file]");
     println!("  --target-mode MODE  切换 auto/manual 目标模式 [Switch target mode]");
     println!("  --keybox            同步 keybox [Sync keybox]");
+    println!("  --remote-slot N     远程池槽位 1/2/3 [Remote slot]");
+    println!("  --force             远程池相同内容也替换 [Rewrite identical remote data]");
+    println!("  --save-selection    安装成功后保存来源与槽位 [Save selection after installation]");
+    println!("  --keybox-validate F 只读校验 Keybox 格式 [Validate keybox file]");
     println!("  --source SOURCE     keybox 来源 remote/rkp [Keybox source]");
     println!("  --rkp-status        检查设备端 RKP 条件 [Check device RKP prerequisites]");
     println!("  --rkp-issue         设备端 RKP 签发并保存产物 [Issue RKP artifacts]");
@@ -197,6 +277,9 @@ pub fn run(args: Vec<String>) -> i32 {
     let options = match parse(&args) {
         Ok(options) => options,
         Err(error) => {
+            if args.iter().any(|arg| arg == "--json") {
+                return json::fail(&error);
+            }
             eprintln!("{error}");
             usage(program);
             return 1;
@@ -207,11 +290,45 @@ pub fn run(args: Vec<String>) -> i32 {
         return 0;
     }
 
+    if let Some(path) = &options.keybox_validate {
+        let result = fs::File::open(path)
+            .map_err(TfError::from)
+            .and_then(keybox::read_limited)
+            .and_then(|data| crate::keybox_format::validate(&data));
+        if options.json {
+            return json::finish(result.map(|()| json!({"valid": true})));
+        }
+        return match result {
+            Ok(()) => {
+                println!("格式有效 [Format valid]");
+                0
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                1
+            }
+        };
+    }
+
     let user_config = options
         .config
         .clone()
         .unwrap_or_else(|| PathBuf::from(USER_CONFIG));
     let config = Config::load(&user_config);
+    let config = if options.keybox {
+        match effective_keybox(&options, &config) {
+            Ok(config) => config,
+            Err(error) => {
+                if options.json {
+                    return json::fail(&error);
+                }
+                eprintln!("{error}");
+                return 1;
+            }
+        }
+    } else {
+        config
+    };
     logging::init(&config, options.verbose);
 
     if options.json {
@@ -277,27 +394,18 @@ pub fn run(args: Vec<String>) -> i32 {
         record(blhide::hide(&config), &mut failed);
     }
     if options.keybox {
-        let mut effective = config.clone();
-        if let Some(source) = options.source.as_deref() {
-            match KeyboxSource::parse(source) {
-                Some(parsed) => effective.keybox_source = parsed,
-                None => {
-                    record(
-                        Err(TfError::new(format!("未知来源 [unknown source]: {source}"))),
-                        &mut failed,
-                    );
-                    return 1;
-                }
-            }
-        }
-        match keybox::fetch(&effective) {
+        match keybox::fetch(
+            &config,
+            options.force,
+            options.save_selection.then_some(user_config.as_path()),
+        ) {
             Ok(report) => {
                 println!(
                     "来源 Source: {}，目标 {} 个 [targets]",
                     report.source.label(),
                     report.targets.len()
                 );
-                record(description::update(&effective), &mut failed);
+                record(description::update(&config), &mut failed);
             }
             Err(error) => record(Err(error), &mut failed),
         }
@@ -531,22 +639,15 @@ fn run_json(options: &Options, config: &Config, user_config: &Path) -> i32 {
         return json::finish(value);
     }
     if options.keybox {
-        let mut effective = config.clone();
-        if let Some(source) = options.source.as_deref() {
-            match KeyboxSource::parse(source) {
-                Some(parsed) => effective.keybox_source = parsed,
-                None => {
-                    return json::fail(&TfError::staged(
-                        "cli",
-                        "source",
-                        format!("未知来源 [unknown source]: {source}"),
-                    ));
-                }
-            }
-        }
-        let value = keybox::fetch(&effective).map(|report| {
+        let value = keybox::fetch(
+            config,
+            options.force,
+            options.save_selection.then_some(user_config),
+        )
+        .map(|report| {
             json!({
                 "source": report.source.label(),
+                "remote_slot": report.remote_slot,
                 "targets": report.targets.iter().map(|(path, changed)| json!({
                     "path": path.display().to_string(),
                     "changed": changed,
@@ -554,7 +655,7 @@ fn run_json(options: &Options, config: &Config, user_config: &Path) -> i32 {
             })
         });
         let code = json::finish(value);
-        let _ = description::update(&effective);
+        let _ = description::update(config);
         return code;
     }
     if options.rkp_status {
@@ -676,6 +777,55 @@ fn read_selection(path: &Path) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keybox_modifiers_validate_before_side_effects() {
+        let parse_args = |args: &[&str]| {
+            parse(
+                &std::iter::once("teeforge".to_owned())
+                    .chain(args.iter().map(|s| (*s).to_owned()))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        for args in [
+            vec!["--force"],
+            vec!["--remote-slot", "2"],
+            vec!["--save-selection"],
+            vec!["--keybox", "--remote-slot", "4"],
+            vec!["--keybox", "--remote-slot", "x"],
+            vec!["--keybox", "--force", "--generate"],
+            vec!["--keybox-validate", "file", "--keybox"],
+        ] {
+            assert!(parse_args(&args).is_err());
+        }
+        let options = parse_args(&[
+            "--keybox",
+            "--source",
+            "remote",
+            "--remote-slot",
+            "2",
+            "--force",
+            "--save-selection",
+        ])
+        .unwrap();
+        assert!(options.force && options.save_selection);
+        assert_eq!(
+            effective_keybox(&options, &Config::default())
+                .unwrap()
+                .keybox_remote_slot,
+            2
+        );
+        let rkp = Config {
+            keybox_source: KeyboxSource::Rkp,
+            ..Config::default()
+        };
+        let options = parse_args(&["--keybox", "--force"]).unwrap();
+        assert!(effective_keybox(&options, &rkp).is_err());
+        let options = parse_args(&["--keybox", "--source", "rkp", "--remote-slot", "1"]).unwrap();
+        assert!(effective_keybox(&options, &Config::default()).is_err());
+        let options = parse_args(&["--keybox"]).unwrap();
+        assert!(!options.save_selection && !options.force);
+    }
 
     #[test]
     fn parses_compatible_options() {

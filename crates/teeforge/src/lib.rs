@@ -7,6 +7,7 @@ mod error;
 mod info;
 mod json;
 mod keybox;
+mod keybox_format;
 mod logging;
 mod omk;
 mod process;

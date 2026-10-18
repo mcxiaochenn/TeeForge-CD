@@ -14,6 +14,7 @@ sha2.workspace = true
 serde_json.workspace = true
 toml_edit.workspace = true
 x509-cert.workspace = true
+roxmltree = "0.20.0"
 
 # 仅 arm64 Android 存在 KeymasterUtils 厂商 ABI。
 # The KeymasterUtils vendor ABI exists only on arm64 Android.

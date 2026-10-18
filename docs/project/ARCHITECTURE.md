@@ -137,6 +137,7 @@ keybox_source=rkp
 - **帧布局由业务结构判定，不由长度字段判定**：长度字段可以自洽但语义不同，能解出合法 `AuthenticatedRequest` 才是真的；命中布局写入 `meta.json.frame_layout`，便于回溯固件差异。
 - 错误按阶段结构化，且**跨 worker 进程保留** `stage` / `code` / `hint` / `raw`。帧类失败额外带 `head_hex`（前 64 字节）、`written`（最后一个非零字节位置）与 `status_le`，用于区分“TA 拒绝”“空成功”“封装不同”“ABI 不匹配”。
 - TA 状态码走 `explain` 映射（AOSP `ErrorCode.aidl`）；未收录的码保留原始数值。
+- `--rkp-probe` 是诊断入口：取一次 challenge 后，把缓冲区初始化（哨兵 / 全 0 / 容量）、`security_level`（1 / 0）、请求封装（裸 / 长度前缀）拆成 6 个变体，**每个变体一个子进程**，因此某个变体触发崩溃只丢失该组。输出 `status`、`written`、`request_changed`、`response_head`，用于区分「固件不认命令」「参数顺序相反」「缓冲区约定不同」三类原因。
 - `rkp` 只在 `aarch64-linux-android` 编译出厂商调用路径，其余 ABI 的 `--rkp-status` 直接给出 `arch` 阻断项。
 
 上游来源：Duck-ToolBox `fb6b1e427f2773ac6139d2eba27068fbdfd089de`，MIT，见 `module/licenses/duck-toolbox.txt`。

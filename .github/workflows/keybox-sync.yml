@@ -24,7 +24,7 @@ jobs:
       - name: Fetch upstream keybox
         id: fetch
         run: |
-          UPSTREAM_URL="https://raw.githubusercontent.com/MeowDump/MeowDump/refs/heads/main/Megatron"
+          UPSTREAM_URL="https://github.com/MeowDump/Integrity-Box/releases/download/archive/Megatron"
           STATUS_URL="https://raw.githubusercontent.com/MeowDump/Integrity-Box/refs/heads/main/keybox/key-status"
 
           curl -fsSL "$UPSTREAM_URL" -o /tmp/megatron_raw --retry 3

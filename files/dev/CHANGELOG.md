@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.6.0-aeb1dc8
+## TeeForge-CD Dev v0.6.0-c210c22
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-aeb1dc8`
-- Version Code: `164`
-- Commit: `aeb1dc8`
+- Version: `v0.6.0-c210c22`
+- Version Code: `166`
+- Commit: `c210c22`
 
 ### 最近提交 Recent Commits
+- c210c22 feat(webui): 支持远程槽位选择与强制替换
+- 0f1cb2e keybox: sync status 2026-10-18 [auto]
 - aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
 - 304e786 fix(ci): 合并上游同步入口修复
 - 6308807 fix(ci): 适配上游同步资源入口
@@ -24,5 +26,3 @@
 - 11c4e31 feat: Merge pull request #2 from mcxiaochenn/feat/rkp-device-issuance
 - 3811f4c chore(git): 忽略 .workbuddy 工具目录
 - 9bcec88 feat(rkp): 移植设备端 RKP 签发并保留远程回退
-- 2132d6c docs(omk): 更新兼容说明与分层验收记录
-- 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护

@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.6.0-304e786
+## TeeForge-CD Dev v0.6.0-aeb1dc8
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-304e786`
-- Version Code: `163`
-- Commit: `304e786`
+- Version: `v0.6.0-aeb1dc8`
+- Version Code: `164`
+- Commit: `aeb1dc8`
 
 ### 最近提交 Recent Commits
+- aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
 - 304e786 fix(ci): 合并上游同步入口修复
 - 6308807 fix(ci): 适配上游同步资源入口
 - a3224b3 Merge pull request #5 from mcxiaochenn/feat/rkp-probe
@@ -25,4 +26,3 @@
 - 9bcec88 feat(rkp): 移植设备端 RKP 签发并保留远程回退
 - 2132d6c docs(omk): 更新兼容说明与分层验收记录
 - 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护
-- 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具

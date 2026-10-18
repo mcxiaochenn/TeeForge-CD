@@ -92,7 +92,7 @@ styles/tailwind.css   Tailwind 入口与全局基样式
 ```text
 keybox_source=remote
   自建 CDN → wget / curl / 管理器 busybox 后备 → 有界下载
-  → 严格解码和 AndroidAttestation 标记校验 → 本地 keybox.xml
+  → 严格解码和完整 XML/PEM/DER 格式校验 → 本地 keybox.xml
 
 keybox_source=rkp
   /data/adb/teeforge/RKP/keybox.xml（--rkp-issue 产出）→ XML 结构检查
@@ -100,6 +100,10 @@ keybox_source=rkp
 两条来源汇合：
   → 已存在的 Tricky Store/TEESimulator-RS 目录和/或 TEESimulator 目录中的 keybox.xml
 ```
+
+远程池由 `keybox_remote_slot=1|2|3` 选择，缺省为 1；旧客户端仍可获取默认槽位。WebUI 在远程模式展示二级选择与强制替换按钮。CLI 的 `--remote-slot` 仅覆盖本次远程选择，`--force` 重新请求并重写相同内容，`--save-selection` 在安装成功后原子保存来源及槽位。Bootstrap 输出槽位，安装报告包含所用槽位和每个目标的实际写入状态。RKP 切换保留槽位偏好。
+
+同步发布与模块入口共用格式校验器：完整 XML、根与必要结构、声明数量、私钥及证书 PEM/DER 编码均须通过；`--keybox-validate FILE --json` 提供只读检查。写入后逐目标回读比对，配置最后保存；任一步失败回滚本轮已写文件、备份及选择。格式校验不替代吊销、信任链、后端或设备验收。
 
 两条来源互不回退：远程下载失败不会改用本机产物，本机产物缺失也不会联网。每个已存在的目标采用原子写入；任一目标失败时恢复本轮已写目标和本地旧文件。具体私密维护细节只存在于被 Git 忽略的 `docs/private/KEYBOX_CRYPTO.md`，不得复制到公开文档。
 

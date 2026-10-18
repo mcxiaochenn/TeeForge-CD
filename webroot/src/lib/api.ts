@@ -128,7 +128,7 @@ export interface Bootstrap {
   system: { kernel: string; selinux: string };
   module: { version: string; version_code: number };
   root: { method: string; version: string };
-  config: { keybox_source: 'remote' | 'rkp'; target_mode: 'auto' | 'manual'; update_channel: string };
+  config: { keybox_source: 'remote' | 'rkp'; keybox_remote_slot: 1 | 2 | 3; target_mode: 'auto' | 'manual'; update_channel: string };
   capabilities: { rkp_platform: boolean; rkp_supported: boolean; rkp_artifacts: boolean };
   paths: { rkp_dir: string; keybox_dir: string };
 }
@@ -207,9 +207,9 @@ export const api = {
   rkpArtifacts: () => call<RkpArtifacts>('--rkp-artifacts'),
   rkpDelete: () => call<{ deleted: boolean; freed_bytes: number }>('--rkp-delete'),
 
-  keybox: (source: 'remote' | 'rkp', onLog?: (chunk: string) => void) =>
-    callStream<{ source: string; targets: { path: string; changed: boolean }[] }>(
-      `--keybox --source ${source}`,
+  keybox: (source: 'remote' | 'rkp', slot: 1 | 2 | 3, force: boolean, onLog?: (chunk: string) => void) =>
+    callStream<{ source: string; remote_slot: 1 | 2 | 3 | null; targets: { path: string; changed: boolean }[] }>(
+      `--keybox --source ${source} --save-selection${source === 'remote' ? ` --remote-slot ${slot}${force ? ' --force' : ''}` : ''}`,
       onLog,
     ),
 

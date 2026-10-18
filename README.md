@@ -16,7 +16,7 @@
 
 - **自动维护目标配置**：一次扫描用户安装的应用并分别更新已存在的兼容目标配置，失败时保留旧文件。
 - **弱化 BL 相关属性**：通过 resetprop 处理 bootloader、Verified Boot、调试和厂商相关属性，可按类别关闭。
-- **按需同步 Keybox**：来源由你显式选择——本机 RKP 产物或远程公共密钥池；不再自动回退，更新失败时保留已有文件。
+- **按需同步 Keybox**：来源由你显式选择——本机 RKP 产物或远程公共密钥池；远程池支持三个槽位；不自动回退，更新失败时保留已有文件。
 - **设备端 RKP 签发（独立功能）**：在高通 arm64 设备上调用本机 Keymint TA 向 Google RKP 申请本机专属证书链，产物单独保存在 `/data/adb/teeforge/RKP/`，与 Keybox 安装解耦。
 - **目标作用域可细调**：支持全量模式与手动模式；手动选择保存在本机，重启后保持，不会被开机全量覆盖。
 - **模块更新**：WebUI 内置更新检查，优先使用中国大陆可直连的自建 CDN，并校验清单中的 sha256。
@@ -102,12 +102,15 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
 - **WebUI**：顶部是设备信息栏，下面是“更新目标作用域”“Keybox 配置”“本机 RKP 签发”“模块与更新”四个入口。
 - **CLI**：适用于终端操作和问题定位。
 
+Keybox 配置选择远程池后可选择槽位 1/2/3，默认槽位 1；安装成功后保存来源和槽位。普通应用跳过内容相同的文件，“强制拉取并替换”会重新请求并写入模块副本及所有已检测到的兼容后端，即使内容相同。下载、格式校验、写入回读或配置保存失败时保留或回滚旧数据，不自动换槽。格式有效不代表未吊销、后端接受或外部检测通过。
+
 常用 CLI 命令需要 Root：
 
 ```sh
 su -c '/data/adb/modules/teeforge_cd/teeforge --generate'
 su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
-su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote'
+su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote --remote-slot 1 --save-selection'
+su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote --remote-slot 2 --force --save-selection'
 su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-status'
 su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-issue'
 su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-probe --json'
@@ -118,6 +121,8 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --help'
 ```
 
 `--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。`--rkp-probe` 是诊断命令：取一次 challenge 后，把缓冲区初始化、`security_level`、请求封装、厂商对象大小四组变量拆成 8 个变体，每个变体在独立子进程中调用一次 TA，输出对照数据。同时会解析 `/vendor/lib64/libkeymasterdeviceutils.so` 的动态符号表，列出 `KeymasterUtils` 与 `send_cmd` 相关入口——如果固件提供了必须先调用的初始化方法或别的重载，会在 `library_symbols` 里直接暴露。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
+
+`--remote-slot` 与 `--force` 只用于远程 Keybox；不带 `--save-selection` 时参数仅对本次操作生效。可用 `--keybox-validate FILE --json` 对文件做只读格式检查，不联网、不安装；不要在反馈中粘贴 Keybox 正文。
 
 CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](docs/project/OVERVIEW.md)。
 

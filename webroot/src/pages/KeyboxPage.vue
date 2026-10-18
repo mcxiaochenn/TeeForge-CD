@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import AppButton from '../components/ui/AppButton.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
+import SegmentedControl from '../components/ui/SegmentedControl.vue';
 import SectionCard from '../components/layout/SectionCard.vue';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
@@ -12,6 +13,17 @@ import { loadSession, session } from '../state/session';
 
 const router = useRouter();
 const source = ref<'rkp' | 'remote'>('remote');
+const remoteSlot = ref<'1' | '2' | '3'>('1');
+const force = ref(false);
+const slotOptions = computed(() => ['1', '2', '3'].map(value => ({ value, label: t('keybox.slot.option', { n: value }), disabled: busy.value })));
+function selectSlot(value: string) {
+  if (!busy.value && (value === '1' || value === '2' || value === '3')) remoteSlot.value = value;
+}
+function confirm(rewrite: boolean) {
+  if (busy.value) return;
+  force.value = rewrite;
+  confirmOpen.value = true;
+}
 const artifacts = ref(false);
 const busy = ref(false);
 const error = ref('');
@@ -34,28 +46,32 @@ async function refresh() {
 onMounted(async () => {
   await loadSession();
   source.value = session.data?.config.keybox_source ?? 'remote';
+  remoteSlot.value = String(session.data?.config.keybox_remote_slot ?? 1) as '1' | '2' | '3';
   await refresh();
 });
 
 function choose(next: 'rkp' | 'remote') {
+  if (busy.value) return;
   if (next === 'rkp' && !rkpAvailable.value) return;
   source.value = next;
 }
 
 async function apply() {
+  if (busy.value) return;
   busy.value = true;
   error.value = '';
   result.value = '';
   log.value = '';
   try {
-    const report = await api.keybox(source.value, (chunk) => {
+    const report = await api.keybox(source.value, Number(remoteSlot.value) as 1 | 2 | 3, force.value, (chunk) => {
       log.value += chunk;
     });
-    result.value = t('keybox.result', { n: report.targets.length });
+    result.value = t('keybox.result', { n: report.targets.filter(target => target.changed).length });
     confirmOpen.value = false;
     await loadSession(true);
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure);
+    confirmOpen.value = false;
   } finally {
     busy.value = false;
   }
@@ -69,7 +85,7 @@ async function apply() {
     <div class="flex flex-col gap-2.5">
       <div
         role="button"
-        tabindex="0"
+        :tabindex="busy ? -1 : 0"
         class="rounded-card border p-4 text-left tap"
         :class="[
           source === 'rkp'
@@ -78,7 +94,7 @@ async function apply() {
           rkpAvailable ? 'cursor-pointer' : 'cursor-default opacity-70',
         ]"
         :aria-pressed="source === 'rkp'"
-        :aria-disabled="!rkpAvailable"
+        :aria-disabled="busy || !rkpAvailable"
         @click="choose('rkp')"
         @keydown.enter.prevent="choose('rkp')"
         @keydown.space.prevent="choose('rkp')"
@@ -102,7 +118,7 @@ async function apply() {
             <span
               v-if="!rkpAvailable"
               role="link"
-              tabindex="0"
+              :tabindex="busy ? -1 : 0"
               class="mt-2 inline-block text-xs font-semibold text-accent underline underline-offset-2"
               @click.stop="router.push('/rkp')"
               @keydown.enter.stop.prevent="router.push('/rkp')"
@@ -115,7 +131,7 @@ async function apply() {
 
       <div
         role="button"
-        tabindex="0"
+        :tabindex="busy ? -1 : 0"
         class="cursor-pointer rounded-card border p-4 text-left tap"
         :class="
           source === 'remote'
@@ -123,6 +139,7 @@ async function apply() {
             : 'border-line bg-surface hover:border-line-strong'
         "
         :aria-pressed="source === 'remote'"
+        :aria-disabled="busy"
         @click="choose('remote')"
         @keydown.enter.prevent="choose('remote')"
         @keydown.space.prevent="choose('remote')"
@@ -143,6 +160,11 @@ async function apply() {
       </div>
     </div>
 
+    <SectionCard v-if="source === 'remote'" :title="t('keybox.slot.title')">
+      <SegmentedControl :model-value="remoteSlot" :options="slotOptions" :label="t('keybox.slot.title')" @update:model-value="selectSlot" />
+      <p class="mt-2 text-xs leading-relaxed text-muted">{{ t('keybox.slot.note') }}</p>
+    </SectionCard>
+
     <p v-if="error" class="rounded-card bg-danger-soft px-4 py-3 text-xs leading-relaxed text-danger">
       {{ error }}
     </p>
@@ -156,8 +178,12 @@ async function apply() {
       >{{ log }}</pre
     >
 
-    <AppButton block size="lg" :disabled="!canApply || busy" :loading="busy" @click="confirmOpen = true">
+    <AppButton block size="lg" :disabled="!canApply || busy" :loading="busy" @click="confirm(false)">
       {{ t('keybox.apply') }}
+    </AppButton>
+
+    <AppButton v-if="source === 'remote'" block size="lg" variant="tonal" :disabled="busy" @click="confirm(true)">
+      {{ t('keybox.force') }}
     </AppButton>
 
     <SectionCard :title="t('keybox.notes')">
@@ -167,13 +193,14 @@ async function apply() {
       </ul>
     </SectionCard>
 
-    <AppSheet v-model:open="confirmOpen" :title="t('keybox.confirm.title')">
+    <AppSheet :open="confirmOpen" :title="force ? t('keybox.force') : t('keybox.confirm.title')" @update:open="value => { if (!busy) confirmOpen = value; }">
       <p class="text-sm leading-relaxed text-muted">
-        {{ source === 'rkp' ? t('keybox.confirm.rkp') : t('keybox.confirm.remote') }}
+        {{ source === 'rkp' ? t('keybox.confirm.rkp') : t('keybox.confirm.remote', { n: remoteSlot }) }}
       </p>
+      <p v-if="force" class="mt-3 text-sm leading-relaxed text-muted">{{ t('keybox.confirm.force') }}</p>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <AppButton variant="ghost" @click="confirmOpen = false">{{ t('common.cancel') }}</AppButton>
+          <AppButton variant="ghost" :disabled="busy" @click="confirmOpen = false">{{ t('common.cancel') }}</AppButton>
           <AppButton :loading="busy" @click="apply">{{ t('common.confirm') }}</AppButton>
         </div>
       </template>

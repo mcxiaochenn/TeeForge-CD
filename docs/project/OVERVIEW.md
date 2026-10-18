@@ -7,8 +7,8 @@ TeeForge-CD 是面向 Magisk/KernelSU 的 Android 模块，主要负责：
 - 一次扫描用户安装的应用，分别更新实际存在的目标配置：Tricky Store/TEESimulator-RS 的 `target.txt`，以及 TEESimulator 的 `config.json` 受管 profile。
 - 根据安装时固化的状态更新 Oh My Keymint（OMK）`injector.toml` 的 `scoop`，仅维护应用作用域。
 - 通过 standard resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
-- 在高通 arm64 设备上通过本机 Keymint TA 向 Google RKP 申请本机专属 Keybox；失败时回退远程 Keybox。
-- 从自建 CDN 获取、校验并同步 Keybox 文件。
+- 在高通 arm64 设备上通过本机 Keymint TA 向 Google RKP 申请本机专属 Keybox；签发与安装独立，不自动回退远程来源。
+- 从自建 CDN 选择三个远程槽位之一，校验格式后事务同步 Keybox；支持强制重写相同内容。
 - 通过 KernelSU WebUI 提供手动操作入口。
 
 当前原生核心是 Rust，目标是 Android API 24+ 的四种 ABI；TypeScript/Astro 负责 WebUI，Shell 负责模块生命周期。
@@ -30,7 +30,10 @@ module/service.sh
 teeforge                      # banner、版本、root 信息和帮助
 teeforge --generate           # 更新已存在的目标配置
 teeforge --hide-bl            # 执行弱隐 BL
-teeforge --keybox             # 获取并同步 Keybox
+teeforge --keybox             # 按已保存来源和槽位获取并同步 Keybox
+teeforge --keybox --source remote --remote-slot 2 --force --save-selection
+                             # 强制替换远程槽位 2，成功后保存选择
+teeforge --keybox-validate FILE --json # 只读校验格式，不联网、不安装
 teeforge --rkp-status         # 检查设备端 RKP 前置条件（不联网）
 teeforge --update-desc        # 更新模块描述
 teeforge --rootdetect         # 输出 root 方法和版本
@@ -61,7 +64,8 @@ teeforge --config FILE        # 覆盖用户配置来源
 - `omk_enabled=0`：默认关闭；安装器检测 OMK 后写入系统配置，用户配置可覆盖。
 - `omk_injector_config=/data/misc/keystore/omk/injector.toml`：OMK 活动作用域配置，不用于 Keybox。
 - `teesim_config=/data/adb/teesim/config.json`：TEESimulator 配置；其 Keybox 路径由父目录派生。
-- `rkp_mode=auto`：`auto`（设备优先，失败回退远程）、`device`（仅设备）、`remote`（仅远程）。
+- `keybox_source=remote`：来源为 `remote` 或 `rkp`，互不回退；旧 `rkp_mode` 不生效。
+- `keybox_remote_slot=1`：远程池槽位 1/2/3；WebUI 安装成功后与来源一起保存，切换 RKP 不清除此值。
 - `rkp_server=https://remoteprovisioning.googleapis.com/v1`：RKP 服务地址，仅调试或自建代理时修改。
 - `rkp_refresh_days=30`：设备签发 Keybox 的复用窗口，`0` 表示每次重签。
 - Rust 加载顺序为系统配置，再由用户配置覆盖；`--config FILE` 只覆盖用户配置来源。

@@ -13,6 +13,8 @@
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+cargo build --locked -p teeforge --bin teeforge
+python -m unittest discover -s .github/scripts -p test_keybox_sync.py -v
 cargo run --locked -p xtask -- build
 cargo run --locked -p xtask -- package
 cargo run --locked -p xtask -- verify
@@ -21,6 +23,10 @@ cargo run --locked -p xtask -- verify
 `build.sh` 和 `package.sh` 是兼容入口，默认委托给 xtask；迁移期只有显式设置 `TEEFORGE_LEGACY_C=1` 才运行旧 C 流程。多后端目标配置、TEESimulator `config.json` 合并、OMK `injector.toml` 作用域和 Keybox 多目标事务只属于默认 Rust 核心；旧 C 对照实现继续只支持既有 `target.txt` 行为，不维护第二套 C JSON/TOML 实现。Rust 和旧 C 均已移除 resetprop-rs。
 
 OMK TOML 编辑使用锁定的 `toml_edit` parse 功能，不启用其格式化输出；工作区测试包含安装检测沙箱。Linux 主机测试用于验证 UID/GID 和 mode 保留，Android SELinux 标签与热加载仍需真机验收。
+
+## WebUI 模拟宿主回归
+
+安装 Python Playwright 及其 Chromium 并构建 WebUI 后，执行 `python tests/webui_keybox.py`；脚本在随机本地端口启动临时服务并在结束时关闭。测试使用独立无头浏览器和合成宿主，检查槽位、普通/强制请求、失败、保存重载、忙碌锁定及 RKP 切换，不连接设备。浏览器截图写入被忽略的 `out/`。
 
 ## xtask 阶段
 
@@ -46,6 +52,7 @@ OMK TOML 编辑使用锁定的 `toml_edit` parse 功能，不启用其格式化�
 - `ci.yml`：格式、Clippy、主机测试、四 ABI 打包、ELF/清单/体积验证。
 - `dev.yml`：master push 后构建 dev 包、上传 Artifact，并更新 page 分支 dev 文件。
 - `release.yml`：标签或手动版本触发正式 Release。
-- `keybox-sync.yml`：按计划同步上游 Keybox 到 page 分支。
+- `keybox-sync.yml`：三槽位全部获取并通过共享主机格式校验后，才准备并发布到 page 分支；任一失败不发布。测试仅使用合成材料，真实上游兼容检查不留存材料或打印内容。
+- 三槽位功能上线先更新并验证同步数据，再分发新版 WebUI；默认槽位保持旧客户端兼容。
 
 CI 成功只证明自动化流程和产物门禁通过，不代替设备安装、升级保留配置或运行行为验收。push、tag、Release 和 page 分支写入都需要明确授权。

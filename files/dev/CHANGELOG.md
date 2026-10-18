@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.6.0-a3224b3
+## TeeForge-CD Dev v0.6.0-304e786
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-a3224b3`
-- Version Code: `161`
-- Commit: `a3224b3`
+- Version: `v0.6.0-304e786`
+- Version Code: `163`
+- Commit: `304e786`
 
 ### 最近提交 Recent Commits
+- 304e786 fix(ci): 合并上游同步入口修复
+- 6308807 fix(ci): 适配上游同步资源入口
 - a3224b3 Merge pull request #5 from mcxiaochenn/feat/rkp-probe
 - 583b1ce feat(rkp): 探测加入对象大小变体与库符号表
 - 7b40e4d feat(rkp): 加入 --rkp-probe 多变异诊断
@@ -24,5 +26,3 @@
 - 2132d6c docs(omk): 更新兼容说明与分层验收记录
 - 31c2cc9 feat(omk): 适配安装固化的作用域更新与事务保护
 - 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具
-- dee93d6 fix(target): 兼容含等号的 Android 安装路径
-- a082b9b docs(maintenance): 记录第二轮运行期回归

@@ -25,6 +25,7 @@ struct Options {
     rkp_issue: bool,
     rkp_artifacts: bool,
     rkp_delete: bool,
+    rkp_probe: bool,
     target_list: bool,
     target_apply: Option<PathBuf>,
     target_mode: Option<String>,
@@ -61,6 +62,7 @@ fn parse(args: &[String]) -> Result<Options> {
             "--rkp-issue" => options.rkp_issue = true,
             "--rkp-artifacts" => options.rkp_artifacts = true,
             "--rkp-delete" => options.rkp_delete = true,
+            "--rkp-probe" => options.rkp_probe = true,
             "--target-list" => options.target_list = true,
             "--target-apply" => {
                 index += 1;
@@ -130,6 +132,9 @@ fn usage(program: &str) {
     println!("  --rkp-issue         设备端 RKP 签发并保存产物 [Issue RKP artifacts]");
     println!("  --rkp-artifacts     列出 RKP 产物 [List RKP artifacts]");
     println!("  --rkp-delete        删除 RKP 产物 [Delete RKP artifacts]");
+    println!(
+        "  --rkp-probe         探测 TA 响应约定（诊断用，消耗一次 challenge） [Probe TA response]"
+    );
     println!("  --self-update MODE  check/install 更新模块 [Check or install updates]");
     println!("  --update-channel C  stable/dev 更新通道 [Update channel]");
     println!("  --bootstrap         输出首屏信息 [Emit bootstrap information]");
@@ -164,6 +169,24 @@ pub fn run(args: Vec<String>) -> i32 {
             return 2;
         };
         return match rkp::execute_worker(std::path::Path::new(directory)) {
+            Ok(()) => 0,
+            Err(error) => {
+                eprintln!("{error}");
+                1
+            }
+        };
+    }
+    // 内部入口：探测变体同样只做一次厂商调用。
+    if let Some(index) = args.iter().position(|arg| arg == "--rkp-ta-probe") {
+        let (Some(directory), Some(variant)) = (args.get(index + 1), args.get(index + 2)) else {
+            eprintln!("--rkp-ta-probe 需要目录与变体序号 [requires a directory and a variant]");
+            return 2;
+        };
+        let Ok(variant) = variant.parse::<usize>() else {
+            eprintln!("变体序号非法 [invalid variant index]");
+            return 2;
+        };
+        return match rkp::execute_probe(std::path::Path::new(directory), variant) {
             Ok(()) => 0,
             Err(error) => {
                 eprintln!("{error}");
@@ -210,6 +233,7 @@ pub fn run(args: Vec<String>) -> i32 {
         && !options.rkp_issue
         && !options.rkp_artifacts
         && !options.rkp_delete
+        && !options.rkp_probe
         && !options.target_list
         && options.target_apply.is_none()
         && options.target_mode.is_none()
@@ -294,6 +318,12 @@ pub fn run(args: Vec<String>) -> i32 {
     }
     if options.rkp_delete {
         match rkp::delete_artifacts(&config) {
+            Ok(value) => println!("{value:#}"),
+            Err(error) => record(Err(error), &mut failed),
+        }
+    }
+    if options.rkp_probe {
+        match rkp::probe(&config) {
             Ok(value) => println!("{value:#}"),
             Err(error) => record(Err(error), &mut failed),
         }
@@ -442,6 +472,9 @@ fn run_json(options: &Options, config: &Config, user_config: &Path) -> i32 {
     if options.rkp_delete {
         commands.push("rkp-delete");
     }
+    if options.rkp_probe {
+        commands.push("rkp-probe");
+    }
     if options.target_list {
         commands.push("target-list");
     }
@@ -550,6 +583,9 @@ fn run_json(options: &Options, config: &Config, user_config: &Path) -> i32 {
     }
     if options.rkp_delete {
         return json::finish(rkp::delete_artifacts(config));
+    }
+    if options.rkp_probe {
+        return json::finish(rkp::probe(config));
     }
     if options.target_list {
         return json::finish(target::list_value(config));

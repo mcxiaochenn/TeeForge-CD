@@ -34,6 +34,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+mod elf;
 mod explain;
 mod keybox;
 mod protocol;
@@ -134,6 +135,55 @@ pub(crate) fn issue(config: &Config) -> Result<Issued> {
         duration_ms: started.elapsed().as_millis(),
         frame_layout: layout.label(),
     })
+}
+
+/// 多变异探测：定位「空成功」的成因。
+///
+/// 现场出现过 `send_cmd` 返回 0 但缓冲区零字节的情况：既不是帧格式问题，也不是
+/// 长度字段问题。探测把缓冲区初始化、security_level、请求封装三个变量拆开，
+/// 每个变体独立子进程执行，用一次装包换回全部对照数据。
+/// Probes one variable at a time to locate the "empty success" path.
+pub(crate) fn probe(config: &Config) -> Result<Value> {
+    let diagnosis = diagnose();
+    if let Some((id, detail)) = diagnosis.blockers.first() {
+        return Err(blocker_error(id, detail));
+    }
+    let key = generate_key()?;
+    let tmp = work_dir(config);
+    let challenge = server::fetch_challenge(&config.rkp_server, &diagnosis.fingerprint, &tmp)?;
+    let cose_key = protocol::cose_key(&key.public_key())?;
+    let request = protocol::build_request(&challenge, &cose_key)?;
+    logging::log(
+        Level::Info,
+        format!(
+            "开始探测 TA 响应，共 {} 个变体 [probing TA response with {} variants]",
+            ta::PROBES.len(),
+            ta::PROBES.len()
+        ),
+    );
+    let variants = worker::probe_all(&tmp, &request)?;
+    // 符号表能说明固件是否提供初始化入口或其它重载；读不到不影响探测结果。
+    let mut library_symbols = elf::function_symbols(VENDOR_LIBRARY, "KeymasterUtils")
+        .unwrap_or_else(|error| {
+            logging::log(
+                Level::Warn,
+                format!("读取库符号失败 [symbols unavailable]: {error}"),
+            );
+            Vec::new()
+        });
+    if let Ok(more) = elf::function_symbols(VENDOR_LIBRARY, "send_cmd") {
+        library_symbols.extend(more);
+    }
+    library_symbols.sort();
+    library_symbols.dedup();
+    Ok(json!({
+        "soc": diagnosis.soc_model,
+        "fingerprint": diagnosis.fingerprint,
+        "challenge_bytes": challenge.len(),
+        "request_bytes": request.len(),
+        "library_symbols": library_symbols,
+        "variants": variants,
+    }))
 }
 
 /// 签发并写入 `RKP/`：keybox.xml、cert-chain.pem、meta.json。
@@ -415,6 +465,11 @@ pub(crate) fn device_path_supported() -> bool {
 
 pub(crate) fn execute_worker(directory: &Path) -> Result<()> {
     worker::execute(directory)
+}
+
+/// 探测子进程入口，供 CLI 的隐藏参数转发。
+pub(crate) fn execute_probe(directory: &Path, variant: usize) -> Result<()> {
+    worker::execute_probe(directory, variant)
 }
 
 fn read_meta(config: &Config) -> Value {

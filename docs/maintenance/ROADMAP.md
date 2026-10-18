@@ -32,6 +32,7 @@ Rust 四 ABI 核心和跨平台打包链已作为默认实现；公开文档正�
 - arm64-v8a 主力设备安装、升级保留配置、音量键选择和开机服务。
 - 设备端 RKP：`--rkp-status` 判定、`--rkp-issue` 真实签发、`-18` 等 TA 错误码的透传与解释、产物落盘/删除、`--keybox --source rkp` 安装；小米 17 Pro 等社区成功机型优先。
 - RKP 帧布局：小米 17 Pro 实测 `--rkp-issue` 在旧版报 `invalid payload length`，需确认 `decode_frame` 命中的 `frame_layout`（预期为 `bare` 或 `status`），并提供 `error.raw.head_hex` 用于比对。
+- RKP 空响应：小米 17 Pro 在修复版上 `send_cmd` 返回 0 但缓冲区零字节（`written: 0`），需用 `--rkp-probe --json` 确认是缓冲区初始化、`security_level` 还是命令本身的问题；判读表见 README。
 - WebUI v2：五个页面在真机 WebView 下的布局与滚动、`ksu.spawn` 流式日志、`ksu.getPackagesInfo` / `ksu://icon` 缺失时的降级、手动选择重启后保持。
 - 视口：小米 17 Pro 上确认四边无溢出、首页不满一屏时不能上下拖动、双指缩放无效、吸顶与吸底正常。
 - Action：音量键在 Action 上下文可读、三个分支（RKP / 远程池 / 作用域）、超时取消不写文件、日志文件完整。

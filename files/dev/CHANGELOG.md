@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.6.0-66cdc0f
+## TeeForge-CD Dev v0.6.0-a3224b3
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-66cdc0f`
-- Version Code: `158`
-- Commit: `66cdc0f`
+- Version: `v0.6.0-a3224b3`
+- Version Code: `161`
+- Commit: `a3224b3`
 
 ### 最近提交 Recent Commits
+- a3224b3 Merge pull request #5 from mcxiaochenn/feat/rkp-probe
+- 583b1ce feat(rkp): 探测加入对象大小变体与库符号表
+- 7b40e4d feat(rkp): 加入 --rkp-probe 多变异诊断
 - 66cdc0f Merge pull request #4 from mcxiaochenn/fix/rkp-frame-and-viewport
 - d28ca1f docs: 记录帧诊断、视口约定与本次真机问题
 - 0d4db16 fix(webui): 消除视口溢出并统一版本号格式
@@ -23,6 +26,3 @@
 - 30d4986 refactor(blhide): 移除 resetprop-rs 并统一标准属性工具
 - dee93d6 fix(target): 兼容含等号的 Android 安装路径
 - a082b9b docs(maintenance): 记录第二轮运行期回归
-- e2c4315 fix(module): 输出 Action 子任务退出状态
-- ad8d3b7 fix(runtime): 收紧下载文本与包列表执行边界
-- 7d56070 docs(maintenance): 记录运行期回归与验证状态

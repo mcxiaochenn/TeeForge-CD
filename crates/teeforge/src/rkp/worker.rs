@@ -90,6 +90,90 @@ pub(crate) fn execute(directory: &Path) -> Result<()> {
     write_private(&directory.join("reply.json"), &encoded)
 }
 
+/// 逐个变体在独立子进程中探测。
+///
+/// 每个变体都会重新 dlopen 厂商库并构造对象：这样某一组触发崩溃时只丢失该组，
+/// 而不是整轮探测；构造参数（security_level）不同也无法复用同一个对象。
+/// Each variant gets its own child so a crash loses only that variant.
+pub(crate) fn probe_all(tmp_root: &Path, request: &[u8]) -> Result<Vec<Value>> {
+    let executable = env::current_exe()
+        .map_err(|error| TfError::new(format!("无法定位当前可执行文件 [current_exe]: {error}")))?;
+    let mut results = Vec::new();
+    for (index, (label, _)) in crate::rkp::ta::PROBES.iter().enumerate() {
+        let directory = unique_dir(tmp_root)?;
+        let outcome = (|| -> Result<Value> {
+            write_private(&directory.join("request.bin"), request)?;
+            let mut command = Command::new(&executable);
+            command
+                .arg("--rkp-ta-probe")
+                .arg(&directory)
+                .arg(index.to_string())
+                .env("LD_LIBRARY_PATH", VENDOR_LIBRARY_PATH);
+            let output = process::run_bounded(
+                command,
+                "teeforge RKP probe",
+                TIMEOUT,
+                4096,
+                "设备端 RKP 探测 [device RKP probe]",
+            )?;
+            if !output.status.success() {
+                return Ok(json!({
+                    "variant": label,
+                    "ok": false,
+                    "crashed": true,
+                    "exit": output.status.code(),
+                    "stderr": stderr_detail(&output.stderr),
+                }));
+            }
+            let reply = read_bounded(&directory.join("probe.json"), MAX_REPLY_BYTES)?;
+            let mut value: Value = serde_json::from_slice(&reply).map_err(|error| {
+                TfError::new(format!("解析探测回执失败 [decode probe]: {error}"))
+            })?;
+            if value.is_object() {
+                value["variant"] = json!(label);
+            }
+            Ok(value)
+        })();
+        let _ = fs::remove_dir_all(&directory);
+        results.push(match outcome {
+            Ok(value) => value,
+            Err(error) => json!({ "variant": label, "ok": false, "error": error.to_string() }),
+        });
+    }
+    Ok(results)
+}
+
+/// 子进程入口：按变体执行一次调用并写探测回执。
+pub(crate) fn execute_probe(directory: &Path, index: usize) -> Result<()> {
+    let result = (|| {
+        let request = read_bounded(&directory.join("request.bin"), protocol::MAX_REQUEST_SIZE)?;
+        protocol::ta_payload(&request)?;
+        let (label, options) = crate::rkp::ta::PROBES
+            .get(index)
+            .ok_or_else(|| TfError::new("未知探测变体 [unknown probe variant]"))?;
+        let call = crate::rkp::ta::probe(&request, *options)?;
+        Ok(json!({
+            "ok": true,
+            "variant": label,
+            "level": options.level,
+            "buffer_len": options.buffer_len,
+            "status": call.status,
+            "written": crate::rkp::ta::written_len(&call.response),
+            "response_head": protocol::head_hex(&call.response),
+            "request_changed": crate::rkp::ta::request_changed(&call.request_before, &call.request_after),
+            "request_before": protocol::head_hex(&call.request_before),
+            "request_after": protocol::head_hex(&call.request_after),
+        }))
+    })();
+    let reply = match result {
+        Ok(value) => value,
+        Err(error) => json!({ "ok": false, "error": describe(&error) }),
+    };
+    let encoded = serde_json::to_vec(&reply)
+        .map_err(|error| TfError::new(format!("编码探测回执失败 [encode probe]: {error}")))?;
+    write_private(&directory.join("probe.json"), &encoded)
+}
+
 /// 把 `TfError` 拆成可跨进程传输的对象。
 fn describe(error: &TfError) -> Value {
     let mut payload = json!({ "message": error.message() });

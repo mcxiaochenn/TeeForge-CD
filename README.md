@@ -117,7 +117,7 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --self-update check'
 su -c '/data/adb/modules/teeforge_cd/teeforge --help'
 ```
 
-`--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。`--rkp-probe` 是诊断命令：取一次 challenge 后，把缓冲区初始化、`security_level`、请求封装三组变量拆成 6 个变体，每个变体在独立子进程中调用一次 TA，输出对照数据。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
+`--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。`--rkp-probe` 是诊断命令：取一次 challenge 后，把缓冲区初始化、`security_level`、请求封装、厂商对象大小四组变量拆成 8 个变体，每个变体在独立子进程中调用一次 TA，输出对照数据。同时会解析 `/vendor/lib64/libkeymasterdeviceutils.so` 的动态符号表，列出 `KeymasterUtils` 与 `send_cmd` 相关入口——如果固件提供了必须先调用的初始化方法或别的重载，会在 `library_symbols` 里直接暴露。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
 
 CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](docs/project/OVERVIEW.md)。
 
@@ -207,7 +207,9 @@ update_channel=stable
   | 某变体 `request_changed` 为 true | out 参数落在了请求缓冲区上，参数顺序需要调整 |
   | `level-0` 有数据 | 该固件要求 `security_level = 0` |
   | `length-prefix` 有数据 | 请求需要长度前缀 |
+  | `object-0x80` / `object-0x100` 有数据 | 厂商对象比 0x40 大，`baseline` 的构造写越界破坏了堆 |
   | 多个变体进程崩溃（`crashed: true`） | 厂商对象布局与该固件不匹配 |
+  | `library_symbols` 里有 `init` / `initialize` / `connect` 之类入口 | 调用前需要先完成初始化 |
 - **报“无法识别 TA 响应帧”或“TA 未写入响应缓冲区”**：说明厂商 `send_cmd` 的返回封装与预期不同。`--rkp-issue --json` 的 `error.raw.head_hex` 是响应缓冲区开头 64 字节，`written` 是最后一个非零字节的位置：
   - 前 8 位为 `00000080` 且 `written` 为 0：缓冲区完全未被写入，属于 ABI 或参数约定不匹配。
   - 开头是 `82`、`a2`、`d2` 等 CBOR 首字节：厂商直接返回裸 payload。

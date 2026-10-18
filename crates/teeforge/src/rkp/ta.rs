@@ -77,6 +77,12 @@ pub(crate) struct CallOptions {
     pub(crate) buffer: BufferInit,
     pub(crate) buffer_len: usize,
     pub(crate) frame: RequestFrame,
+    /// 传给厂商构造函数的对象存储大小。
+    ///
+    /// 上游按 0x40 分配，但那只是「观察到的客户端」的值；固件升级后对象可能变大，
+    /// 构造写越界会破坏堆上相邻数据，表现为后续调用静默失败。
+    /// Upstream allocates 0x40 from one observed client; newer firmware may need more.
+    pub(crate) object_size: usize,
 }
 
 impl Default for CallOptions {
@@ -86,6 +92,7 @@ impl Default for CallOptions {
             buffer: BufferInit::Sentinel,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         }
     }
 }
@@ -101,7 +108,7 @@ pub(crate) struct CallResult {
 /// 探测变体表：标签 + 参数。
 ///
 /// 顺序固定，`--rkp-probe` 的输出按这个顺序排列，便于与现场日志对照。
-pub(crate) const PROBES: [(&str, CallOptions); 6] = [
+pub(crate) const PROBES: [(&str, CallOptions); 8] = [
     (
         "baseline",
         CallOptions {
@@ -109,6 +116,7 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Sentinel,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         },
     ),
     (
@@ -118,6 +126,7 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Zero,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         },
     ),
     (
@@ -127,6 +136,7 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Capacity,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         },
     ),
     (
@@ -136,6 +146,7 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Zero,
             buffer_len: 0x2000,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         },
     ),
     (
@@ -145,6 +156,7 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Zero,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::Plain,
+            object_size: 0x40,
         },
     ),
     (
@@ -154,6 +166,27 @@ pub(crate) const PROBES: [(&str, CallOptions); 6] = [
             buffer: BufferInit::Zero,
             buffer_len: BUFFER_SIZE,
             frame: RequestFrame::LengthBe,
+            object_size: 0x40,
+        },
+    ),
+    (
+        "object-0x80",
+        CallOptions {
+            level: 1,
+            buffer: BufferInit::Zero,
+            buffer_len: BUFFER_SIZE,
+            frame: RequestFrame::Plain,
+            object_size: 0x80,
+        },
+    ),
+    (
+        "object-0x100",
+        CallOptions {
+            level: 1,
+            buffer: BufferInit::Zero,
+            buffer_len: BUFFER_SIZE,
+            frame: RequestFrame::Plain,
+            object_size: 0x100,
         },
     ),
 ];
@@ -205,7 +238,6 @@ mod imp {
     use crate::rkp::protocol::BUFFER_SIZE;
     use crate::rkp::ta::{BufferInit, CallOptions, CallResult, RawFrame, frame_request};
     use std::ffi::c_void;
-    use std::mem::MaybeUninit;
 
     use libloading::Library;
 
@@ -217,13 +249,17 @@ mod imp {
     type Destructor = unsafe extern "C" fn(*mut c_void);
     type SendCommand = unsafe extern "C" fn(*mut c_void, *mut c_void, u32, *mut c_void, u32) -> i32;
 
-    // 参考实现为该厂商类分配 0x40 字节；只经由构造/析构函数持有，不读取字段。
-    // The reference client allocates 0x40 bytes; only the vendor constructor owns them.
-    #[repr(C, align(16))]
-    struct VendorObject([MaybeUninit<u8>; 0x40]);
+    /// 对象存储的尾部余量。
+    ///
+    /// 探测「对象比预期大」时，若按较小尺寸分配，构造函数写越界会破坏相邻堆数据，
+    /// 反而改变被测行为。预留余量后越界落在自己的存储内，结果才有意义。
+    /// Slack keeps an oversized constructor from corrupting unrelated heap data.
+    const OBJECT_SLACK: usize = 0x100;
 
     struct Session {
-        object: Box<VendorObject>,
+        /// `u128` 保证 16 字节对齐，与厂商类的要求一致。
+        /// `u128` gives the 16-byte alignment the vendor class expects.
+        object: Vec<u128>,
         destructor: Destructor,
         send: SendCommand,
         _library: Library,
@@ -237,7 +273,7 @@ mod imp {
     }
 
     impl Session {
-        fn open(level: i32) -> Result<Self> {
+        fn open(level: i32, object_size: usize) -> Result<Self> {
             // SAFETY: 仅本适配层解析固定厂商 ABI，且只在 arm64 Android 的隔离子进程中调用。
             // SAFETY: only this adapter resolves the fixed vendor ABI, in an isolated child.
             let library: Library = unsafe {
@@ -262,10 +298,11 @@ mod imp {
                     .get::<SendCommand>(b"_ZN14keymasterutils14KeymasterUtils8send_cmdEPvjS1_j\0")
             }
             .map_err(|_| fail("缺少 send_cmd 符号 [send_cmd symbol missing]"))?;
-            let mut object = Box::new(VendorObject([MaybeUninit::new(0); 0x40]));
-            // SAFETY: 对齐的可写存储地址在 Drop 前保持稳定。
-            // SAFETY: stable aligned storage.
-            unsafe { constructor(object.as_mut() as *mut VendorObject as *mut c_void, level) };
+            let words = (object_size.max(0x10) + OBJECT_SLACK).div_ceil(16);
+            let mut object = vec![0u128; words];
+            // SAFETY: 对齐的可写存储地址在 Drop 前保持稳定；容量含余量。
+            // SAFETY: stable aligned storage with slack for oversized objects.
+            unsafe { constructor(object.as_mut_ptr().cast(), level) };
             Ok(Self {
                 object,
                 destructor,
@@ -293,7 +330,7 @@ mod imp {
             // SAFETY: live instance, disjoint buffers valid for the synchronous call.
             let status = unsafe {
                 (self.send)(
-                    self.object.as_mut() as *mut VendorObject as *mut c_void,
+                    self.object.as_mut_ptr().cast(),
                     request.as_mut_ptr().cast(),
                     request.len() as u32,
                     response.as_mut_ptr().cast(),
@@ -339,16 +376,17 @@ mod imp {
         fn drop(&mut self) {
             // SAFETY: 析构只执行一次，且对象与库在调用期间均存活。
             // SAFETY: the destructor runs once while both the object and library are live.
-            unsafe { (self.destructor)(self.object.as_mut() as *mut VendorObject as *mut c_void) };
+            unsafe { (self.destructor)(self.object.as_mut_ptr().cast()) };
         }
     }
 
     pub(super) fn request(bytes: &[u8]) -> Result<RawFrame> {
-        Session::open(1)?.request(bytes)
+        let options = CallOptions::default();
+        Session::open(options.level, options.object_size)?.request(bytes)
     }
 
     pub(super) fn probe(bytes: &[u8], options: CallOptions) -> Result<CallResult> {
-        Ok(Session::open(options.level)?.call(bytes, options))
+        Ok(Session::open(options.level, options.object_size)?.call(bytes, options))
     }
 }
 

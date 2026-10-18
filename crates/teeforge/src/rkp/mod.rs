@@ -34,6 +34,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+mod elf;
 mod explain;
 mod keybox;
 mod protocol;
@@ -161,11 +162,26 @@ pub(crate) fn probe(config: &Config) -> Result<Value> {
         ),
     );
     let variants = worker::probe_all(&tmp, &request)?;
+    // 符号表能说明固件是否提供初始化入口或其它重载；读不到不影响探测结果。
+    let mut library_symbols = elf::function_symbols(VENDOR_LIBRARY, "KeymasterUtils")
+        .unwrap_or_else(|error| {
+            logging::log(
+                Level::Warn,
+                format!("读取库符号失败 [symbols unavailable]: {error}"),
+            );
+            Vec::new()
+        });
+    if let Ok(more) = elf::function_symbols(VENDOR_LIBRARY, "send_cmd") {
+        library_symbols.extend(more);
+    }
+    library_symbols.sort();
+    library_symbols.dedup();
     Ok(json!({
         "soc": diagnosis.soc_model,
         "fingerprint": diagnosis.fingerprint,
         "challenge_bytes": challenge.len(),
         "request_bytes": request.len(),
+        "library_symbols": library_symbols,
         "variants": variants,
     }))
 }

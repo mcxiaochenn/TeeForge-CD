@@ -132,7 +132,9 @@ fn usage(program: &str) {
     println!("  --rkp-issue         设备端 RKP 签发并保存产物 [Issue RKP artifacts]");
     println!("  --rkp-artifacts     列出 RKP 产物 [List RKP artifacts]");
     println!("  --rkp-delete        删除 RKP 产物 [Delete RKP artifacts]");
-    println!("  --rkp-probe         探测 TA 响应约定（诊断用，消耗一次 challenge） [Probe TA response]");
+    println!(
+        "  --rkp-probe         探测 TA 响应约定（诊断用，消耗一次 challenge） [Probe TA response]"
+    );
     println!("  --self-update MODE  check/install 更新模块 [Check or install updates]");
     println!("  --update-channel C  stable/dev 更新通道 [Update channel]");
     println!("  --bootstrap         输出首屏信息 [Emit bootstrap information]");

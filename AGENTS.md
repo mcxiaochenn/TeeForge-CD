@@ -11,7 +11,7 @@
 5. 未明确授权不得 push、发版、打标签、强制覆盖或执行其他危险操作。
 6. 用户说“提交”只表示本地 commit，不自动 push。
 7. 连接、调试或修改用户主力设备前必须取得明确授权。
-8. 自动化构建结果与真机验收结果必须分别报告，构建通过不代表设备行为通过。
+8. 自动化构建结果与真机验收结果分别记录。用户要求发布正式版即表示对应 Dev 版本已由用户真机测试通过；以此作为发布依据，不再添加“待验证”“待验收”等表述，也不要求重复真机验证。
 9. Keybox 私密维护细节不得写入公开文档、提交、日志或最终回复。
 10. 所有外部输入、下载内容、命令退出状态和平台差异都必须按实际结果处理，不能凭假设放行。
 11. 每轮结束必须判断是否需要更新项目文档或踩坑记录，并在最终回复中说明判断结果。
@@ -24,7 +24,7 @@
 - 当前技术架构：`docs/project/ARCHITECTURE.md`
 - 构建、测试、CI、发版：`docs/development/BUILD_AND_RELEASE.md`
 - 安装、ABI、设备验收：`docs/operations/INSTALLATION.md`
-- 当前任务与待验收项：`docs/maintenance/ROADMAP.md`
+- 当前任务与验收记录：`docs/maintenance/ROADMAP.md`
 - 已知问题与踩坑记录：`docs/maintenance/LESSONS.md`
 - 文档维护规则：`docs/maintenance/DOCUMENTATION.md`
 - Rust 重构决策：`docs/decisions/0001-rust-four-abi-migration.md`

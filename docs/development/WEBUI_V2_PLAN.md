@@ -1,6 +1,6 @@
 # WebUI v2 与 Action 改造计划
 
-> 状态：已实现（M0–M5），真机验收待执行
+> 状态：已实现（M0–M5），对应 Dev 版本已由用户真机测试通过（2026-10-22）
 > 范围：WebUI 信息架构重做、四项新功能入口、二进制接口拆分、Action 交互重做、日志截断修复
 > 参照：[Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)（MIT）、[Tricky-Addon-Update-Target-List](https://github.com/KOWX712/Tricky-Addon-Update-Target-List)（Apache-2.0）
 > 说明：两个项目只作交互与信息结构参考，不复制其代码、样式、图标或文案
@@ -10,7 +10,7 @@
 > 实现结果：二进制、WebUI、Action 三段均已落地；`cargo test` 99 项通过，`vite build` 通过。
 > 与原计划的差异：更新安装**要求清单提供 sha256** 才自动安装（原计划允许手动保存降级，已实现）；
 > Action 按键按确认采用 TWRP 形式（音量下切换、音量上确认）；`keybox_source` 默认 `remote`。
-> 真机验收（小米 17 Pro）尚未执行，`-18` 与音量键可用性需在设备上确认。
+> 发布验收：用户确认对应 Dev 版本已通过真机测试，并据此发布 v0.7.0 正式版。
 
 | 项 | 结论 |
 |---|---|

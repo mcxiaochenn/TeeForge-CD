@@ -8,7 +8,7 @@
 > 现有三个对接目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`；Keybox 分别位于对应目录。Oh My Keymint（OMK）仅适配应用作用域，安装时检测并固化启用状态，不接管其 Keybox 或服务配置。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
 
 > [!NOTE]
-> 当前 `master` 构建基线为 Android 7.0（API 24）及以上，包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI。四架构自动化构建已经验证，真机与模拟器覆盖仍需分别验收；稳定 Release 可能晚于 `master`，实际支持范围以对应 Release 说明和安装输出为准。
+> 当前 `master` 构建基线为 Android 7.0（API 24）及以上，包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI。四架构自动化构建已经验证，正式版在对应 Dev 版本通过用户真机测试后发布；实际支持范围以对应 Release 说明和安装输出为准。
 
 [下载稳定版](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest) · [项目文档](docs/README.md)
 
@@ -35,7 +35,7 @@
 | ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
 | 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS；Oh My Keymint 仅应用作用域 |
 | 目标配置 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/target.txt`；TEESimulator：`/data/adb/teesim/config.json` 的 `profiles.teeforge.apps` |
-| OMK 作用域 | 安装时检测并固化；更新 `/data/misc/keystore/omk/injector.toml` 的 `scoop`；OMK 自身要求 Android 12+，真机待验收 |
+| OMK 作用域 | 安装时检测并固化；更新 `/data/misc/keystore/omk/injector.toml` 的 `scoop`；OMK 自身要求 Android 12+ |
 | Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml`；来源可选远程池或本机 RKP |
 | RKP 产物 | `/data/adb/teeforge/RKP/`（`keybox.xml`、`cert-chain.pem`、`meta.json`，权限 0600） |
 | 设备端 RKP | 仅 `arm64-v8a` + 高通 SoC + `/vendor/lib64/libkeymasterdeviceutils.so` + `/dev/smcinvoke`；其余环境只能使用远程 Keybox |
@@ -49,7 +49,7 @@
 - 知道当前 Root 管理器的模块禁用或安全模式入口，以便异常启动时恢复。
 - 需要保留旧配置时，提前备份 `/data/adb/teeforge/config.conf`。
 
-仓库当前没有宣称所有 Root 管理器版本、ROM 和设备组合都已完成真机验证。自动化结果与待验收项见[当前路线图](docs/maintenance/ROADMAP.md)。
+正式版对应 Dev 版本已通过用户真机测试。自动化验证与真机测试记录见[当前路线图](docs/maintenance/ROADMAP.md)。
 
 ## 下载与安装
 

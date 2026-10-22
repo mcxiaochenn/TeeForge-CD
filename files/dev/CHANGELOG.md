@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.6.0-c210c22
+## TeeForge-CD Dev v0.6.0-2185c0a
 
 ### 构建信息 Build Info
-- Version: `v0.6.0-c210c22`
-- Version Code: `166`
-- Commit: `c210c22`
+- Version: `v0.6.0-2185c0a`
+- Version Code: `168`
+- Commit: `2185c0a`
 
 ### 最近提交 Recent Commits
+- 2185c0a chore(release): 准备 v0.7.0 正式版
+- be2998c keybox: sync status 2026-10-21 [auto]
 - c210c22 feat(webui): 支持远程槽位选择与强制替换
 - 0f1cb2e keybox: sync status 2026-10-18 [auto]
 - aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
@@ -24,5 +26,3 @@
 - 00f4a29 feat(webui): 重写为 Vue 单页应用，按功能分区管理
 - 6190914 feat(core): 拆分 RKP 与 Keybox，新增 JSON 契约与更新能力
 - 11c4e31 feat: Merge pull request #2 from mcxiaochenn/feat/rkp-device-issuance
-- 3811f4c chore(git): 忽略 .workbuddy 工具目录
-- 9bcec88 feat(rkp): 移植设备端 RKP 签发并保留远程回退

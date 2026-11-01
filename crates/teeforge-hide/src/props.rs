@@ -67,11 +67,8 @@ const ENTRIES: &[Entry] = &[
         value: "sha256",
         category: Category::Boot,
     },
-    Entry {
-        name: "ro.boot.vbmeta.avb_version",
-        value: "1.0",
-        category: Category::Boot,
-    },
+    // 真机属性名是 ro.boot.avb_version，如实报告 1.4；不要把版本号降级改写。
+    // The real property is ro.boot.avb_version and reports 1.4; never downgrade it.
     Entry {
         name: "ro.boot.vbmeta.invalidate_on_error",
         value: "yes",

@@ -23,7 +23,11 @@ sleep 5
 # 弱隐二次加固：post-fs-data 已写过一次，这里防止厂商脚本在启动后期写回。
 # Second weak-hiding pass; OEM scripts may restore values late in boot.
 mkdir -p "$LOG_DIR" 2>/dev/null
-"$HIDE" --config "$CONFIG" --stage late >>"$LOG_DIR/blhide.log" 2>&1
+if [ ! -x "$HIDE" ]; then
+  echo "[$(date +%s 2>/dev/null)] [ERROR] $HIDE 不可执行 [not executable]" >>"$LOG_DIR/blhide.log" 2>/dev/null
+else
+  "$HIDE" --config "$CONFIG" --stage late >>"$LOG_DIR/blhide.log" 2>&1
+fi
 
 # 更新目标应用配置 Update target app configuration
 "$TF" --config "$CONFIG" --generate

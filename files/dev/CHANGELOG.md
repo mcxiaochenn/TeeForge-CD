@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.7.0-284ee97
+## TeeForge-CD Dev v0.7.0-a2e3902
 
 ### 构建信息 Build Info
-- Version: `v0.7.0-284ee97`
-- Version Code: `176`
-- Commit: `284ee97`
+- Version: `v0.7.0-a2e3902`
+- Version Code: `177`
+- Commit: `a2e3902`
 
 ### 最近提交 Recent Commits
+- a2e3902 fix(hide): 不再改写 ro.boot.vbmeta.size
 - 284ee97 fix(hide): 基线改用 getprop，修复 resetprop 空 dump 导致的空操作
 - ce82de7 feat(hide): 弱隐 BL 拆分为独立二进制并按 runtime 布局下发
 - 5bc48e2 Merge pull request #6 from mcxiaochenn/feat/action-menu-busy-overlay
@@ -25,4 +26,3 @@
 - 583b1ce feat(rkp): 探测加入对象大小变体与库符号表
 - 7b40e4d feat(rkp): 加入 --rkp-probe 多变异诊断
 - 66cdc0f Merge pull request #4 from mcxiaochenn/fix/rkp-frame-and-viewport
-- d28ca1f docs: 记录帧诊断、视口约定与本次真机问题

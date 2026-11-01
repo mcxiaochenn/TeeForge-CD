@@ -145,43 +145,71 @@ if [ "$PICK_INDEX" -eq 2 ]; then
     cancelled
 fi
 
-if ! pick "选择操作 [Choose an action]" "更新 Keybox [Update keybox]" "更新目标作用域 [Update target scope]"; then
+if ! pick "选择操作 [Choose an action]" "一键更新目标作用域和 Keybox [Update target scope and keybox]" "更新目标作用域 [Update target scope]" "更新 Keybox [Update keybox]"; then
     cancelled
 fi
+ACTION=$PICK_INDEX
 
-case "$PICK_INDEX" in
-    1)
-        if ! pick "Keybox 来源 [Keybox source]" "本机 RKP 签发并应用 [Issue with device RKP]" "远程公共密钥池 [Shared pool from CDN]"; then
-            cancelled
+# Keybox 来源始终显式选择，与 README 的约定一致。
+# The keybox source is always chosen explicitly.
+pick_keybox_source() {
+    if ! pick "Keybox 来源 [Keybox source]" "本机 RKP 签发并应用 [Issue with device RKP]" "远程公共密钥池 [Shared pool from CDN]"; then
+        return 1
+    fi
+    KEYBOX_SOURCE=$PICK_INDEX
+    return 0
+}
+
+run_target_scope() {
+    run_logged "$TF" --config "$CONFIG" --generate
+}
+
+run_keybox() {
+    if [ "$KEYBOX_SOURCE" -eq 1 ]; then
+        say ""
+        say "[RKP 1/2] 本机 RKP 签发 [Issuing on device]..."
+        run_logged "$TF" --config "$CONFIG" --rkp-issue
+        RESULT=$?
+        if [ "$RESULT" -eq 0 ]; then
+            say ""
+            say "[RKP 2/2] 安装 RKP 产物到后端 [Installing artifacts]..."
+            run_logged "$TF" --config "$CONFIG" --keybox --source rkp
+            RESULT=$?
+        else
+            say "RKP 签发失败，未改动后端 keybox [issuance failed; backends untouched]"
         fi
-        case "$PICK_INDEX" in
-            1)
-                say ""
-                say "[1/2] 本机 RKP 签发 [Issuing on device]..."
-                run_logged "$TF" --config "$CONFIG" --rkp-issue
-                RESULT=$?
-                if [ "$RESULT" -eq 0 ]; then
-                    say ""
-                    say "[2/2] 安装 RKP 产物到后端 [Installing artifacts]..."
-                    run_logged "$TF" --config "$CONFIG" --keybox --source rkp
-                    RESULT=$?
-                else
-                    say "RKP 签发失败，未改动后端 keybox [issuance failed; backends untouched]"
-                fi
-                ;;
-            2)
-                say ""
-                say "从远程密钥池获取 [Fetching shared keybox]..."
-                run_logged "$TF" --config "$CONFIG" --keybox --source remote
-                RESULT=$?
-                ;;
-        esac
+    else
+        say ""
+        say "从远程密钥池获取 [Fetching shared keybox]..."
+        run_logged "$TF" --config "$CONFIG" --keybox --source remote
+        RESULT=$?
+    fi
+}
+
+case "$ACTION" in
+    1)
+        pick_keybox_source || cancelled
+        say ""
+        say "[1/2] 更新目标作用域 [Updating target scope]..."
+        run_target_scope
+        RESULT=$?
+        if [ "$RESULT" -eq 0 ]; then
+            say ""
+            say "[2/2] 更新 Keybox [Updating keybox]..."
+            run_keybox
+        else
+            say "目标作用域更新失败，已跳过 Keybox [target scope failed; keybox skipped]"
+        fi
         ;;
     2)
         say ""
         say "更新目标作用域 [Updating target scope]..."
-        run_logged "$TF" --config "$CONFIG" --generate
+        run_target_scope
         RESULT=$?
+        ;;
+    3)
+        pick_keybox_source || cancelled
+        run_keybox
         ;;
 esac
 

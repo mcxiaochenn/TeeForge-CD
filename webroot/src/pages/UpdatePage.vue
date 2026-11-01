@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import SectionCard from '../components/layout/SectionCard.vue';
 import AppBadge from '../components/ui/AppBadge.vue';
+import AppBusyOverlay from '../components/ui/AppBusyOverlay.vue';
 import AppButton from '../components/ui/AppButton.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
@@ -221,5 +222,7 @@ onMounted(async () => {
         </div>
       </template>
     </AppSheet>
+
+    <AppBusyOverlay :open="busy" :label="t('common.busy.update')" />
   </div>
 </template>

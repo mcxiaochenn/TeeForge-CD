@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import SectionCard from '../components/layout/SectionCard.vue';
 import AppBadge from '../components/ui/AppBadge.vue';
+import AppBusyOverlay from '../components/ui/AppBusyOverlay.vue';
 import AppButton from '../components/ui/AppButton.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
@@ -21,6 +22,7 @@ const issueError = ref<ApiError | null>(null);
 const confirmOpen = ref(false);
 const deleteOpen = ref(false);
 const succeeded = ref('');
+const busyLabel = ref('');
 
 const supported = computed(() => status.value?.supported ?? false);
 
@@ -83,6 +85,7 @@ async function load() {
 
 async function issue() {
   busy.value = true;
+  busyLabel.value = t('common.busy.rkp');
   log.value = '';
   issueError.value = null;
   succeeded.value = '';
@@ -103,6 +106,7 @@ async function issue() {
 
 async function removeArtifacts() {
   busy.value = true;
+  busyLabel.value = '';
   try {
     await api.rkpDelete();
     deleteOpen.value = false;
@@ -269,5 +273,7 @@ onMounted(load);
         </div>
       </template>
     </AppSheet>
+
+    <AppBusyOverlay :open="busy" :label="busyLabel" />
   </div>
 </template>

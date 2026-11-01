@@ -1,11 +1,13 @@
-## TeeForge-CD Dev v0.7.0-55459ce
+## TeeForge-CD Dev v0.8.0-26aa4ff
 
 ### 构建信息 Build Info
-- Version: `v0.7.0-55459ce`
-- Version Code: `179`
-- Commit: `55459ce`
+- Version: `v0.8.0-26aa4ff`
+- Version Code: `181`
+- Commit: `26aa4ff`
 
 ### 最近提交 Recent Commits
+- 26aa4ff docs: 重构 README，精简重复内容并修正事实错误
+- 0f7f5e3 keybox: sync status 2026-11-01 [auto]
 - 55459ce release: v0.8.0（弱隐 BL 独立二进制与 runtime 布局）
 - f59b99b chore(hide): 摘要行记录开机时长，两阶段日志可排到同一时间轴
 - a2e3902 fix(hide): 不再改写 ro.boot.vbmeta.size
@@ -24,5 +26,3 @@
 - aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
 - 304e786 fix(ci): 合并上游同步入口修复
 - 6308807 fix(ci): 适配上游同步资源入口
-- a3224b3 Merge pull request #5 from mcxiaochenn/feat/rkp-probe
-- 583b1ce feat(rkp): 探测加入对象大小变体与库符号表

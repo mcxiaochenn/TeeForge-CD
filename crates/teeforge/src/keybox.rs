@@ -89,6 +89,31 @@ fn validate_month(value: &str) -> Result<String> {
     )))
 }
 
+/// 远程槽位按月轮换；设备本地月份可能早于发布方（UTC + CI 延迟），
+/// 因此允许回退到最近已发布的月份。[Remote slots rotate monthly; fall back when
+/// the device month is ahead of the published month.]
+const REMOTE_MONTH_CANDIDATES: u8 = 3;
+
+fn candidate_months(current: &str) -> Result<Vec<String>> {
+    let month = validate_month(current)?;
+    let mut year: i32 = month[..4]
+        .parse()
+        .map_err(|_| TfError::new("系统年份无效 [Invalid system year]"))?;
+    let mut number: i32 = month[5..]
+        .parse()
+        .map_err(|_| TfError::new("系统月份无效 [Invalid system month]"))?;
+    let mut months = Vec::with_capacity(REMOTE_MONTH_CANDIDATES as usize);
+    for _ in 0..REMOTE_MONTH_CANDIDATES {
+        months.push(format!("{year:04}-{number:02}"));
+        number -= 1;
+        if number == 0 {
+            number = 12;
+            year -= 1;
+        }
+    }
+    Ok(months)
+}
+
 fn slot_filename(month: &str, slot: u8) -> Result<String> {
     validate_month(month)?;
     if !(1..=3).contains(&slot) {
@@ -484,16 +509,50 @@ fn rkp_keybox(config: &Config) -> Result<Vec<u8>> {
 
 fn remote_keybox(slot: u8, force: bool) -> Result<Vec<u8>> {
     let (cdn, public_key) = endpoints()?;
-    let mut url = format!("{cdn}{}", slot_filename(&current_month()?, slot)?);
-    if force {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| TfError::new("系统时间无效 [Invalid system time]"))?
-            .as_nanos();
-        url.push_str(&format!("?refresh={nonce}"));
+    let current = current_month()?;
+    remote_keybox_from(&current, slot, force, |month, slot, force| {
+        let mut url = format!("{cdn}{}", slot_filename(month, slot)?);
+        if force {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| TfError::new("系统时间无效 [Invalid system time]"))?
+                .as_nanos();
+            url.push_str(&format!("?refresh={nonce}"));
+        }
+        let encrypted = download(&url)?;
+        decrypt(&encrypted, &public_key)
+    })
+}
+
+/// 依次尝试当前月及前两个月，只有全部失败才报错。
+/// Try the current month then the previous ones; only report after all fail.
+fn remote_keybox_from(
+    current: &str,
+    slot: u8,
+    force: bool,
+    mut fetch: impl FnMut(&str, u8, bool) -> Result<Vec<u8>>,
+) -> Result<Vec<u8>> {
+    let mut errors = Vec::new();
+    for month in candidate_months(current)? {
+        match fetch(&month, slot, force) {
+            Ok(data) => {
+                if month != current {
+                    logging::log(
+                        Level::Warn,
+                        format!(
+                            "当前月份槽位尚未发布，回退到 {month} [Current month slot not published; falling back to {month}]"
+                        ),
+                    );
+                }
+                return Ok(data);
+            }
+            Err(error) => errors.push(format!("{month}: {error}")),
+        }
     }
-    let encrypted = download(&url)?;
-    decrypt(&encrypted, &public_key)
+    Err(TfError::new(format!(
+        "远程 Keybox 获取失败 [Remote keybox fetch failed]: {}",
+        errors.join("; ")
+    )))
 }
 
 fn install(
@@ -553,6 +612,51 @@ mod tests {
         assert_eq!(names.len(), 3);
         assert!(slot_filename(month, 0).is_err());
         assert!(slot_filename("2026-13", 1).is_err());
+    }
+
+    #[test]
+    fn candidate_months_walk_back_across_year_boundary() {
+        assert_eq!(
+            candidate_months("2026-11").unwrap(),
+            ["2026-11", "2026-10", "2026-09"]
+        );
+        assert_eq!(
+            candidate_months("2026-01").unwrap(),
+            ["2026-01", "2025-12", "2025-11"]
+        );
+        assert!(candidate_months("2026-13").is_err());
+        assert!(candidate_months("26-01").is_err());
+    }
+
+    #[test]
+    fn remote_fetch_falls_back_to_the_last_published_month() {
+        let requested = std::cell::RefCell::new(Vec::new());
+        let data = remote_keybox_from("2026-11", 2, false, |month, slot, _| {
+            requested.borrow_mut().push((month.to_owned(), slot));
+            if month == "2026-11" {
+                Err(TfError::new("404"))
+            } else {
+                Ok(b"payload".to_vec())
+            }
+        })
+        .expect("previous month still published");
+        assert_eq!(data, b"payload");
+        assert_eq!(
+            requested.borrow().as_slice(),
+            [("2026-11".to_owned(), 2u8), ("2026-10".to_owned(), 2u8)]
+        );
+    }
+
+    #[test]
+    fn remote_fetch_reports_every_attempted_month() {
+        let error = remote_keybox_from("2026-02", 1, false, |month, _, _| {
+            Err(TfError::new(format!("missing {month}")))
+        })
+        .expect_err("no published month available");
+        let message = error.to_string();
+        for month in ["2026-02", "2026-01", "2025-12"] {
+            assert!(message.contains(month), "{message}");
+        }
     }
 
     fn directory(label: &str) -> PathBuf {

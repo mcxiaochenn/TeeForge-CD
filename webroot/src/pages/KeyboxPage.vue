@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import AppButton from '../components/ui/AppButton.vue';
+import AppBusyOverlay from '../components/ui/AppBusyOverlay.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
 import SegmentedControl from '../components/ui/SegmentedControl.vue';
@@ -205,5 +206,7 @@ async function apply() {
         </div>
       </template>
     </AppSheet>
+
+    <AppBusyOverlay :open="busy" :label="t('common.busy.keybox')" />
   </div>
 </template>

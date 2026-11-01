@@ -130,6 +130,16 @@
   transform: translateY(16px);
 }
 
+/* 等待浮层：只淡入淡出，不要位移，避免等待时界面抖动 */
+.busy-enter-active,
+.busy-leave-active {
+  transition: opacity var(--dur-2) var(--ease);
+}
+.busy-enter-from,
+.busy-leave-to {
+  opacity: 0;
+}
+
 /* dvh 可用时用动态视口高度，浮层底部不会被系统栏遮住。 */
 @supports (height: 100dvh) {
   .sheet-panel {

@@ -1,155 +1,138 @@
 # TeeForge-CD
 
-面向 Magisk、KernelSU 和 APatch 模块环境的 Android 工具，用于维护 TEE 目标模块的应用列表、执行 bootloader 属性弱化处理，并按需同步 Keybox。
-
-**目标配置开机更新，Keybox 按需同步。**
+面向 Magisk、KernelSU、APatch 的 Android 模块：维护 Tricky Store、TEESimulator、TEESimulator-RS 的目标应用列表，弱化 bootloader 相关属性，并按需同步 Keybox。目标配置开机自动更新，Keybox 只在主动操作时同步。
 
 > [!WARNING]
-> 现有三个对接目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`；Keybox 分别位于对应目录。Oh My Keymint（OMK）仅适配应用作用域，安装时检测并固化启用状态，不接管其 Keybox 或服务配置。BL 弱化不等于重新锁定 bootloader，也不能保证通过任何外部检测。
-
-> [!NOTE]
-> 当前 `master` 构建基线为 Android 7.0（API 24）及以上，包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI。四架构自动化构建已经验证，正式版在对应 Dev 版本通过用户真机测试后发布；实际支持范围以对应 Release 说明和安装输出为准。
+> 三个目标的配置契约不同：Tricky Store 与 TEESimulator-RS 使用 `/data/adb/tricky_store/target.txt`，TEESimulator 使用 `/data/adb/teesim/config.json` 的 `profiles.teeforge.apps`，Keybox 分别位于对应目录。Oh My Keymint（OMK）只适配应用作用域，不接管其 Keybox 或服务配置。BL 弱化不等于重新锁定 bootloader，也不保证通过任何外部检测。
 
 [下载稳定版](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest) · [项目文档](docs/README.md)
 
 ## 功能
 
-- **自动维护目标配置**：一次扫描用户安装的应用并分别更新已存在的兼容目标配置，失败时保留旧文件。
-- **弱化 BL 相关属性**：通过 resetprop 处理 bootloader、Verified Boot、调试和厂商相关属性，可按类别关闭。
-- **按需同步 Keybox**：来源由你显式选择——本机 RKP 产物或远程公共密钥池；远程池支持三个槽位；所选槽位当月尚未发布时沿用该槽位最近已发布的版本，不回退到其他槽位，更新失败时保留已有文件。
-- **设备端 RKP 签发（独立功能）**：在高通 arm64 设备上调用本机 Keymint TA 向 Google RKP 申请本机专属证书链，产物单独保存在 `/data/adb/teeforge/RKP/`，与 Keybox 安装解耦。
-- **目标作用域可细调**：支持全量模式与手动模式；手动选择保存在本机，重启后保持，不会被开机全量覆盖。
-- **模块更新**：WebUI 内置更新检查，优先使用中国大陆可直连的自建 CDN，并校验清单中的 sha256。
-- **安装时架构选择**：模块包内置四种 ABI，安装器按设备 ABI 选择并校验对应 ELF，不使用其他架构兜底。
-- **配置与 Root 检测**：识别 Magisk、KernelSU 或 APatch 环境，用户配置在升级时默认保留。
-- **WebUI 与命令行**：支持模块 Action、兼容的模块 WebUI 以及设备端 CLI。
-
-开机服务会更新模块描述、执行 BL 弱化并更新目标配置；Keybox 下载只在用户主动运行 Action、WebUI 操作或 `--keybox` 时执行。
+- 目标配置维护：一次扫描用户应用，更新已存在的兼容目标配置；事务写入，失败回滚，不创建目标目录。
+- BL 属性弱化：resetprop 覆盖 bootloader、Verified Boot、调试和厂商相关属性，可按类别开关，开机分两阶段执行。
+- Keybox 同步：来源显式二选一——远程公共密钥池（3 个槽位）或本机 RKP 产物，两条路互不回退。
+- 设备端 RKP 签发：仅限高通 arm64，调用本机 Keymint TA 向 Google RKP 申请本机专属证书链，产物与安装解耦。
+- 目标作用域：全量（auto）或手动勾选（manual），手动选择保存在本机，重启后保持。
+- OMK 作用域适配：安装时检测并固化启用状态，只维护 `injector.toml` 的 `scoop`。
+- 模块自更新：WebUI 检查更新，走自建 CDN，校验清单 sha256 后调用管理器安装。
+- 操作入口：模块 Action（音量键菜单）、WebUI、设备端 CLI。
 
 ## 兼容性与前置条件
 
-| 项目 | 当前 `master` 范围 |
+| 项目 | 范围 |
 |---|---|
-| Android | Android 7.0 / API 24 及以上；Root 管理器自身可能有更高要求 |
-| Root 环境 | Magisk、KernelSU、APatch 的兼容 Magisk 模块环境；未设置硬编码最低管理器版本 |
+| Android | 7.0 / API 24 及以上（Root 管理器自身可能要求更高） |
+| Root 环境 | Magisk、KernelSU、APatch 的模块环境 |
 | ABI | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` |
-| 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS；Oh My Keymint 仅应用作用域 |
-| 目标配置 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/target.txt`；TEESimulator：`/data/adb/teesim/config.json` 的 `profiles.teeforge.apps` |
-| OMK 作用域 | 安装时检测并固化；更新 `/data/misc/keystore/omk/injector.toml` 的 `scoop`；OMK 自身要求 Android 12+ |
-| Keybox | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml`；来源可选远程池或本机 RKP |
-| RKP 产物 | `/data/adb/teeforge/RKP/`（`keybox.xml`、`cert-chain.pem`、`meta.json`，权限 0600） |
-| 设备端 RKP | 仅 `arm64-v8a` + 高通 SoC + `/vendor/lib64/libkeymasterdeviceutils.so` + `/dev/smcinvoke`；其余环境只能使用远程 Keybox |
-| 属性工具 | 全架构统一使用 Root 环境提供的 standard resetprop |
-| WebUI | 需要支持 KernelSU 模块 WebUI 接口的管理器；其他环境可使用 Action 或终端 |
+| 目标模块 | Tricky Store、TEESimulator、TEESimulator-RS；OMK 仅应用作用域，OMK 自身要求 Android 12+ |
+| Keybox 路径 | Tricky Store/TEESimulator-RS：`/data/adb/tricky_store/keybox.xml`；TEESimulator：`/data/adb/teesim/keybox.xml` |
+| 设备端 RKP | `arm64-v8a` + 高通 SoC + `/vendor/lib64/libkeymasterdeviceutils.so` + `/dev/smcinvoke`；其余环境只能用远程 Keybox |
+| WebUI | 需要支持 KernelSU 模块 WebUI 接口的管理器；其他环境用 Action 或终端 |
 
-安装前请确保：
+四 ABI 自动化构建已验证；正式版在对应 Dev 版通过真机测试后发布，实际支持范围以 Release 说明和安装输出为准，记录见[路线图](docs/maintenance/ROADMAP.md)。
 
-- 已从本仓库官方 Release 下载模块 ZIP，而不是 GitHub 自动生成的 Source code 压缩包。
-- 如需使用目标配置或 Keybox 功能，已安装并配置上述任一兼容目标模块；TeeForge 只更新实际存在的后端配置，不创建幽灵目录。
-- 知道当前 Root 管理器的模块禁用或安全模式入口，以便异常启动时恢复。
-- 需要保留旧配置时，提前备份 `/data/adb/teeforge/config.conf`。
+安装前：
 
-正式版对应 Dev 版本已通过用户真机测试。自动化验证与真机测试记录见[当前路线图](docs/maintenance/ROADMAP.md)。
+- 从 [GitHub Releases](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest) 下载模块 ZIP，不要用自动生成的 Source code 压缩包。
+- 使用目标配置或 Keybox 前先装好任一兼容目标模块；TeeForge 只更新真实存在的后端配置。
+- 知道当前 Root 管理器的安全模式或模块禁用入口，异常启动时靠它恢复。
+- 需要保留旧配置时提前备份 `/data/adb/teeforge/config.conf`。
 
 ## 下载与安装
 
-普通用户应使用 [GitHub Releases](https://github.com/mcxiaochenn/TeeForge-CD/releases/latest) 中的正式模块 ZIP。
+普通用户只用 GitHub Releases 的正式模块 ZIP。Dev 包和 GitHub Actions Artifact 仅用于测试，可能包含未发布行为，不能当稳定版或长期回退包；稳定版与 Dev 版走不同更新渠道。
 
-> [!WARNING]
-> Dev 包和 GitHub Actions Artifact 仅用于测试，可能包含未发布行为，不能作为稳定版或长期回退包。稳定版与 Dev 版使用不同的更新渠道。
+1. 在 Magisk、KernelSU 或 APatch 的“模块”页面选择本地安装。
+2. 选中 TeeForge-CD ZIP，不要解压。
+3. 安装器校验包内 `.sha256` 清单，再选择并验证设备 ABI；清单缺失、文件异常或 ABI 不支持会中止安装。
+4. 检测到已有配置：音量+ 保留，音量- 全部清除，10 秒无操作默认保留。
+5. 安装输出会显示 Root 环境、ABI 和 OMK 作用域检测结果。
+6. 重启生效。
 
-1. 在 Magisk、KernelSU 或 APatch 管理器的“模块”页面选择从本地安装。
-2. 选择从官方 Release 下载的 TeeForge-CD ZIP，不要解压。
-3. 安装器先校验包内 `.sha256` 清单，再选择并验证当前设备 ABI；清单缺失、文件异常或 ABI 不支持时会中止安装。
-4. 检测到已有配置时：音量加保留配置，音量减清除全部 TeeForge 数据；10 秒无操作默认保留。
-5. 安装器统一使用 standard resetprop，并显示 OMK 作用域适配检测结果；OMK 待更新模块优先，禁用或待卸载时不启用适配。
-6. 安装完成后重启设备。
-
-Recovery 刷入未纳入当前验收范围，请优先使用 Root 管理器安装。
+Recovery 刷入不在当前验收范围，请用 Root 管理器安装。
 
 ## 安装后验证
 
-重启并等待系统完成启动后，在 Root 管理器的模块页面检查 TeeForge-CD 描述：正常情况下会由“等待重启”更新为包含 Root 类型、TeeForge-CD 版本、ABI 和 Keybox 状态的信息。`keybox: N/A` 表示尚无本地 Keybox 记录，不代表安装失败；描述仍停留在等待状态，则表示描述更新尚未完成。描述更新发生在其他开机动作之前，因此还需继续验证实际使用的功能。
+重启后在模块页面看 TeeForge-CD 描述：应从“等待重启”变为包含 Root 类型、模块版本、ABI 和 Keybox 状态的信息。`keybox: N/A` 表示还没有本地 Keybox 记录，不是安装失败；描述一直没变说明描述更新未完成。描述更新先于其他开机动作，仍需按下面步骤确认实际功能。
 
-随后按已安装的后端检查目标配置。Tricky Store/TEESimulator-RS：
+装了 Tricky Store / TEESimulator-RS：
 
 ```sh
 su -c 'test -s /data/adb/tricky_store/target.txt && wc -l /data/adb/tricky_store/target.txt'
 ```
 
-命令应成功返回非零行数。使用 TEESimulator 时检查受管 profile：
+应返回非零行数。装了 TEESimulator 时检查受管 profile：
 
 ```sh
 su -c "grep -n 'teeforge\|_teeforgeManaged' /data/adb/teesim/config.json"
 ```
 
-文件不存在、为空、缺少受管 profile 或命令退出码非零时，应按“故障排查与反馈”收集信息。
+文件不存在、为空、缺少受管 profile 或命令退出码非零时，按“故障排查与反馈”收集信息。
 
-如果只使用 BL 弱化且未安装兼容目标模块，可跳过目标配置检查，改为执行以下命令。弱隐由独立二进制执行，退出码 0 表示已执行完成（单条属性失败只记 WARN，不改变退出码）：
+只用 BL 弱化、未装目标模块时跳过上面两步，直接跑一次弱隐（退出码 0 表示执行完成，单条属性失败只记 WARN）：
 
 ```sh
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge-hide'
 ```
 
-还可以在 Root 管理器中运行模块 Action。Action 会依次同步 Keybox 和更新目标配置；两步均成功时输出 `完成 [Done]`，无需再次重启。任一步失败都会输出非零状态，不应视为成功。
+也可以在管理器里运行模块 Action，一步完成目标配置与 Keybox 更新，成功输出 `完成 [Done]`，无需再重启；任一步失败都返回非零，不算成功。
 
 ## 使用与配置
 
-### 常用入口
+### 入口
 
-- **开机自动执行**：post-fs-data 阶段先做一次弱隐；开机完成后更新模块描述、二次弱隐、更新已存在的目标配置。
-- **模块 Action**：音量键两级菜单。音量下切换高亮、音量上确认、15 秒无操作取消；先询问是否执行，再选择“一键更新目标作用域和 Keybox”“更新目标作用域”或“更新 Keybox”（一键与单独更新 Keybox 都需先选来源：本机 RKP / 远程池）。一键流程先写目标配置再更新 Keybox，目标配置失败则跳过 Keybox 并返回非零状态。全过程写入 `/data/adb/teeforge/logs/action-*.log`。
-- **WebUI**：顶部是设备信息栏，下面是“更新目标作用域”“Keybox 配置”“本机 RKP 签发”“模块与更新”四个入口。执行耗时操作时显示等待浮层（含已用秒数），避免误以为界面卡住。
-- **CLI**：适用于终端操作和问题定位。
+- 开机自动：post-fs-data 阶段弱隐一次；开机完成后更新模块描述、二次弱隐、更新目标配置。
+- 模块 Action：音量键两级菜单（音量下切换、音量上确认、15 秒无操作取消）。先确认是否执行，再选“一键更新目标作用域和 Keybox”“更新目标作用域”或“更新 Keybox”；涉及 Keybox 时先选来源。一键流程先写目标配置，目标配置失败就跳过 Keybox 并返回非零。日志写入 `/data/adb/teeforge/logs/action-*.log`。
+- WebUI：顶部设备信息栏，下面四个入口——更新目标作用域、Keybox 配置、本机 RKP 签发、模块与更新。
+- CLI：终端操作和问题定位，命令见下。
 
-Keybox 配置选择远程池后可选择槽位 1/2/3，默认槽位 1；安装成功后保存来源和槽位。普通应用跳过内容相同的文件，“强制拉取并替换”会重新请求并写入模块副本及所有已检测到的兼容后端，即使内容相同。下载、格式校验、写入回读或配置保存失败时保留或回滚旧数据，不自动换槽；所选槽位的当月版本尚未发布时，自动使用该槽位最近已发布的版本，实际回退的月份写入日志。格式有效不代表未吊销、后端接受或外部检测通过。
+Keybox 选远程池时可选槽位 1/2/3（默认 1），安装成功后记住来源和槽位。内容相同的文件默认跳过；“强制拉取并替换”会重新请求并重写模块副本及所有已检测到的后端。所选槽位当月未发布时沿用该槽位最近已发布的版本（实际月份写入日志），失败不换槽；下载、校验或写入失败保留旧数据。格式有效不代表未吊销、后端接受或通过外部检测。
 
-常用 CLI 命令需要 Root：
+### CLI
+
+常用命令（需要 Root）：
 
 ```sh
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --generate'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge-hide --verbose'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source remote --remote-slot 1 --save-selection'
-su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source remote --remote-slot 2 --force --save-selection'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source rkp'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-status'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-issue'
-su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-probe --json'
-su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source rkp'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --target-list --json'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --self-update check'
 su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --help'
 ```
 
-`--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。`--rkp-probe` 是诊断命令：取一次 challenge 后，把缓冲区初始化、`security_level`、请求封装、厂商对象大小四组变量拆成 8 个变体，每个变体在独立子进程中调用一次 TA，输出对照数据。同时会解析 `/vendor/lib64/libkeymasterdeviceutils.so` 的动态符号表，列出 `KeymasterUtils` 与 `send_cmd` 相关入口——如果固件提供了必须先调用的初始化方法或别的重载，会在 `library_symbols` 里直接暴露。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
+- `--remote-slot`、`--force` 只作用于远程 Keybox；不带 `--save-selection` 时参数只对本次生效。
+- `--keybox-validate FILE --json` 只读校验格式，不联网、不安装；反馈中不要粘贴 Keybox 正文。
+- `--rkp-status` 只查本地条件（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网。`--rkp-probe` 是固件诊断命令：8 个调用变体各跑一个子进程，输出对照数据和厂商库符号表。
+- 查询类命令支持 `--json`，输出 `{ok,data}` / `{ok,error}` 信封；`--json` 一次只搭配一个动作。任一步失败退出码非零。
 
-`--remote-slot` 与 `--force` 只用于远程 Keybox；不带 `--save-selection` 时参数仅对本次操作生效。可用 `--keybox-validate FILE --json` 对文件做只读格式检查，不联网、不安装；不要在反馈中粘贴 Keybox 正文。
-
-CLI 任一步失败都会返回非零退出码。完整参数见[项目概览](docs/project/OVERVIEW.md)。
+更多参数见[项目概览](docs/project/OVERVIEW.md)。
 
 ### 设备端 RKP
 
-设备端 RKP 用本机高通 Keymint TA 向 Google RKP 服务申请一把**本机专属**的证书链，输出仍是标准 Keybox，因此后续写入流程与远程 Keybox 完全一致。
+用本机高通 Keymint TA 向 Google RKP 申请本机专属证书链，产物仍是标准 Keybox，后续写入与远程 Keybox 一致。
 
-- 先运行 `--rkp-status` 确认条件；不满足时不会发起任何网络请求。
-- `--rkp-issue` 只产出产物，不改动任何后端 Keybox：`/data/adb/teeforge/RKP/` 下保存 `keybox.xml`、`cert-chain.pem`、`meta.json`（含生成时间、证书数量、device id、sha256），权限 0600。
-- 安装由 Keybox 一侧负责：`--keybox --source rkp` 读取上述产物并写入后端；`--source remote` 走远程池。两条路径不再互相回退。
-- 失败时透传阶段与原始码（例如 TA 返回 `-18`），WebUI 会给出对应原因与建议；帧类失败额外带 `head_hex` 与 `written`，可直接判断厂商封装格式。`--rkp-delete` 删除整个 RKP 目录。
-- 仅部分高通设备与固件支持；TA 返回非零状态、厂商库符号不匹配或网络不可达都会如实报错。
+- `--rkp-status` 先确认条件，不满足时不发任何请求。
+- `--rkp-issue` 只产出产物：`/data/adb/teeforge/RKP/` 下的 `keybox.xml`、`cert-chain.pem`、`meta.json`（权限 0600），不改动任何后端。
+- `--keybox --source rkp` 安装本机产物，`--source remote` 走远程池，互不回退；`--rkp-delete` 删除 RKP 目录。
+- 失败按阶段透传状态与原始码（如 TA 返回 `-18`）；帧类失败带 `head_hex` 与 `written`，`meta.json` 的 `frame_layout` 记录实际命中的帧布局。仅部分高通设备与固件支持。
+- 签发成功只代表拿到一把 RKP 证书链，不代表通过任何外部检测。
 
-> [!NOTE]
-> 该功能移植自 [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox) 的 Device RKP Issuer（MIT），并裁剪为 V2 路径。成功签发只代表获得了一把 RKP 证书链，不代表通过任何外部检测。
+实现移植自 [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox) 的 Device RKP Issuer（MIT），裁剪为 V2 路径。
 
 ### OMK 应用作用域
 
-先安装 OMK，再安装 TeeForge；同次重启前安装也可以被检测。后来安装或重新启用 OMK 时，重新安装 TeeForge 刷新检测结果。活动配置尚未生成时会输出 warning 并跳过，完成 OMK 初始化后再次运行 `--generate`。
+先装 OMK 再装 TeeForge；同次重启前装齐也能检测。之后才安装或重新启用 OMK 的，重装 TeeForge 刷新检测结果。OMK 活动配置尚未生成时输出 warning 并跳过，等 OMK 初始化后再运行 `--generate`。
 
-TeeForge 保留 `scoop` 中原有手动条目，只维护 `# BEGIN TeeForge-CD managed scoop` 与 `# END TeeForge-CD managed scoop` 之间的自动条目。需要长期固定的条目请放在区块外；自动条目会随应用安装、卸载更新。数组以外的配置保持原样，更新前备份为 `injector.toml.teeforge.bak`。
-
-使用 WebUI 的“更新目标作用域”或 CLI `--generate`。OMK 作用域更新不需要运行 Keybox 操作；模块 Action 会先询问操作类型，选择“更新目标作用域”时不会触碰 Keybox。成功输出只代表文件更新；OMK 加载和应用实际行为需另行确认。TeeForge 不自动重启 OMK；旧格式迁移由 OMK 完成。
+只维护 `# BEGIN TeeForge-CD managed scoop` 与 `# END TeeForge-CD managed scoop` 之间的自动条目，手动条目和区块外配置原样保留；需要长期固定的条目放在区块外。更新前备份 `injector.toml.teeforge.bak`。OMK 作用域更新不涉及 Keybox；TeeForge 不自动重启 OMK，文件写入成功不代表 OMK 已加载。
 
 ### 配置
 
-用户配置位于 `/data/adb/teeforge/config.conf`，升级时默认保留。常用总开关：
+用户配置 `/data/adb/teeforge/config.conf`，升级默认保留。常用开关：
 
 ```ini
 debug=0
@@ -159,106 +142,66 @@ target_mode=auto
 update_channel=stable
 ```
 
-- `debug=1`：将运行日志写入 `/data/adb/teeforge/logs/`。
-- `blhide=0`：关闭全部 BL 弱化操作（由 `runtime/teeforge-hide` 读取）。
-- `keybox_source=remote|rkp`：Keybox 来源。`remote` 从 CDN 获取公共池，`rkp` 使用 `RKP/` 下的本机产物；默认 `remote` 保持旧行为。
-- `target_mode=auto|manual`：`auto` 每次写入全部已安装用户应用；`manual` 只写入 `/data/adb/teeforge/target-selection.json` 中的集合，WebUI 的手动勾选会写这里。
-- `update_channel=stable|dev`：WebUI 更新检查使用的通道；`update_base` 默认 `https://teeforge.mcxiaochen.top/files/update`。
-- `rkp_server`：默认 `https://remoteprovisioning.googleapis.com/v1`，仅用于调试或自建代理。
-- 旧 `rkp_mode`、`rkp_refresh_days` 仍可解析但不再生效，升级后统一由 `keybox_source` 决定来源。
-- 安装器生成的分类开关可分别设为 `0` 或 `1`，只影响 `runtime/teeforge-hide`。
-- `omk_enabled` 由安装器在系统配置中固化，默认 `0`；用户配置可覆盖，设为 `0` 停止更新 OMK。
-- `omk_injector_config` 默认 `/data/misc/keystore/omk/injector.toml`，仅覆盖作用域文件路径。
-- 旧 `prop_tool`、`blhide_compact` 键兼容忽略，不再生成，升级不改写已有用户配置。
+- `debug=1`：运行日志写入 `/data/adb/teeforge/logs/`。
+- `blhide=0`：关闭全部 BL 弱化；`blhide_*` 分类开关同样只由 `runtime/teeforge-hide` 读取。
+- `keybox_source=remote|rkp`：Keybox 来源，默认 `remote`。
+- `target_mode=auto|manual`：`auto` 写入全部用户应用；`manual` 只写 `/data/adb/teeforge/target-selection.json` 中的集合，WebUI 手动勾选写这里。
+- `update_channel=stable|dev`：WebUI 更新检查通道；`update_base` 默认 `https://teeforge.mcxiaochen.top/files/update`。
+- `rkp_server`：默认 `https://remoteprovisioning.googleapis.com/v1`，仅调试或自建代理时修改。
+- `omk_enabled` 由安装器固化（默认 0），用户配置可覆盖；`omk_injector_config` 默认 `/data/misc/keystore/omk/injector.toml`。
+- 旧键 `rkp_mode`、`rkp_refresh_days`、`prop_tool`、`blhide_compact` 只为兼容解析，不再生效，也不再生成。
 
-`/data/adb/teeforge/sys.conf` 由安装器维护，不应手动编辑。配置修改会在下一次相关命令或开机服务执行时读取。数据流与安全边界见[当前架构](docs/project/ARCHITECTURE.md)。
+`/data/adb/teeforge/sys.conf` 由安装器维护，不要手动编辑。修改后的配置在下一次命令或开机服务执行时生效。数据流与安全边界见[当前架构](docs/project/ARCHITECTURE.md)。
 
 ## 更新、卸载与恢复
 
-### 更新
+更新：从稳定 Release 或管理器的稳定入口安装新版。已有 `config.conf` 默认保留，其他运行时数据清理；安装时选“全部清除”会删除 `/data/adb/teeforge/` 下全部配置、日志和缓存。
 
-- 从稳定 Release 或管理器的稳定更新入口安装新版。
-- 检测到已有 `config.conf` 时，安装器默认保留该文件并清理其他运行时数据。
-- 如果在安装提示中选择“全部清除”，`/data/adb/teeforge/` 下的配置、日志和缓存数据都会被删除。
+卸载：在管理器卸载后重启。卸载脚本删除整个 `/data/adb/teeforge/`（含配置、日志、本地 Keybox 副本），需要保留先自行备份。目标模块的 `target.txt`、`keybox.xml`、teesim 配置和 OMK 的 `injector.toml` 不会删除，确认不再需要时自行备份后清理。
 
-### 卸载
-
-在 Root 管理器中卸载 TeeForge-CD 后重启。卸载脚本会删除整个 `/data/adb/teeforge/` 数据目录，包括用户配置、日志和 TeeForge 的本地 Keybox 副本；需要保留配置时请先自行备份。
-
-卸载脚本不会删除目标目录中的 `/data/adb/tricky_store/target.txt`、`/data/adb/tricky_store/keybox.xml`、`/data/adb/teesim/config.json` 或 `/data/adb/teesim/keybox.xml`。OMK 的 `injector.toml` 及其 TeeForge 备份也会保留。上述文件可能仍被对应目标模块使用；如确认不再需要，应在卸载并重启后先备份，再自行清理。
-
-### 异常恢复
-
-- BL 弱化行为异常但系统仍可启动时，先将 `blhide=0`，再重启或手动重新执行相关命令。
-- 无法正常启动时，使用当前 Root 管理器的安全模式或模块禁用机制，进入系统后禁用或卸载 TeeForge-CD。
-
-官方恢复说明：[Magisk 模块安全模式](https://topjohnwu.github.io/Magisk/faq.html) · [KernelSU Bootloop 恢复](https://kernelsu.org/guide/rescue-from-bootloop.html) · [APatch Bootloop 恢复](https://apatch.dev/rescue-bootloop.html)
+异常恢复：BL 弱化行为异常但能开机时，把 `blhide` 设为 `0` 再重启；无法正常启动时用管理器的安全模式或模块禁用机制进入系统后卸载 TeeForge-CD。官方说明：[Magisk 安全模式](https://topjohnwu.github.io/Magisk/faq.html) · [KernelSU Bootloop 恢复](https://kernelsu.org/guide/rescue-from-bootloop.html) · [APatch Bootloop 恢复](https://apatch.dev/rescue-bootloop.html)
 
 ## 故障排查与反馈
 
-### 常见情况
+- 安装提示校验失败：删除 ZIP，从 Release 重新下载；不要修改或重新打包。
+- ABI 不支持或 ELF 不匹配：设备主 ABI 不在支持列表内；不要用其他架构二进制替换。
+- 目标配置没更新：确认后端是 `/data/adb/tricky_store/target.txt` 或 `/data/adb/teesim/config.json`，手动跑 `--generate` 看真实退出码；没有任何兼容后端时命令成功但只记 warning。
+- Keybox 同步失败：检查网络和命令输出；失败会保留已有文件，非空响应不等于有效结果。
+- 设备端 RKP 没有生效：先跑 `--rkp-status`；日志和 WebUI 会给出失败阶段、原始码与建议。
+- 报“无法识别 TA 响应帧”或“TA 未写入响应缓冲区”：看 `--rkp-issue --json` 的 `error.raw.head_hex`（响应头 64 字节）和 `written`（最后一个非零字节位置）。全 `00` 开头且 `written=0` 是缓冲区未被写入（ABI 或参数约定不符）；开头是 `82`、`a2`、`d2` 等 CBOR 首字节说明厂商返回裸 payload；前 4 字节是负值（如 `eeffffff`）说明 TA 返回了 KeyMint 错误码。签发成功时 `meta.json.frame_layout` 记录命中布局，可对比同型号固件。
+- `--rkp-probe` 判读：`status` 是 `send_cmd` 返回值，`written` 是响应写入长度，`request_changed` 表示请求缓冲区是否被厂商改写。常见对照：
 
-- **安装提示校验失败**：删除当前 ZIP，从官方 Release 重新下载；不要修改或重新打包模块。
-- **提示 ABI 不支持或 ELF 不匹配**：确认设备报告的主 ABI 属于支持列表，不要用其他架构二进制强行替换。
-- **目标配置没有更新**：确认目标模块使用 `/data/adb/tricky_store/target.txt` 或 `/data/adb/teesim/config.json`，检查 `teeforge` 管理标记和手动运行 `--generate` 的真实退出码。没有任何兼容后端时，命令成功但只记录 warning。
-- **Keybox 同步失败**：检查网络和命令输出；失败时程序会保留已有文件，不要把非空响应直接视为有效结果。
-- **设备端 RKP 没有生效**：先运行 `--rkp-status` 确认前置条件；日志与 WebUI 会给出失败阶段、原始码与建议，不再有隐式回退。
-- **`--rkp-probe` 的判读方式**：每条结果包含 `status`（`send_cmd` 返回值）、`written`（响应最后一个非零字节位置）、`request_changed`（请求缓冲区是否被厂商改写）与 `response_head`。
+| 观察 | 结论 |
+|---|---|
+| 只有 `baseline` 空、`zero-buffer` 有数据 | 前 4 字节哨兵干扰厂商逻辑，默认初始化应改为全 0 |
+| 全部变体 `written=0` 且 `request_changed=false` | 请求未到达 TA，先查 SELinux 拒绝与 TA 服务状态 |
+| 某变体 `request_changed=true` | out 参数落在请求缓冲区上，参数顺序需要调整 |
+| `level-0` 有数据 | 该固件要求 `security_level = 0` |
+| `length-prefix` 有数据 | 请求需要长度前缀 |
+| `object-0x80` / `object-0x100` 有数据 | 厂商对象比 0x40 大，`baseline` 构造写越界 |
+| 多个变体 `crashed: true` | 厂商对象布局与该固件不匹配 |
+| `library_symbols` 有 `init` / `initialize` / `connect` 入口 | 调用前需要先完成初始化 |
 
-  | 观察 | 结论 |
-  |---|---|
-  | 只有 `baseline` 空、`zero-buffer` 有数据 | 前 4 字节的哨兵干扰了厂商逻辑，默认初始化应改为全 0 |
-  | 全部变体 `written` 均为 0 且 `request_changed` 为 false | 请求没有真正到达 TA，优先查 SELinux 拒绝与 TA 服务状态 |
-  | 某变体 `request_changed` 为 true | out 参数落在了请求缓冲区上，参数顺序需要调整 |
-  | `level-0` 有数据 | 该固件要求 `security_level = 0` |
-  | `length-prefix` 有数据 | 请求需要长度前缀 |
-  | `object-0x80` / `object-0x100` 有数据 | 厂商对象比 0x40 大，`baseline` 的构造写越界破坏了堆 |
-  | 多个变体进程崩溃（`crashed: true`） | 厂商对象布局与该固件不匹配 |
-  | `library_symbols` 里有 `init` / `initialize` / `connect` 之类入口 | 调用前需要先完成初始化 |
-- **报“无法识别 TA 响应帧”或“TA 未写入响应缓冲区”**：说明厂商 `send_cmd` 的返回封装与预期不同。`--rkp-issue --json` 的 `error.raw.head_hex` 是响应缓冲区开头 64 字节，`written` 是最后一个非零字节的位置：
-  - 前 8 位为 `00000080` 且 `written` 为 0：缓冲区完全未被写入，属于 ABI 或参数约定不匹配。
-  - 开头是 `82`、`a2`、`d2` 等 CBOR 首字节：厂商直接返回裸 payload。
-  - 前 4 字节全 `00`、随后才是长度：响应没有 status 字段。
-  - 前 4 字节是负值（如 `eeffffff`）：TA 明确返回了 KeyMint 错误码，按错误码排障。
-  签发成功时 `meta.json` 的 `frame_layout` 会记录实际命中的布局，可用来对比同型号固件。
-- **OMK 没有更新**：检查安装检测结果、`omk_enabled` 与活动配置是否已生成；无效 TOML、未知版本或文件元数据无法保留时会拒绝更新。不要将文件写入成功视为服务已加载。
-- **模块描述仍显示等待重启**：确认系统已经完成启动，运行 `--update-desc` 后检查退出码和日志。
+需要文件日志时把 `debug` 设为 `1`，复现后查看 `/data/adb/teeforge/logs/`，分享前移除设备标识等隐私内容。
 
-需要文件日志时，将 `config.conf` 中的 `debug` 改为 `1`，复现问题后查看 `/data/adb/teeforge/logs/`。分享前请移除设备标识、账号信息和其他隐私内容。
-
-提交 Issue 时请提供：
-
-- TeeForge-CD 版本及下载渠道（Release 或 Dev）。
-- Android 版本、设备 ABI、Root 实现及版本。
-- Tricky Store、TEESimulator、TEESimulator-RS 或其他相关模块的名称及版本。
-- 清晰的复现步骤、期望结果和实际结果。
-- 安装输出、相关命令退出码及已脱敏日志。
-
-[提交 GitHub Issue](https://github.com/mcxiaochenn/TeeForge-CD/issues)
+提交 Issue 请提供：TeeForge-CD 版本与下载渠道；Android 版本、ABI、Root 实现及版本；相关目标模块名称及版本；复现步骤、期望与实际结果；安装输出、命令退出码和脱敏日志。[提交 Issue](https://github.com/mcxiaochenn/TeeForge-CD/issues)
 
 ## 开发文档
 
 - [项目概览与 CLI](docs/project/OVERVIEW.md)
-- [当前技术架构](docs/project/ARCHITECTURE.md)
+- [技术架构](docs/project/ARCHITECTURE.md)
 - [构建、测试与发布](docs/development/BUILD_AND_RELEASE.md)
 - [安装与设备验收](docs/operations/INSTALLATION.md)
-- [当前路线图](docs/maintenance/ROADMAP.md)
-
-本 README 描述当前 `master` 的用户可见行为；正式包的具体内容以对应 Release 说明和安装输出为准。
+- [路线图](docs/maintenance/ROADMAP.md)
 
 ## License 与致谢
 
 TeeForge-CD 采用 [GNU GPL v3 或更高版本](LICENSE)发布。
 
-感谢以下项目提供模块接口、兼容目标或基础能力：
+模块接口、兼容目标或基础能力来自：
 
-- [Magisk](https://github.com/topjohnwu/Magisk)
-- [KernelSU](https://github.com/tiann/KernelSU)
-- [APatch](https://github.com/bmax121/APatch)
-- [Tricky Store](https://github.com/5ec1cff/TrickyStore)
-- [TEESimulator](https://github.com/JingMatrix/TEESimulator)
-- [TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)
-- [Oh My Keymint](https://github.com/qwq233/OhMyKeymint)
-- [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)：设备端 RKP 签发流程、CSR_V2 帧格式与证书链校验（MIT，见 `module/licenses/duck-toolbox.txt`）；WebUI 的 Material 3 分层与列表行布局参考其设计思路，代码与样式为独立实现
+- [Magisk](https://github.com/topjohnwu/Magisk)、[KernelSU](https://github.com/tiann/KernelSU)、[APatch](https://github.com/bmax121/APatch)
+- [Tricky Store](https://github.com/5ec1cff/TrickyStore)、[TEESimulator](https://github.com/JingMatrix/TEESimulator)、[TEESimulator-RS](https://github.com/Enginex0/TEESimulator-RS)、[Oh My Keymint](https://github.com/qwq233/OhMyKeymint)
+- [Duck-ToolBox](https://github.com/eltavine/Duck-ToolBox)：设备端 RKP 签发流程、CSR_V2 帧格式与证书链校验（MIT，见 `module/licenses/duck-toolbox.txt`）；WebUI 视觉分层参考其设计思路，代码与样式为独立实现
 
-第三方项目名称仅用于说明依赖与兼容关系，不代表官方合作或背书。
+第三方项目名称仅用于说明依赖与兼容关系，不代表官方合作或背书。本 README 描述当前 `master` 的用户可见行为，正式包内容以 Release 说明和安装输出为准。

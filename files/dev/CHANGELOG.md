@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.7.0-f59b99b
+## TeeForge-CD Dev v0.7.0-55459ce
 
 ### 构建信息 Build Info
-- Version: `v0.7.0-f59b99b`
-- Version Code: `178`
-- Commit: `f59b99b`
+- Version: `v0.7.0-55459ce`
+- Version Code: `179`
+- Commit: `55459ce`
 
 ### 最近提交 Recent Commits
+- 55459ce release: v0.8.0（弱隐 BL 独立二进制与 runtime 布局）
 - f59b99b chore(hide): 摘要行记录开机时长，两阶段日志可排到同一时间轴
 - a2e3902 fix(hide): 不再改写 ro.boot.vbmeta.size
 - 284ee97 fix(hide): 基线改用 getprop，修复 resetprop 空 dump 导致的空操作
@@ -25,4 +26,3 @@
 - 6308807 fix(ci): 适配上游同步资源入口
 - a3224b3 Merge pull request #5 from mcxiaochenn/feat/rkp-probe
 - 583b1ce feat(rkp): 探测加入对象大小变体与库符号表
-- 7b40e4d feat(rkp): 加入 --rkp-probe 多变异诊断

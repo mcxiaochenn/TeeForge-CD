@@ -1,11 +1,14 @@
-## TeeForge-CD Dev v0.7.0-76adff8
+## TeeForge-CD Dev v0.7.0-5bc48e2
 
 ### 构建信息 Build Info
-- Version: `v0.7.0-76adff8`
-- Version Code: `171`
-- Commit: `76adff8`
+- Version: `v0.7.0-5bc48e2`
+- Version Code: `174`
+- Commit: `5bc48e2`
 
 ### 最近提交 Recent Commits
+- 5bc48e2 Merge pull request #6 from mcxiaochenn/feat/action-menu-busy-overlay
+- b753f23 docs: 同步 Action 三选项与等待浮层说明
+- 24cd4c0 feat: Action 三选项与 WebUI 等待浮层
 - 76adff8 fix(keybox): 月初回退到最近已发布的月份
 - 4311f6b docs(release): 修正正式发布的真机验收记录与约定
 - fc04341 keybox: sync status 2026-10-30 [auto]
@@ -23,6 +26,3 @@
 - d28ca1f docs: 记录帧诊断、视口约定与本次真机问题
 - 0d4db16 fix(webui): 消除视口溢出并统一版本号格式
 - 6f7facd fix(rkp): 帧只解析一次并按业务结构判定布局
-- b0dfdab Merge pull request #3 from mcxiaochenn/feat/webui-v2
-- a10360a docs: 同步 WebUI v2、RKP 拆分与 Action 交互
-- 5bfd530 feat(action): 音量键两级菜单与日志落盘

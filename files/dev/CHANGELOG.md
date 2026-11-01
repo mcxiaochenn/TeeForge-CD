@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.7.0-5bc48e2
+## TeeForge-CD Dev v0.7.0-ce82de7
 
 ### 构建信息 Build Info
-- Version: `v0.7.0-5bc48e2`
-- Version Code: `174`
-- Commit: `5bc48e2`
+- Version: `v0.7.0-ce82de7`
+- Version Code: `175`
+- Commit: `ce82de7`
 
 ### 最近提交 Recent Commits
+- ce82de7 feat(hide): 弱隐 BL 拆分为独立二进制并按 runtime 布局下发
 - 5bc48e2 Merge pull request #6 from mcxiaochenn/feat/action-menu-busy-overlay
 - b753f23 docs: 同步 Action 三选项与等待浮层说明
 - 24cd4c0 feat: Action 三选项与 WebUI 等待浮层
@@ -25,4 +26,3 @@
 - 66cdc0f Merge pull request #4 from mcxiaochenn/fix/rkp-frame-and-viewport
 - d28ca1f docs: 记录帧诊断、视口约定与本次真机问题
 - 0d4db16 fix(webui): 消除视口溢出并统一版本号格式
-- 6f7facd fix(rkp): 帧只解析一次并按业务结构判定布局

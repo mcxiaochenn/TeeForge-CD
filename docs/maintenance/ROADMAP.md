@@ -48,6 +48,13 @@ v0.7.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Ru
 - 主机验证：`cargo test -p teeforge --lib keybox` 27 项通过（含候选月份跨年、回退命中、逐月失败）；宿主二进制对真实 CDN 复现原故障并回退成功，槽位 1、槽位 3 与 `--force` 路径均验证。
 - 设备侧：本次未执行主力机调试，实际效果由用户自行验证。
 
+## 2026-11-01：Action 三选项与 WebUI 等待浮层
+
+- Action 二级菜单改为三项：一键更新目标作用域和 Keybox、更新目标作用域、更新 Keybox。一键流程先写目标作用域再更新 Keybox，目标失败即跳过 Keybox 并返回非零；Keybox 来源在两条含 Keybox 的路径上仍然显式选择。
+- WebUI 新增 `AppBusyOverlay`：350ms 后才出现（短命令不闪），显示当前操作、已等待秒数与"请勿关闭"提示；接入 Keybox 同步、RKP 签发、目标作用域写入、更新安装四处耗时操作，只做淡入淡出，不位移。
+- 验证：`action.sh` 用桩二进制覆盖一键+远程、一键+RKP、目标失败跳过、单选各分支与取消，pipefail 与无 pipefail 两种分支的退出码传播均正确；全部 SFC 经 `@vue/compiler-sfc` 静态编译通过；在干净依赖的临时目录 `vite build` 通过（67 模块，产物 CSS 含 `z-[60]`、`bg-black/30`、`border-[3px]` 等新工具类）。
+- 本机 `webroot/node_modules` 处于残缺状态（缺 esbuild 与 rollup 平台包），未在本机跑 `xtask package`；需在无守卫终端执行 `npm ci` 恢复。
+
 ## 验收状态
 
 - 真机测试：用户确认对应 Dev 版本已测试通过，作为正式发布依据。

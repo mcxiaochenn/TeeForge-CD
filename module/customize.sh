@@ -17,7 +17,7 @@ if [ "$VERIFY_RET" -ne 0 ]; then
 fi
 ui_print " "
 
-# 选择当前设备对应的 TeeForge 二进制 Select TeeForge binary for current ABI
+# 选择当前设备对应的二进制 Select binaries for current ABI
 ARCH=$(getprop ro.product.cpu.abi)
 case "$ARCH" in
     arm64-v8a) EXPECTED_MACHINE=183 ;;
@@ -27,19 +27,37 @@ case "$ARCH" in
     *) abort "  不支持的设备架构 [Unsupported device ABI]: $ARCH" ;;
 esac
 
-TEE_BIN="$MODPATH/bin/$ARCH/teeforge"
-if [ ! -f "$TEE_BIN" ]; then
-    abort "  缺少 $ARCH 二进制 [Missing binary for $ARCH]"
-fi
+# 先校验 ELF 架构再复制，避免把错误架构的产物装进模块。
+# Verify the ELF machine before copying so a wrong-ABI build never gets installed.
+check_elf() {
+    ELF_PATH="$1"
+    ELF_NAME="${ELF_PATH##*/}"
+    if [ ! -f "$ELF_PATH" ]; then
+        abort "  缺少 $ELF_NAME [$ARCH] [Missing $ELF_NAME]"
+    fi
+    ELF_MACHINE=$(od -An -t u2 -j 18 -N 2 "$ELF_PATH" 2>/dev/null | tr -d ' ')
+    if [ "$ELF_MACHINE" != "$EXPECTED_MACHINE" ]; then
+        abort "  ELF 架构校验失败 [ELF architecture mismatch]: $ELF_NAME $ARCH/$ELF_MACHINE"
+    fi
+}
 
-ELF_MACHINE=$(od -An -t u2 -j 18 -N 2 "$TEE_BIN" 2>/dev/null | tr -d ' ')
-if [ "$ELF_MACHINE" != "$EXPECTED_MACHINE" ]; then
-    abort "  ELF 架构校验失败 [ELF architecture mismatch]: $ARCH/$ELF_MACHINE"
-fi
+RUNTIME_SRC="$MODPATH/runtime/$ARCH"
+check_elf "$RUNTIME_SRC/teeforge"
+check_elf "$RUNTIME_SRC/teeforge-hide"
 
-cp "$TEE_BIN" "$MODPATH/teeforge" || abort "  无法安装 teeforge [Cannot install teeforge]"
-chmod 755 "$MODPATH/teeforge"
-rm -rf "$MODPATH/bin"
+# 扁平化到 runtime/ 根：开机脚本只认这两个固定路径。
+# Flatten into runtime/: boot scripts only know these two fixed paths.
+cp "$RUNTIME_SRC/teeforge" "$MODPATH/runtime/teeforge" || abort "  无法安装 teeforge [Cannot install teeforge]"
+cp "$RUNTIME_SRC/teeforge-hide" "$MODPATH/runtime/teeforge-hide" || abort "  无法安装 teeforge-hide [Cannot install teeforge-hide]"
+chmod 755 "$MODPATH/runtime/teeforge" "$MODPATH/runtime/teeforge-hide"
+
+# 删除其余 ABI 目录，只保留当前架构产物。
+# Drop every other ABI directory and keep the current architecture only.
+for ABI_DIR in "$MODPATH"/runtime/*/; do
+    if [ -d "$ABI_DIR" ]; then
+        rm -rf "$ABI_DIR"
+    fi
+done
 ui_print "  架构 [ABI]: $ARCH"
 ui_print " "
 
@@ -48,10 +66,10 @@ CONFIG_FILE="$TEEFORGE_DIR/config.conf"
 
 # 先设置权限（音量键检测需要执行二进制）
 # Set permissions first (volume key detection needs binary to be executable)
-chmod 755 "$MODPATH/teeforge"
+chmod 755 "$MODPATH/runtime/teeforge"
 
 # 检测 root 方式 Detect root method (安装时安装前，环境变量可用)
-ROOT_RESULT=$("$MODPATH/teeforge" --rootdetect 2>/dev/null)
+ROOT_RESULT=$("$MODPATH/runtime/teeforge" --rootdetect 2>/dev/null)
 ROOT_METHOD=$(echo "$ROOT_RESULT" | sed -n '1p')
 ROOT_VERSION=$(echo "$ROOT_RESULT" | sed -n '2p')
 [ -n "$ROOT_METHOD" ] && ui_print "  Root: $ROOT_METHOD (v$ROOT_VERSION)"
@@ -66,7 +84,7 @@ if [ -d "$TEEFORGE_DIR" ]; then
         ui_print "  音量+ = 保留配置 [Volume+ = Keep config]"
         ui_print "  音量- = 全部清除 [Volume- = Clean all]"
 
-        RESULT=$("$MODPATH/teeforge" --volume 10 --no-rootdetect)
+        RESULT=$("$MODPATH/runtime/teeforge" --volume 10 --no-rootdetect)
         ui_print " "
         if [ "$RESULT" = "0" ]; then
             ui_print "  清除所有数据 [Cleaning all data]"
@@ -142,6 +160,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
 debug=$MODULE_DEBUG
 
 # 弱隐 BL 开关 Weak BL Hiding Switches
+# 由 runtime/teeforge-hide 读取；主程序不再处理这些键。
+# Read by runtime/teeforge-hide; the main binary no longer consumes these keys.
 # 0: 关闭 Off  1: 开启 On (默认 default)
 blhide=1
 blhide_boot=1
@@ -163,7 +183,7 @@ fi
 
 # Set permissions
 set_perm_recursive "$MODPATH" 0 0 0755 0644
-set_perm "$MODPATH/teeforge" 0 0 0755
+set_perm_recursive "$MODPATH/runtime" 0 0 0755 0755
 
 ui_print " "
 ui_print "  Done! Reboot to activate"

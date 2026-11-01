@@ -1,0 +1,10 @@
+[package]
+name = "teeforge-hide"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# 弱隐 BL 专用最小二进制：只依赖 std，开机早期可独立执行。
+# Minimal weak-BL binary: std only, runs standalone during early boot.
+[dependencies]

@@ -6,7 +6,7 @@ TeeForge-CD 是面向 Magisk/KernelSU 的 Android 模块，主要负责：
 
 - 一次扫描用户安装的应用，分别更新实际存在的目标配置：Tricky Store/TEESimulator-RS 的 `target.txt`，以及 TEESimulator 的 `config.json` 受管 profile。
 - 根据安装时固化的状态更新 Oh My Keymint（OMK）`injector.toml` 的 `scoop`，仅维护应用作用域。
-- 通过 standard resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
+- 通过独立的 `runtime/teeforge-hide` 与 standard resetprop 弱化隐藏 bootloader、Verified Boot 和调试相关属性。
 - 在高通 arm64 设备上通过本机 Keymint TA 向 Google RKP 申请本机专属 Keybox；签发与安装独立，不自动回退远程来源。
 - 从自建 CDN 选择三个远程槽位之一，校验格式后事务同步 Keybox；支持强制重写相同内容。
 - 通过 KernelSU WebUI 提供手动操作入口。
@@ -16,20 +16,21 @@ TeeForge-CD 是面向 Magisk/KernelSU 的 Android 模块，主要负责：
 ## 开机流程
 
 ```text
+module/post-fs-data.sh
+  └─ runtime/teeforge-hide --stage early   # zygote 启动前覆盖属性
 module/service.sh
-  ├─ teeforge --update-desc
-  ├─ teeforge --hide-bl
-  └─ teeforge --generate
+  ├─ runtime/teeforge --update-desc
+  ├─ runtime/teeforge-hide --stage late    # boot_completed 后二次加固
+  └─ runtime/teeforge --generate
 ```
 
-二进制运行时数据位于 `/data/adb/teeforge/`；Tricky Store/TEESimulator-RS 文件位于 `/data/adb/tricky_store/`，TEESimulator 文件位于 `/data/adb/teesim/`。
+二进制统一位于模块的 `runtime/`；安装时按 ABI 选择并扁平化为 `runtime/teeforge` 与 `runtime/teeforge-hide`。二进制运行时数据位于 `/data/adb/teeforge/`；Tricky Store/TEESimulator-RS 文件位于 `/data/adb/tricky_store/`，TEESimulator 文件位于 `/data/adb/teesim/`。
 
 ## CLI 公共接口
 
 ```text
 teeforge                      # banner、版本、root 信息和帮助
 teeforge --generate           # 更新已存在的目标配置
-teeforge --hide-bl            # 执行弱隐 BL
 teeforge --keybox             # 按已保存来源和槽位获取并同步 Keybox
 teeforge --keybox --source remote --remote-slot 2 --force --save-selection
                              # 强制替换远程槽位 2，成功后保存选择
@@ -45,15 +46,28 @@ teeforge --config FILE        # 覆盖用户配置来源
 
 多动作执行保持兼容顺序；任一步失败都会使最终退出码为非零。
 
+弱隐由独立二进制执行，配置键 `blhide*` 仍写在 `/data/adb/teeforge/config.conf`：
+
+```text
+teeforge-hide                 # 立即执行一次（等价 --stage early）
+teeforge-hide --stage late    # 先等 sys.boot_completed，再执行
+teeforge-hide --dry-run       # 只打印计划，不写属性
+teeforge-hide --verbose       # 逐条输出
+teeforge-hide --strict        # 有属性失败时返回 1
+```
+
+单条属性失败只记 WARN 并返回 0；`resetprop` 完全不可用时返回 1。
+
 ## 主要入口
 
 | 路径 | 作用 |
 |---|---|
 | `crates/teeforge/` | Android 设备端 Rust CLI 与核心模块（含 `rkp/` 设备端签发） |
+| `crates/teeforge-hide/` | 独立弱隐二进制：只做 resetprop 属性覆盖，开机早期可执行 |
 | `xtask/` | 四 ABI 构建、ELF 校验、WebUI 构建和模块打包 |
 | `module/` | Magisk/KernelSU 模块脚本与安装资源 |
 | `webroot/` | Astro + TypeScript KernelSU WebUI |
-| `native/` | 真机验收完成前保留的旧 C 对照实现 |
+| `native/` | 历史 C 对照实现，已退出构建链，仅作参考 |
 | `docs/` | 当前项目文档、决策、维护和历史记录 |
 
 ## 配置文件

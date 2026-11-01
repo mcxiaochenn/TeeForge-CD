@@ -477,6 +477,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "teeforge-hide"
+version = "0.1.0"
+
+[[package]]
 name = "tls_codec"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

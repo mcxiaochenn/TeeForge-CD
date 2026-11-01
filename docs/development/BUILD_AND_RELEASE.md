@@ -20,7 +20,9 @@ cargo run --locked -p xtask -- package
 cargo run --locked -p xtask -- verify
 ```
 
-`build.sh` 和 `package.sh` 是兼容入口，默认委托给 xtask；迁移期只有显式设置 `TEEFORGE_LEGACY_C=1` 才运行旧 C 流程。多后端目标配置、TEESimulator `config.json` 合并、OMK `injector.toml` 作用域和 Keybox 多目标事务只属于默认 Rust 核心；旧 C 对照实现继续只支持既有 `target.txt` 行为，不维护第二套 C JSON/TOML 实现。Rust 和旧 C 均已移除 resetprop-rs。
+`build.sh` 和 `package.sh` 是兼容入口，直接委托给 xtask；旧 C 对照流程已移除，不再提供 `TEEFORGE_LEGACY_C` 分支。多后端目标配置、TEESimulator `config.json` 合并、OMK `injector.toml` 作用域和 Keybox 多目标事务只属于 Rust 核心。
+
+本机 npm 无法执行时（例如 `node_modules` 损坏且无法重装），可设置 `TEEFORGE_SKIP_WEBUI=1` 跳过 WebUI 构建，复用 `module/webroot/` 现有产物；该变量只用于本地受限环境，CI 与正式打包不设置。
 
 OMK TOML 编辑使用锁定的 `toml_edit` parse 功能，不启用其格式化输出；工作区测试包含安装检测沙箱。Linux 主机测试用于验证 UID/GID 和 mode 保留，Android SELinux 标签与热加载仍需真机验收。
 
@@ -31,14 +33,14 @@ OMK TOML 编辑使用锁定的 `toml_edit` parse 功能，不启用其格式化�
 ## xtask 阶段
 
 1. 按四 ABI 配置 Cargo target 和 NDK clang linker。
-2. 以 release 配置构建并复制到 `out/bin/<abi>/teeforge`。
-3. 用 ELF machine 和 `llvm-readelf` 检查架构及动态依赖。
+2. 以 release 配置分别构建 `teeforge` 与 `teeforge-hide`，复制到 `out/bin/<abi>/`。
+3. 用 ELF machine 和 `llvm-readelf` 分别检查两个产物的架构及动态依赖。
 4. 在锁定依赖环境中构建 WebUI。
-5. 在暂存目录注入 `version`、`versionCode` 和 dev 渠道信息。
+5. 在暂存目录注入 `version`、`versionCode` 和 dev 渠道信息，并把 `out/bin/` 整体复制为模块的 `runtime/<abi>/`。
 6. 检查源码、暂存目录和最终 ZIP 内 Shell 文件均为纯 LF。
 7. 生成 `.sha256`，创建 ZIP，复核清单存在并执行体积门禁。
 
-限制：单个 stripped 二进制不超过 1.5 MiB，完整 ZIP 不超过 6 MiB；依赖只允许 Android `libc.so` 和 `libdl.so`。
+限制：单个 `teeforge` 不超过 1.5 MiB，`teeforge-hide` 不超过 512 KiB，完整 ZIP 不超过 6 MiB；两者依赖只允许 Android `libc.so` 和 `libdl.so`。
 
 ## 版本与渠道
 

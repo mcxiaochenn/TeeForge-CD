@@ -5,13 +5,13 @@
 `customize.sh` 的主要顺序：
 
 1. 读取并执行 `.sha256` 完整性校验；清单缺失或任一文件异常立即中止。
-2. 读取 `ro.product.cpu.abi`，选择 `bin/<abi>/teeforge`。
-3. 校验 ELF machine，复制为模块根目录的 `teeforge`，删除其他 ABI。
+2. 读取 `ro.product.cpu.abi`，选定 `runtime/<abi>/`。
+3. 校验 `teeforge` 与 `teeforge-hide` 的 ELF machine，复制并扁平化为 `runtime/teeforge`、`runtime/teeforge-hide`，删除其他 ABI 目录。
 4. 检测 Root 方法和版本。
 5. 询问是否保留已有 `/data/adb/teeforge/` 配置，超时默认保留。
 6. 全架构使用 standard resetprop；检测 OMK 模块并固化启用状态，待更新目录优先，禁用或待卸载时关闭。
 7. 生成 `sys.conf`，只在不存在时生成用户 `config.conf`。
-8. 在所有递归权限设置之后重新授予 teeforge 二进制执行权限。
+8. 在所有递归权限设置之后重新授予 `runtime/` 下两个二进制执行权限。
 
 不支持的 ABI、缺少对应 ELF 或 machine 不匹配时不得使用其他架构兜底。
 
@@ -35,6 +35,7 @@
 真机还必须单独验证：
 
 - 至少一台 arm64-v8a 主力设备的安装和升级。
+- 弱隐两个阶段：`post-fs-data` 结束后属性已改写、`logs/blhide.log` 无 ERROR；`ro.build.selinux` 不存在时不应产生失败记录。
 - 配置保留、音量键选择、开机服务和 target/keybox 实际结果。
 - OMK 的普通文件 UID/GID、0600 权限、SELinux 标签、热加载和应用实际路由；验证先装 OMK 未重启、升级、禁用再启用，以及三种目标共存。
 - OMK 仅支持作用域更新，不应验证或宣称其 Keybox 已被 TeeForge 同步。

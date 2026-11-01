@@ -12,7 +12,7 @@
 MODDIR=${0%/*}
 DATA_DIR=/data/adb/teeforge
 CONFIG="$DATA_DIR/config.conf"
-TF="$MODDIR/teeforge"
+TF="$MODDIR/runtime/teeforge"
 LOG_DIR="$DATA_DIR/logs"
 
 mkdir -p "$LOG_DIR" 2>/dev/null

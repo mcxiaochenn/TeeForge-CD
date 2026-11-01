@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/teeforge", "xtask"]
+members = ["crates/teeforge", "crates/teeforge-hide", "xtask"]
 resolver = "2"
 
 [workspace.package]

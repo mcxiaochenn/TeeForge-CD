@@ -60,7 +60,6 @@ styles/tailwind.css   Tailwind 入口与全局基样式
 | `rkp` | 设备端 RKP：前置检查、CSR_V2 帧、TA 隔离子进程、服务交互、证书链校验、产物落盘与删除、错误码解释 |
 | `update` | 更新清单解析、单一 CDN 端点、sha256/大小/ZIP 头校验、按 root 管理器调用安装器 |
 | `info` | `--bootstrap` 单次采集（getprop 全量、内核、SELinux、模块版本、能力位） |
-| `blhide` | 参数数组调用 resetprop，逐项收集失败 |
 | `rootdetect` | 环境变量和 `/data/adb/*` 路径检测 |
 | `volume` | 动态扫描 input event，封装设备输入 unsafe 适配 |
 | `atomic_file` | 同目录临时文件、同步写入和原子替换；OMK 专用路径保留 UID/GID、mode 和 Android SELinux 标签 |
@@ -160,11 +159,21 @@ OMK 启用状态只在安装时检测并写入 sys.conf 的 `omk_enabled`；默�
 
 PendingUpdate 保存渲染使用的原始字节。OMK 替换前检查原始内容与元数据，并在限制权限的临时文件中准备原 UID/GID、mode 和 Android SELinux 标签；失败不提交。专用备份为 injector.toml.teeforge.bak，不占用 OMK 的备份名；回滚也保留元数据。回滚发现目标已被其他进程修改时拒绝覆盖并报告失败。跨文件事务无法保证多个热加载服务同时切换；写入完成不代表 OMK 已加载或应用路由已生效。
 
-不接管 OMK config.toml、Keybox、filter、intercept 或服务重启。旧 C 不新增 OMK 支持。
+不接管 OMK config.toml、Keybox、filter、intercept 或服务重启。
 
 ## BL 隐藏
 
-全架构的 Rust 与旧 C 均使用 standard resetprop，删除预置 rs 二进制和安装选择。Rust 使用参数数组逐条调用工具；失败项聚合到最终错误。旧 prop_tool 和 blhide_compact 键按未知键忽略，保留其他 BL 分类开关。
+弱隐由独立二进制 `crates/teeforge-hide` 执行；主程序不再包含该逻辑，也不再提供 `--hide-bl`。
+
+- 两阶段：`post-fs-data.sh` 在 zygote 启动前执行 `--stage early`；`service.sh` 在 `sys.boot_completed` 后执行 `--stage late` 二次加固，防止厂商脚本在启动后期写回。早期阶段串行阻塞开机，二进制在该阶段不做任何等待。
+- 一次无参数 `resetprop` 全量 dump 建立基线，之后逐条比较；值相同直接跳过，避免每条属性多 fork 一次。
+- 只改已存在的属性，不凭空创建。属性缺失记为 `missing`，不计入失败；这同时避免在非对应品牌设备上凭空出现三星、一加等专有属性。
+- 删除前先在全量快照里确认存在，不存在记为 `absent`。`ro.build.selinux` 这类旧属性在现代设备上通常已不存在，而 `resetprop --delete` 对不存在的节点返回非零，不能当作错误。
+- recovery 相关属性只在当前值为 `recovery` 时改为 `unknown`，正常开机不得留下 `unknown`。
+- `ro.build.type` / `ro.build.tags` 连同 `ro.<分区>.build.type` / `ro.<分区>.build.tags` 一起遍历，只匹配单段分区名。
+- `ro.boot.vbmeta.size` 用 `blockdev --getsize64` 读取真实分区大小，且仅当属性已存在时写入；`ro.boot.vbmeta.digest` 不做回填，`dd` + `sha256` 的结果不等于 AVB digest。
+- 退出码：单条失败记 WARN 并返回 0；`resetprop` 不可用返回 1；`--strict` 下任何失败返回 1。
+- 配置键 `blhide` 与 `blhide_*` 仍由 `customize.sh` 写入 `config.conf`，只由 `teeforge-hide` 读取。
 
 ## 构建产物和 ABI
 
@@ -175,7 +184,7 @@ PendingUpdate 保存渲染使用的原始字节。OMK 替换前检查原始内�
 | x86 | `i686-linux-android` | `i686-linux-android24` | 3 |
 | x86_64 | `x86_64-linux-android` | `x86_64-linux-android24` | 62 |
 
-ZIP 内置四个 ABI，`customize.sh` 根据 `ro.product.cpu.abi` 选择一个并校验 ELF 后删除其余版本。
+ZIP 的 `runtime/` 内置四个 ABI，每个目录包含 `teeforge` 与 `teeforge-hide` 两个二进制。`customize.sh` 按 `ro.product.cpu.abi` 选定目录、校验两者的 ELF machine，复制并扁平化为 `runtime/teeforge` 与 `runtime/teeforge-hide`，再删除其余 ABI 目录；开机脚本只使用这两个固定路径。
 
 ## 安全边界
 

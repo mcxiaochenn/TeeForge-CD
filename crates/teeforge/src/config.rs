@@ -116,18 +116,6 @@ pub(crate) struct Config {
     pub(crate) root_method: String,
     pub(crate) root_version: String,
     pub(crate) debug: bool,
-    pub(crate) blhide: bool,
-    pub(crate) blhide_boot: bool,
-    pub(crate) blhide_security: bool,
-    pub(crate) blhide_vendor: bool,
-    pub(crate) blhide_oem: bool,
-    pub(crate) blhide_secureboot: bool,
-    pub(crate) blhide_realme: bool,
-    pub(crate) blhide_recovery: bool,
-    pub(crate) blhide_developer: bool,
-    pub(crate) blhide_selinux: bool,
-    pub(crate) blhide_virtual: bool,
-    pub(crate) blhide_delete: bool,
 }
 
 impl Default for Config {
@@ -153,18 +141,6 @@ impl Default for Config {
             root_method: "Unknown".into(),
             root_version: "unknown".into(),
             debug: false,
-            blhide: true,
-            blhide_boot: true,
-            blhide_security: true,
-            blhide_vendor: true,
-            blhide_oem: true,
-            blhide_secureboot: true,
-            blhide_realme: true,
-            blhide_recovery: true,
-            blhide_developer: true,
-            blhide_selinux: true,
-            blhide_virtual: true,
-            blhide_delete: true,
         }
     }
 }
@@ -254,18 +230,6 @@ impl Config {
             "root_method" => self.root_method = value.into(),
             "root_version" => self.root_version = value.into(),
             "debug" => self.debug = parse_bool(value),
-            "blhide" => self.blhide = parse_bool(value),
-            "blhide_boot" => self.blhide_boot = parse_bool(value),
-            "blhide_security" => self.blhide_security = parse_bool(value),
-            "blhide_vendor" => self.blhide_vendor = parse_bool(value),
-            "blhide_oem" => self.blhide_oem = parse_bool(value),
-            "blhide_secureboot" => self.blhide_secureboot = parse_bool(value),
-            "blhide_realme" => self.blhide_realme = parse_bool(value),
-            "blhide_recovery" => self.blhide_recovery = parse_bool(value),
-            "blhide_developer" => self.blhide_developer = parse_bool(value),
-            "blhide_selinux" => self.blhide_selinux = parse_bool(value),
-            "blhide_virtual" => self.blhide_virtual = parse_bool(value),
-            "blhide_delete" => self.blhide_delete = parse_bool(value),
             _ => {}
         }
     }
@@ -325,8 +289,8 @@ mod tests {
     #[test]
     fn invalid_boolean_is_off() {
         let mut config = Config::default();
-        config.apply("blhide", "invalid");
-        assert!(!config.blhide);
+        config.apply("debug", "invalid");
+        assert!(!config.debug);
     }
 
     #[test]
@@ -420,6 +384,5 @@ mod tests {
         }
         assert_eq!(config.root_method, "KernelSU");
         assert!(config.debug);
-        assert!(!config.blhide);
     }
 }

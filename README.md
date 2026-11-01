@@ -85,10 +85,10 @@ su -c "grep -n 'teeforge\|_teeforgeManaged' /data/adb/teesim/config.json"
 
 文件不存在、为空、缺少受管 profile 或命令退出码非零时，应按“故障排查与反馈”收集信息。
 
-如果只使用 BL 弱化且未安装兼容目标模块，可跳过目标配置检查，改为执行以下命令；退出码为 0 表示本次属性命令均已成功执行：
+如果只使用 BL 弱化且未安装兼容目标模块，可跳过目标配置检查，改为执行以下命令。弱隐由独立二进制执行，退出码 0 表示已执行完成（单条属性失败只记 WARN，不改变退出码）：
 
 ```sh
-su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge-hide'
 ```
 
 还可以在 Root 管理器中运行模块 Action。Action 会依次同步 Keybox 和更新目标配置；两步均成功时输出 `完成 [Done]`，无需再次重启。任一步失败都会输出非零状态，不应视为成功。
@@ -97,7 +97,7 @@ su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
 
 ### 常用入口
 
-- **开机自动执行**：更新模块描述、执行 BL 弱化、更新已存在的目标配置。
+- **开机自动执行**：post-fs-data 阶段先做一次弱隐；开机完成后更新模块描述、二次弱隐、更新已存在的目标配置。
 - **模块 Action**：音量键两级菜单。音量下切换高亮、音量上确认、15 秒无操作取消；先询问是否执行，再选择“一键更新目标作用域和 Keybox”“更新目标作用域”或“更新 Keybox”（一键与单独更新 Keybox 都需先选来源：本机 RKP / 远程池）。一键流程先写目标配置再更新 Keybox，目标配置失败则跳过 Keybox 并返回非零状态。全过程写入 `/data/adb/teeforge/logs/action-*.log`。
 - **WebUI**：顶部是设备信息栏，下面是“更新目标作用域”“Keybox 配置”“本机 RKP 签发”“模块与更新”四个入口。执行耗时操作时显示等待浮层（含已用秒数），避免误以为界面卡住。
 - **CLI**：适用于终端操作和问题定位。
@@ -107,17 +107,17 @@ Keybox 配置选择远程池后可选择槽位 1/2/3，默认槽位 1；安装�
 常用 CLI 命令需要 Root：
 
 ```sh
-su -c '/data/adb/modules/teeforge_cd/teeforge --generate'
-su -c '/data/adb/modules/teeforge_cd/teeforge --hide-bl'
-su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote --remote-slot 1 --save-selection'
-su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source remote --remote-slot 2 --force --save-selection'
-su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-status'
-su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-issue'
-su -c '/data/adb/modules/teeforge_cd/teeforge --rkp-probe --json'
-su -c '/data/adb/modules/teeforge_cd/teeforge --keybox --source rkp'
-su -c '/data/adb/modules/teeforge_cd/teeforge --target-list --json'
-su -c '/data/adb/modules/teeforge_cd/teeforge --self-update check'
-su -c '/data/adb/modules/teeforge_cd/teeforge --help'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --generate'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge-hide --verbose'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source remote --remote-slot 1 --save-selection'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source remote --remote-slot 2 --force --save-selection'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-status'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-issue'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --rkp-probe --json'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --keybox --source rkp'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --target-list --json'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --self-update check'
+su -c '/data/adb/modules/teeforge_cd/runtime/teeforge --help'
 ```
 
 `--rkp-status` 只做本地检查（SoC、厂商库、`/dev/smcinvoke`、fingerprint），不联网、不调用 TA，用于判断设备端 RKP 是否具备条件。`--rkp-probe` 是诊断命令：取一次 challenge 后，把缓冲区初始化、`security_level`、请求封装、厂商对象大小四组变量拆成 8 个变体，每个变体在独立子进程中调用一次 TA，输出对照数据。同时会解析 `/vendor/lib64/libkeymasterdeviceutils.so` 的动态符号表，列出 `KeymasterUtils` 与 `send_cmd` 相关入口——如果固件提供了必须先调用的初始化方法或别的重载，会在 `library_symbols` 里直接暴露。所有查询类命令都支持 `--json`，输出统一的 `{ok,data}` / `{ok,error}` 信封；`--json` 只能搭配一个命令。
@@ -160,13 +160,13 @@ update_channel=stable
 ```
 
 - `debug=1`：将运行日志写入 `/data/adb/teeforge/logs/`。
-- `blhide=0`：关闭全部 BL 弱化操作。
+- `blhide=0`：关闭全部 BL 弱化操作（由 `runtime/teeforge-hide` 读取）。
 - `keybox_source=remote|rkp`：Keybox 来源。`remote` 从 CDN 获取公共池，`rkp` 使用 `RKP/` 下的本机产物；默认 `remote` 保持旧行为。
 - `target_mode=auto|manual`：`auto` 每次写入全部已安装用户应用；`manual` 只写入 `/data/adb/teeforge/target-selection.json` 中的集合，WebUI 的手动勾选会写这里。
 - `update_channel=stable|dev`：WebUI 更新检查使用的通道；`update_base` 默认 `https://teeforge.mcxiaochen.top/files/update`。
 - `rkp_server`：默认 `https://remoteprovisioning.googleapis.com/v1`，仅用于调试或自建代理。
 - 旧 `rkp_mode`、`rkp_refresh_days` 仍可解析但不再生效，升级后统一由 `keybox_source` 决定来源。
-- 安装器生成的分类开关可分别设为 `0` 或 `1`。
+- 安装器生成的分类开关可分别设为 `0` 或 `1`，只影响 `runtime/teeforge-hide`。
 - `omk_enabled` 由安装器在系统配置中固化，默认 `0`；用户配置可覆盖，设为 `0` 停止更新 OMK。
 - `omk_injector_config` 默认 `/data/misc/keystore/omk/injector.toml`，仅覆盖作用域文件路径。
 - 旧 `prop_tool`、`blhide_compact` 键兼容忽略，不再生成，升级不改写已有用户配置。

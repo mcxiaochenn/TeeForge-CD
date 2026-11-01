@@ -1,5 +1,4 @@
 mod atomic_file;
-mod blhide;
 mod cli;
 mod config;
 mod description;

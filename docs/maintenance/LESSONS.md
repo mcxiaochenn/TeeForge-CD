@@ -1,5 +1,15 @@
 # 可复用踩坑记录
 
+## 2026-11-01：删不存在的属性不是"删除失败"
+
+- 范围：模块弱隐 BL（现 `crates/teeforge-hide`）。
+- 现象：开机日志出现 `[ERROR] 1 个属性操作失败 [property operations failed]: ro.build.selinux: resetprop 失败，退出码 1 [resetprop failed, exit code 1]`，但其余属性均已生效。
+- 根因：`resetprop --delete NAME` 是把节点从属性树里摘掉，节点不存在就返回非零。`ro.build.selinux` 是 Android 4.x/5.x 时代的属性，现代设备多数已不存在；旧实现无条件删除，并把非零退出码聚合为整条命令失败，于是每次开机都报一条 ERROR。
+- 正确处理：删除前先用一次全量 `resetprop` 快照确认属性存在，不存在计入 `absent` 而不是失败。单条属性写入被拒也只记 WARN；只有 `resetprop` 完全不可用才返回非零。
+- 顺带修掉：旧实现对 `ro.bootmode` 固定写 `unknown`，会把正常开机的 `normal` 也改掉；现在只在当前值确实为 `recovery` 时改写。
+- 防止复发：撤销类操作必须区分"本来就不存在"和"操作被拒"；外部工具的退出码只有在语义明确时才能当作失败依据。
+- 状态：已修复。
+
 ## 2026-11-01：按月轮换的远程资源不能假设月初就有货
 
 - 范围：模块远程 Keybox 获取（`crates/teeforge/src/keybox.rs`）。

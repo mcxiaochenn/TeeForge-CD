@@ -10,7 +10,29 @@ type DynError = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, DynError>;
 
 const MAX_BINARY_SIZE: u64 = 1_572_864;
+const MAX_HIDE_BINARY_SIZE: u64 = 524_288;
 const MAX_PACKAGE_SIZE: u64 = 6_291_456;
+
+/// 单个可执行产物的构建描述；体积上限按职责分别设置。
+/// One buildable artifact; size limits stay per-artifact because duties differ.
+struct Artifact {
+    package: &'static str,
+    binary: &'static str,
+    max_size: u64,
+}
+
+const ARTIFACTS: &[Artifact] = &[
+    Artifact {
+        package: "teeforge",
+        binary: "teeforge",
+        max_size: MAX_BINARY_SIZE,
+    },
+    Artifact {
+        package: "teeforge-hide",
+        binary: "teeforge-hide",
+        max_size: MAX_HIDE_BINARY_SIZE,
+    },
+];
 
 struct Abi {
     android: &'static str,
@@ -143,27 +165,67 @@ fn build_android() -> Result<()> {
         if !clang.is_file() {
             return Err(format!("NDK clang 不存在 [missing]: {}", clang.display()).into());
         }
-        let rustflags = format!("-Clink-arg=--target={}", abi.clang);
-        let mut cargo = Command::new("cargo");
-        cargo
-            .current_dir(&workspace)
-            .args(["build", "--release", "-p", "teeforge", "--target", abi.rust])
-            .env(abi.cargo_linker_env, &clang)
-            .env("TEEFORGE_VERSION", &version)
-            .env("RUSTFLAGS", rustflags);
-        command_ok(
-            &mut cargo,
-            &format!("构建 {} [Build {}]", abi.android, abi.android),
-        )?;
+        for artifact in ARTIFACTS {
+            build_artifact(
+                &workspace,
+                &ndk,
+                &clang,
+                abi,
+                artifact,
+                &version,
+                &output_root,
+            )?;
+        }
+    }
+    Ok(())
+}
 
-        let source = workspace
-            .join("target")
-            .join(abi.rust)
-            .join("release")
-            .join("teeforge");
-        let destination = output_root.join(abi.android).join("teeforge");
-        fs::create_dir_all(destination.parent().expect("destination parent"))?;
-        fs::copy(&source, &destination)?;
+#[allow(clippy::too_many_arguments)]
+fn build_artifact(
+    workspace: &Path,
+    ndk: &Path,
+    clang: &Path,
+    abi: &Abi,
+    artifact: &Artifact,
+    version: &str,
+    output_root: &Path,
+) -> Result<()> {
+    let rustflags = format!("-Clink-arg=--target={}", abi.clang);
+    let mut cargo = Command::new("cargo");
+    cargo
+        .current_dir(workspace)
+        .args([
+            "build",
+            "--release",
+            "-p",
+            artifact.package,
+            "--target",
+            abi.rust,
+        ])
+        .env(abi.cargo_linker_env, clang)
+        .env("RUSTFLAGS", rustflags);
+    // 只有主程序把版本号编进二进制；弱隐二进制不读这个变量。
+    // Only the main binary embeds the version; the weak-hiding binary ignores it.
+    if artifact.package == "teeforge" {
+        cargo.env("TEEFORGE_VERSION", version);
+    }
+    command_ok(
+        &mut cargo,
+        &format!(
+            "构建 {} {} [Build {} {}]",
+            abi.android, artifact.package, abi.android, artifact.package
+        ),
+    )?;
+
+    let source = workspace
+        .join("target")
+        .join(abi.rust)
+        .join("release")
+        .join(artifact.binary);
+    let destination = output_root.join(abi.android).join(artifact.binary);
+    fs::create_dir_all(destination.parent().expect("destination parent"))?;
+    fs::copy(&source, &destination)?;
+    if artifact.package == "teeforge" {
         fs::copy(
             &source,
             output_root
@@ -171,17 +233,17 @@ fn build_android() -> Result<()> {
                 .expect("out parent")
                 .join(format!("teeforge-{}", abi.android)),
         )?;
-        let size = fs::metadata(&destination)?.len();
-        if size > MAX_BINARY_SIZE {
-            return Err(format!(
-                "{} 体积 {} 超过 1.5 MiB 上限 [binary exceeds size limit]",
-                abi.android, size
-            )
-            .into());
-        }
-        verify_elf(&destination, abi.elf_machine, &ndk)?;
-        println!("    {}: {} bytes", abi.android, size);
     }
+    let size = fs::metadata(&destination)?.len();
+    if size > artifact.max_size {
+        return Err(format!(
+            "{} {} 体积 {} 超过上限 [binary exceeds size limit]: {}",
+            abi.android, artifact.binary, size, artifact.max_size
+        )
+        .into());
+    }
+    verify_elf(&destination, abi.elf_machine, ndk)?;
+    println!("    {} {}: {} bytes", abi.android, artifact.binary, size);
     Ok(())
 }
 
@@ -273,6 +335,13 @@ fn verify_source_shell_files(workspace: &Path) -> Result<()> {
 }
 
 fn build_webui(workspace: &Path) -> Result<()> {
+    // 仅用于无法执行 npm 的受限环境（例如本机 node_modules 损坏且无法重装）；
+    // CI 和正式打包不设置该变量，仍然必须从锁定依赖完整构建。
+    // Escape hatch for restricted hosts only; CI and release builds never set it.
+    if env::var_os("TEEFORGE_SKIP_WEBUI").is_some() {
+        println!("==> 跳过 WebUI 构建 [Skipping WebUI build] (TEEFORGE_SKIP_WEBUI)");
+        return Ok(());
+    }
     let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
     let webroot = workspace.join("webroot");
     let npm_cache = workspace.join("out").join("npm-cache");
@@ -472,11 +541,13 @@ fn package() -> Result<()> {
     if stale.exists() {
         fs::remove_file(stale)?;
     }
-    let bin = stage.join("bin");
-    if bin.exists() {
-        fs::remove_dir_all(&bin)?;
+    // 二进制统一落在 runtime/<abi>/；安装时裁剪并扁平化为 runtime/ 下两个文件。
+    // Binaries live under runtime/<abi>/ and are flattened into runtime/ at install time.
+    let runtime = stage.join("runtime");
+    if runtime.exists() {
+        fs::remove_dir_all(&runtime)?;
     }
-    copy_tree(&out.join("bin"), &bin)?;
+    copy_tree(&out.join("bin"), &runtime)?;
     fs::copy(workspace.join("README.md"), stage.join("README"))?;
 
     let version = env::var("VERSION").unwrap_or(teeforge_version(&workspace)?);
@@ -516,12 +587,18 @@ fn verify_outputs() -> Result<()> {
     verify_source_shell_files(&workspace)?;
     let output = workspace.join("out").join("bin");
     for abi in ABIS {
-        let binary = output.join(abi.android).join("teeforge");
-        let size = fs::metadata(&binary)?.len();
-        if size == 0 || size > MAX_BINARY_SIZE {
-            return Err(format!("{} 产物无效 [invalid output]", abi.android).into());
+        for artifact in ARTIFACTS {
+            let binary = output.join(abi.android).join(artifact.binary);
+            let size = fs::metadata(&binary)?.len();
+            if size == 0 || size > artifact.max_size {
+                return Err(format!(
+                    "{} {} 产物无效 [invalid output]",
+                    abi.android, artifact.binary
+                )
+                .into());
+            }
+            println!("{} {}: {} bytes", abi.android, artifact.binary, size);
         }
-        println!("{}: {} bytes", abi.android, size);
     }
     Ok(())
 }
@@ -601,6 +678,67 @@ mod tests {
         run(true)?;
         fs::remove_dir_all(directory)?;
         Ok(())
+    }
+
+    #[test]
+    fn installer_flattens_runtime_for_current_abi() -> Result<()> {
+        let directory = env::temp_dir().join(format!("teeforge-runtime-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory)?;
+        let source = fs::read_to_string(root().join("module/customize.sh"))?;
+        let start = source
+            .find("# 选择当前设备对应的二进制")
+            .ok_or("missing ABI selection")?;
+        let banner = "ui_print \"  架构 [ABI]: $ARCH\"";
+        let end = source.find(banner).ok_or("missing ABI banner")? + banner.len();
+        let snippet = &source[start..end];
+
+        // 四个 ABI 目录都放最小 ELF 头，只有 arm64 的 machine 与模拟设备一致。
+        // Every ABI directory gets a minimal ELF header; only arm64 matches the fake device.
+        for (abi, machine) in [
+            ("arm64-v8a", 183_u16),
+            ("armeabi-v7a", 40),
+            ("x86", 3),
+            ("x86_64", 62),
+        ] {
+            let abi_dir = directory.join("runtime").join(abi);
+            fs::create_dir_all(&abi_dir)?;
+            for name in ["teeforge", "teeforge-hide"] {
+                fs::write(abi_dir.join(name), elf_header(machine))?;
+            }
+        }
+
+        let script = format!(
+            "set -eu\nui_print() {{ :; }}\nabort() {{ echo \"abort: $*\" >&2; exit 1; }}\ngetprop() {{ echo arm64-v8a; }}\nMODPATH='{}'\n{snippet}\n",
+            directory.to_string_lossy().replace('\\', "/")
+        );
+        let shell = if cfg!(windows) {
+            "C:/Program Files/Git/bin/bash.exe"
+        } else {
+            "sh"
+        };
+        let output = Command::new(shell).args(["-c", &script]).output()?;
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        // 安装后只保留 runtime/ 根下的两个固定路径。
+        // After install only the two fixed paths under runtime/ remain.
+        assert!(directory.join("runtime/teeforge").is_file());
+        assert!(directory.join("runtime/teeforge-hide").is_file());
+        assert!(!directory.join("runtime/arm64-v8a").exists());
+        assert!(!directory.join("runtime/x86").exists());
+        let _ = fs::remove_dir_all(&directory);
+        Ok(())
+    }
+
+    fn elf_header(machine: u16) -> Vec<u8> {
+        let mut header = vec![0_u8; 20];
+        header[..4].copy_from_slice(b"\x7fELF");
+        header[18..20].copy_from_slice(&machine.to_le_bytes());
+        header
     }
 
     #[test]

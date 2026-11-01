@@ -55,6 +55,16 @@ v0.7.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Ru
 - 验证：`action.sh` 用桩二进制覆盖一键+远程、一键+RKP、目标失败跳过、单选各分支与取消，pipefail 与无 pipefail 两种分支的退出码传播均正确；全部 SFC 经 `@vue/compiler-sfc` 静态编译通过；在干净依赖的临时目录 `vite build` 通过（67 模块，产物 CSS 含 `z-[60]`、`bg-black/30`、`border-[3px]` 等新工具类）。
 - 本机 `webroot/node_modules` 处于残缺状态（缺 esbuild 与 rollup 平台包），未在本机跑 `xtask package`；需在无守卫终端执行 `npm ci` 恢复。
 
+## 2026-11-01：弱隐 BL 独立二进制
+
+- `blhide` 从主程序拆出为独立 crate `crates/teeforge-hide`，零第三方依赖，四 ABI 与主程序一起构建。
+- 两阶段执行：`post-fs-data.sh` 早期覆盖 + `service.sh` 开机后二次加固；二进制统一位于模块 `runtime/`，安装时按 ABI 扁平化为 `runtime/teeforge`、`runtime/teeforge-hide`。
+- 重写属性覆盖策略：一次全量 dump 建基线、先读后写、只改已存在属性、删除前探测、recovery 条件改写、`ro.*.build.type/tags` 动态遍历、`ro.boot.vbmeta.size` 动态探测。
+- 错误语义修正：`ro.build.selinux` 不存在时不再报错；单条失败降级 WARN 且退出码为 0，`--strict` 可恢复严格模式。
+- 移除 `--hide-bl` 与旧 C 对照分支，`TEEFORGE_LEGACY_C` 不再受支持。
+- 主机验证：146 项测试（teeforge 123、teeforge-hide 20、xtask 3，含安装布局沙箱）、格式与 Clippy 通过；四 ABI 构建通过，`teeforge-hide` 依次为 345/254/384/380 KB；ZIP 2,969,281 字节，`.sha256` 25 条含 8 个 `runtime/<abi>/` 条目。
+- 设备侧：本轮未执行真机验证，安装后的两阶段效果和日志需单独确认。
+
 ## 验收状态
 
 - 真机测试：用户确认对应 Dev 版本已测试通过，作为正式发布依据。

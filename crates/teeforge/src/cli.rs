@@ -1,4 +1,3 @@
-use crate::blhide;
 use crate::config::{Config, KeyboxSource, SYS_CONFIG, TargetMode, USER_CONFIG, UpdateChannel};
 use crate::description;
 use crate::error::{Result, TfError};
@@ -18,7 +17,6 @@ use std::path::{Path, PathBuf};
 #[derive(Default)]
 struct Options {
     generate: bool,
-    hide_bl: bool,
     keybox: bool,
     source: Option<String>,
     remote_slot: Option<u8>,
@@ -56,7 +54,6 @@ fn parse(args: &[String]) -> Result<Options> {
         };
         match args[index].as_str() {
             "--generate" => options.generate = true,
-            "--hide-bl" => options.hide_bl = true,
             "--keybox" => options.keybox = true,
             "--source" => {
                 index += 1;
@@ -148,7 +145,6 @@ fn parse(args: &[String]) -> Result<Options> {
         ));
     }
     let other_action = options.generate
-        || options.hide_bl
         || options.rootdetect
         || options.update_desc
         || options.rkp_status
@@ -219,7 +215,6 @@ fn usage(program: &str) {
     println!("  --update-channel C  stable/dev 更新通道 [Update channel]");
     println!("  --bootstrap         输出首屏信息 [Emit bootstrap information]");
     println!("  --json              以 JSON 输出 [Emit JSON]");
-    println!("  --hide-bl           弱隐 bootloader [Weak bootloader hiding]");
     println!("  --rootdetect        检测 root 方式并输出 [Detect root method]");
     println!("  --update-desc       更新模块描述 [Update module description]");
     println!("  --no-rootdetect     跳过 root 检测 [Skip root detection]");
@@ -343,7 +338,6 @@ pub fn run(args: Vec<String>) -> i32 {
     }
 
     let no_action = !options.generate
-        && !options.hide_bl
         && !options.keybox
         && !options.rootdetect
         && !options.update_desc
@@ -389,9 +383,6 @@ pub fn run(args: Vec<String>) -> i32 {
             Ok(outcome) => outcome.log(),
             Err(error) => record(Err(error), &mut failed),
         }
-    }
-    if options.hide_bl {
-        record(blhide::hide(&config), &mut failed);
     }
     if options.keybox {
         match keybox::fetch(
@@ -832,7 +823,6 @@ mod tests {
         let args = vec![
             "teeforge".into(),
             "--generate".into(),
-            "--hide-bl".into(),
             "--volume".into(),
             "12".into(),
             "--config".into(),
@@ -840,7 +830,6 @@ mod tests {
         ];
         let options = parse(&args).expect("valid options");
         assert!(options.generate);
-        assert!(options.hide_bl);
         assert_eq!(options.volume, Some(12));
         assert_eq!(options.config, Some(PathBuf::from("/tmp/config")));
     }

@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-v0.7.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Rust 四 ABI 核心和跨平台打包链为默认实现。
+v0.8.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Rust 四 ABI 核心和跨平台打包链为默认实现。
 
 ## 已完成
 
@@ -59,11 +59,12 @@ v0.7.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Ru
 
 - `blhide` 从主程序拆出为独立 crate `crates/teeforge-hide`，零第三方依赖，四 ABI 与主程序一起构建。
 - 两阶段执行：`post-fs-data.sh` 早期覆盖 + `service.sh` 开机后二次加固；二进制统一位于模块 `runtime/`，安装时按 ABI 扁平化为 `runtime/teeforge`、`runtime/teeforge-hide`。
-- 重写属性覆盖策略：一次全量 dump 建基线、先读后写、只改已存在属性、删除前探测、recovery 条件改写、`ro.*.build.type/tags` 动态遍历、`ro.boot.vbmeta.size` 动态探测。
+- 重写属性覆盖策略：一次全量 dump 建基线、先读后写、只改已存在属性、删除前探测、recovery 条件改写、`ro.*.build.type/tags` 动态遍历。
 - 错误语义修正：`ro.build.selinux` 不存在时不再报错；单条失败降级 WARN 且退出码为 0，`--strict` 可恢复严格模式。
-- 移除 `--hide-bl` 与旧 C 对照分支，`TEEFORGE_LEGACY_C` 不再受支持。
-- 主机验证：146 项测试（teeforge 123、teeforge-hide 20、xtask 3，含安装布局沙箱）、格式与 Clippy 通过；四 ABI 构建通过，`teeforge-hide` 依次为 345/254/384/380 KB；ZIP 2,969,281 字节，`.sha256` 25 条含 8 个 `runtime/<abi>/` 条目。
-- 设备侧：本轮未执行真机验证，安装后的两阶段效果和日志需单独确认。
+- 移除 `--hide-bl` 与旧 C 对照分支，`TEEFORGE_LEGACY_C` 不再受支持。移除 CLI 参数与模块 `bin/` 布局属于不兼容变更，源码版本随之由 `0.7.0` 递增到 `0.8.0`，`versionCode` 仍由 CI 按提交数注入。
+- 主机验证：150 项测试（teeforge 123、teeforge-hide 24、xtask 3，含安装布局沙箱）、格式与 Clippy 通过；四 ABI 双二进制构建通过，模块包 `runtime/` 含 8 个二进制，`.sha256` 覆盖全部文件。
+- 设备侧修复（同轮真机反馈）：`resetprop` 无参数在 ReSukiSU 上不输出属性列表，导致全量基线为空、34 条全判 missing 且退出码 0（空操作）；基线改用 `getprop`，空 dump 视为错误，写入后回读校验，新增 `hide-state` 与 `--status`。`ro.boot.vbmeta.size` 实测被 blockdev 分区大小覆盖（131072 对真值 18496），已移除动态探测。摘要行追加 `up=<秒>s`，用于给两阶段日志排序（post-fs-data 阶段 RTC 未对齐，墙钟停在 1970）。
+- 设备侧验收（25098PN5AC / Android 17 / ReSukiSU）：`runtime/` 已扁平化为两个文件；`post-fs-data` 在开机 16 s、`service` 在 38 s 各执行一次，early `source=getprop entries=2491 applied=5 skipped=29 missing=17`，late `applied=0 skipped=35`，两阶段 `failed=0 verify_failed=0`。三条核心属性达到目标值，`ro.boot.vbmeta.size` 保持 18496。
 
 ## 验收状态
 

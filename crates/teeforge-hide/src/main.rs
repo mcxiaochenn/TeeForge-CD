@@ -121,8 +121,9 @@ fn run() -> i32 {
     let outcome = plan.execute(&tool, args.verbose);
     let mismatches = verify(&plan);
 
+    let uptime = log::uptime_secs().map_or_else(|| "?".to_string(), |value| format!("{value}s"));
     let summary = format!(
-        "stage={} source={} entries={} applied={} skipped={} missing={} failed={} removed={} absent={} verify_failed={}",
+        "stage={} source={} entries={} applied={} skipped={} missing={} failed={} removed={} absent={} verify_failed={} up={uptime}",
         args.stage.label(),
         dump.source,
         dump.entries.len(),

@@ -12,11 +12,12 @@
 
 - 范围：`crates/teeforge-hide`。
 - 现象：设备日志 `stage=early applied=0 skipped=0 missing=34 failed=0 removed=0 absent=3`，34 正好等于属性表总条数；同时 `resetprop ro.boot.flash.locked` 能读到 `0`。第三方检测报告显示所有 `ro.boot.*` 仍是原始值。
+- 关键证据：出报告时模块是正常安装的，`runtime/` 下两个二进制权限正确、开机脚本两阶段都跑到了、日志也写出来了。安装链路、权限、路径全都没问题，**属性仍然是原始值**——这排除了"没装上""脚本没跑""SELinux 拦住"，把根因锁定在写入这一步。
 - 根因：基线原先用 `resetprop` 无参数全量 dump。ReSukiSU（KernelSU 分支）的 resetprop 在这种调用下不输出属性列表，dump 返回空；计划阶段把 34 条全判成"不存在"，一条都没写，退出码仍为 0。
 - 正确处理：基线改用系统自带 `getprop`，格式固定 `[name]: [value]`、不依赖各 root 管理器的 resetprop 实现、post-fs-data 阶段也可用；`resetprop` 只在 `getprop` 失败且输出非空时回退。dump 为空视为错误，不再当成"全部缺失"。
 - 补充：写入后重新读一次做回读校验；摘要与 `/data/adb/teeforge/hide-state` 记录 `source/entries/verify_failed`；`--status` 直接查看上次结果。
 - 防止复发：任何"全量快照"都要校验非空；`missing` 等于全部条数本身就是异常信号，应当报错而不是静默完成。
-- 状态：已修复，待真机复验。
+- 状态：已修复，真机复验通过（`source=getprop entries=3492`，首次 `applied=3 verify_failed=0`，二次 `applied=0` 幂等）。
 
 ## 2026-11-01：删不存在的属性不是"删除失败"
 

@@ -13,7 +13,6 @@ mod config;
 mod log;
 mod props;
 mod resetprop;
-mod vbmeta;
 
 use crate::log::{Level, log};
 use std::fs;
@@ -99,7 +98,7 @@ fn run() -> i32 {
         }
     };
 
-    let plan = props::plan(&config, &dump.entries, vbmeta::size());
+    let plan = props::plan(&config, &dump.entries);
 
     if args.dry_run {
         for assignment in &plan.assignments {

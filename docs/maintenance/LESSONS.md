@@ -1,5 +1,13 @@
 # 可复用踩坑记录
 
+## 2026-11-01：分区大小不是 bootloader 报的 vbmeta 大小
+
+- 范围：`crates/teeforge-hide` 的 `ro.boot.vbmeta.size`。
+- 现象：真机 dry-run 显示计划把 `ro.boot.vbmeta.size` 从 `18496` 改成 `131072`。
+- 根因：参考实现用 `blockdev --getsize64 /dev/block/by-name/vbmeta` 读分区大小；而该属性是 bootloader 测量的 vbmeta 镜像大小，两者语义不同。改写只会和 TEE、分区实际内容产生矛盾。
+- 正确处理：不再改写该属性，移除动态探测逻辑。
+- 防止复发：属性值要匹配"谁产生、什么语义"，不能只看名字像就自行算一个数填进去。
+
 ## 2026-11-01：resetprop 无参数不给列表，弱隐静默变成空操作
 
 - 范围：`crates/teeforge-hide`。

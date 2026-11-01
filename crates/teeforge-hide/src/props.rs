@@ -245,7 +245,7 @@ pub struct Outcome {
     pub failures: Vec<String>,
 }
 
-pub fn plan(config: &HideConfig, dump: &[(String, String)], vbmeta_size: Option<u64>) -> Plan {
+pub fn plan(config: &HideConfig, dump: &[(String, String)]) -> Plan {
     let lookup = dump
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
@@ -279,19 +279,6 @@ pub fn plan(config: &HideConfig, dump: &[(String, String)], vbmeta_size: Option<
                 }
             }
         }
-    }
-
-    if config.boot
-        && let Some(size) = vbmeta_size
-        && let Some(current) = lookup.get("ro.boot.vbmeta.size")
-    {
-        push(
-            &mut assignments,
-            &mut seen,
-            "ro.boot.vbmeta.size",
-            &size.to_string(),
-            current,
-        );
     }
 
     if config.recovery {
@@ -432,7 +419,6 @@ mod tests {
         let plan = plan(
             &HideConfig::default(),
             &dump(&[("ro.boot.flash.locked", "0")]),
-            None,
         );
         assert_eq!(
             assignment(&plan, "ro.boot.flash.locked").map(|item| item.value.as_str()),
@@ -453,7 +439,6 @@ mod tests {
                 ("ro.boot.flash.locked", "1"),
                 ("ro.boot.verifiedbootstate", "orange"),
             ]),
-            None,
         );
         assert!(
             !assignment(&plan, "ro.boot.flash.locked")
@@ -472,7 +457,6 @@ mod tests {
         let plan = plan(
             &HideConfig::default(),
             &dump(&[("ro.bootmode", "normal"), ("ro.boot.mode", "recovery")]),
-            None,
         );
         assert!(assignment(&plan, "ro.bootmode").is_none());
         assert_eq!(
@@ -491,7 +475,6 @@ mod tests {
                 ("ro.vendor.build.tags", "test-keys"),
                 ("ro.build.type.extra", "userdebug"),
             ]),
-            None,
         );
         assert_eq!(
             assignment(&plan, "ro.build.type").map(|item| item.value.as_str()),
@@ -522,7 +505,6 @@ mod tests {
                 ("ro.debuggable", "1"),
                 ("ro.boot.selinux", "permissive"),
             ]),
-            None,
         );
         assert!(assignment(&plan, "ro.boot.flash.locked").is_none());
         assert!(assignment(&plan, "ro.debuggable").is_none());
@@ -533,11 +515,7 @@ mod tests {
 
     #[test]
     fn deletes_only_touch_existing_properties() {
-        let plan = plan(
-            &HideConfig::default(),
-            &dump(&[("ro.build.selinux", "1")]),
-            None,
-        );
+        let plan = plan(&HideConfig::default(), &dump(&[("ro.build.selinux", "1")]));
         assert_eq!(plan.deletes, vec!["ro.build.selinux".to_owned()]);
         assert_eq!(plan.absent_deletes, 2);
     }
@@ -548,25 +526,20 @@ mod tests {
             delete: false,
             ..HideConfig::default()
         };
-        let plan = plan(&config, &dump(&[("ro.build.selinux", "1")]), None);
+        let plan = plan(&config, &dump(&[("ro.build.selinux", "1")]));
         assert!(plan.deletes.is_empty());
         assert_eq!(plan.absent_deletes, 0);
     }
 
     #[test]
-    fn vbmeta_size_uses_probed_value_only_when_present() {
+    fn vbmeta_size_is_never_rewritten() {
+        // 分区大小（blockdev）与 bootloader 报的 vbmeta 镜像大小语义不同，改写只会制造矛盾。
+        // Partition size and the bootloader-reported vbmeta size differ; rewriting only creates drift.
         let plan = plan(
             &HideConfig::default(),
-            &dump(&[("ro.boot.vbmeta.size", "4096")]),
-            Some(8192),
+            &dump(&[("ro.boot.vbmeta.size", "18496")]),
         );
-        assert_eq!(
-            assignment(&plan, "ro.boot.vbmeta.size").map(|item| item.value.as_str()),
-            Some("8192")
-        );
-
-        let second = super::plan(&HideConfig::default(), &dump(&[]), Some(8192));
-        assert!(assignment(&second, "ro.boot.vbmeta.size").is_none());
+        assert!(assignment(&plan, "ro.boot.vbmeta.size").is_none());
     }
 
     #[test]

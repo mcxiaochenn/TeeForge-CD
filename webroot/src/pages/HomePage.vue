@@ -28,9 +28,11 @@ const modeLabel = computed(() => {
 
 <template>
   <div class="flex flex-col gap-6 pt-1">
-    <div v-if="session.error" class="flex items-start gap-2 rounded-card bg-warning-soft px-4 py-3 text-xs leading-relaxed text-warning">
+    <div v-if="hostMissing || session.error" class="flex items-start gap-2 rounded-card bg-warning-soft px-4 py-3 text-xs leading-relaxed text-warning">
       <AppIcon name="alert" :size="16" class="mt-0.5" />
-      <span>{{ t('home.bridgeMissing') }}</span>
+      <span v-if="hostMissing">{{ t('home.bridgeMissing') }}</span>
+      <!-- 宿主存在时显示真实错误，避免把命令失败误报成缺少 KernelSU。 -->
+      <span v-else>{{ session.error }}</span>
     </div>
 
     <DeviceHeader :data="session.data" :loading="session.loading" />

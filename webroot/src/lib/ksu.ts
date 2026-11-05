@@ -8,7 +8,9 @@
 export const MODDIR = '/data/adb/modules/teeforge_cd';
 export const DATA_DIR = '/data/adb/teeforge';
 export const CONFIG = DATA_DIR + '/config.conf';
-export const TEEFORGE = MODDIR + '/teeforge';
+// v0.8.0 起二进制由安装脚本扁平化到 runtime/ 根，WebUI 必须调用同一路径。
+// Since v0.8.0 the installer flattens binaries into runtime/; the WebUI must use that path.
+export const TEEFORGE = MODDIR + '/runtime/teeforge';
 export const SELECTION_FILE = DATA_DIR + '/target-selection.json';
 
 export interface ExecResult {

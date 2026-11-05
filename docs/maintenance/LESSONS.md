@@ -1,5 +1,18 @@
 # 可复用踩坑记录
 
+## 2026-11-05：布局迁移只改了脚本，WebUI 仍调用旧二进制路径
+
+- 范围：`module/customize.sh` 的 `runtime/` 布局与 `webroot/src/lib/ksu.ts`。
+- 现象：升级 v0.8.0 后打开模块 WebUI，首页提示「未检测到 KernelSU 环境」，四个入口全部置灰。
+- 关键证据：模块安装正常，`runtime/teeforge` 存在且权限正确，开机脚本两阶段日志也正常；而 WebUI 内执行的命令退出码是 127（`/data/adb/modules/teeforge_cd/teeforge: not found`）。
+- 根因有两层：
+  1. v0.8.0 把二进制从模块根目录移到 `runtime/` 并由安装脚本扁平化，`action.sh`、`service.sh`、`post-fs-data.sh` 都跟着改了，`webroot/src/lib/ksu.ts` 的 `TEEFORGE` 常量漏改，WebUI 仍调用模块根下的旧路径。
+  2. 首页把任意 `session.error` 都渲染成 `home.bridgeMissing`，命令 exit 127 被误报成「找不到 KernelSU」，把真实原因遮住了。
+- 正确处理：`TEEFORGE` 改为 `MODDIR + '/runtime/teeforge'`；首页只在 `!hasHost()` 时显示 bridgeMissing，有宿主时显示后端返回的真实错误。
+- 验证方式：新增 `xtask` 测试 `webui_binary_path_matches_installed_layout`，解析 `ksu.ts` 的常量并与 `customize.sh` 的安装目标比对；把常量改回旧路径后该测试失败（`customize.sh does not install $MODPATH/teeforge`），恢复后通过。`npm run build` 产物中确认调用路径为 `runtime/teeforge`。
+- 防止复发：安装布局变更必须同时排查全部消费方（开机脚本、Action、WebUI、自更新），并用测试把两侧路径绑死；错误提示不要把任何失败都归因于环境缺失。
+- 状态：已修复。
+
 ## 2026-11-01：分区大小不是 bootloader 报的 vbmeta 大小
 
 - 范围：`crates/teeforge-hide` 的 `ro.boot.vbmeta.size`。

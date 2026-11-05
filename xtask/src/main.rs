@@ -754,4 +754,26 @@ mod tests {
         let _ = fs::remove_dir_all(directory);
         Ok(())
     }
+
+    #[test]
+    fn webui_binary_path_matches_installed_layout() -> Result<()> {
+        // WebUI 与安装脚本必须指向同一个二进制路径。v0.8.0 改成 runtime/ 布局时
+        // 只改了安装脚本，WebUI 仍调用旧路径，导致所有命令 exit 127。
+        // The WebUI and installer must agree on the binary path; the runtime/ layout
+        // change left the WebUI pointing at the old path, failing every command with 127.
+        let ksu = fs::read_to_string(root().join("webroot/src/lib/ksu.ts"))?;
+        let installer = fs::read_to_string(root().join("module/customize.sh"))?;
+        let marker = "export const TEEFORGE = MODDIR + '/";
+        let start = ksu.find(marker).ok_or("missing TEEFORGE constant")? + marker.len();
+        let end = ksu[start..]
+            .find('\'')
+            .ok_or("unterminated TEEFORGE constant")?
+            + start;
+        let relative = &ksu[start..end];
+        assert!(
+            installer.contains(&format!("\"$MODPATH/{relative}\"")),
+            "customize.sh does not install $MODPATH/{relative}"
+        );
+        Ok(())
+    }
 }

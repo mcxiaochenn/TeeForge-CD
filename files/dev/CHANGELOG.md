@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.8.0-26aa4ff
+## TeeForge-CD Dev v0.8.0-2d5e85e
 
 ### 构建信息 Build Info
-- Version: `v0.8.0-26aa4ff`
-- Version Code: `181`
-- Commit: `26aa4ff`
+- Version: `v0.8.0-2d5e85e`
+- Version Code: `182`
+- Commit: `2d5e85e`
 
 ### 最近提交 Recent Commits
+- 2d5e85e fix(webui): 修正 runtime 布局下的二进制路径
 - 26aa4ff docs: 重构 README，精简重复内容并修正事实错误
 - 0f7f5e3 keybox: sync status 2026-11-01 [auto]
 - 55459ce release: v0.8.0（弱隐 BL 独立二进制与 runtime 布局）
@@ -25,4 +26,3 @@
 - 0f1cb2e keybox: sync status 2026-10-18 [auto]
 - aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
 - 304e786 fix(ci): 合并上游同步入口修复
-- 6308807 fix(ci): 适配上游同步资源入口

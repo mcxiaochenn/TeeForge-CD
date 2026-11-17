@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-v0.8.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Rust 四 ABI 核心和跨平台打包链为默认实现。
+v0.8.2 正式版已发布；对应 Dev 版本已由用户完成真机测试。Rust 四 ABI 核心和跨平台打包链为默认实现。
 
 ## 已完成
 
@@ -66,6 +66,13 @@ v0.8.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Ru
 - 设备侧修复（同轮真机反馈）：`resetprop` 无参数在 ReSukiSU 上不输出属性列表，导致全量基线为空、34 条全判 missing 且退出码 0（空操作）；基线改用 `getprop`，空 dump 视为错误，写入后回读校验，新增 `hide-state` 与 `--status`。`ro.boot.vbmeta.size` 实测被 blockdev 分区大小覆盖（131072 对真值 18496），已移除动态探测。摘要行追加 `up=<秒>s`，用于给两阶段日志排序（post-fs-data 阶段 RTC 未对齐，墙钟停在 1970）。
 - 设备侧验收（25098PN5AC / Android 17 / ReSukiSU）：`runtime/` 已扁平化为两个文件；`post-fs-data` 在开机 16 s、`service` 在 38 s 各执行一次，early `source=getprop entries=2491 applied=5 skipped=29 missing=17`，late `applied=0 skipped=35`，两阶段 `failed=0 verify_failed=0`。三条核心属性达到目标值，`ro.boot.vbmeta.size` 保持 18496。
 
+## 2026-11-18：Action Keybox 来源顺序调整
+
+- Action「Keybox 来源」二级菜单把「远程公共密钥池」提为第一项并作为默认高亮项，「本机 RKP 签发并应用」退为第二项；一键更新与单项更新 Keybox 两条路径共用该选择器，一并生效。README 早已按「远程池在前」描述来源，本次让 Action 与之对齐。
+- 分支判断随序号同步调整：`KEYBOX_SOURCE` 1 = 远程池、2 = RKP，序号与实际调用参数保持一致。
+- 验证：`sh -n`、`bash -n` 与纯 LF 检查通过；桩二进制覆盖一键+默认来源、一键+切到 RKP、单项更新+远程、目标失败跳过 Keybox、超时取消五条路径，dash（无 pipefail）与 bash（有 pipefail）两种 shell 的退出码传播均正确。
+- 源码与模块模板版本统一为 `0.8.2`（v0.8.1 直接以修复提交打 tag，未改源码版本），`versionCode` 继续由 CI 按提交数注入。
+
 ## 验收状态
 
 - 真机测试：用户确认对应 Dev 版本已测试通过，作为正式发布依据。
@@ -84,4 +91,4 @@ v0.8.0 正式版已发布；对应 Dev 版本已由用户完成真机测试。Ru
 3. 单独评估旧 C 对照实现的清理。
 4. 在 CDN 更新清单中补 `sha256` 与 `size`，否则 WebUI 只能保存安装包、无法自动安装。
 
-最近更新：2026-11-01
+最近更新：2026-11-18

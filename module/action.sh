@@ -152,8 +152,9 @@ ACTION=$PICK_INDEX
 
 # Keybox 来源始终显式选择，与 README 的约定一致。
 # The keybox source is always chosen explicitly.
+# 1 = 远程公共密钥池（默认项）；2 = 本机 RKP 签发并应用
 pick_keybox_source() {
-    if ! pick "Keybox 来源 [Keybox source]" "本机 RKP 签发并应用 [Issue with device RKP]" "远程公共密钥池 [Shared pool from CDN]"; then
+    if ! pick "Keybox 来源 [Keybox source]" "远程公共密钥池 [Shared pool from CDN]" "本机 RKP 签发并应用 [Issue with device RKP]"; then
         return 1
     fi
     KEYBOX_SOURCE=$PICK_INDEX
@@ -165,7 +166,7 @@ run_target_scope() {
 }
 
 run_keybox() {
-    if [ "$KEYBOX_SOURCE" -eq 1 ]; then
+    if [ "$KEYBOX_SOURCE" -eq 2 ]; then
         say ""
         say "[RKP 1/2] 本机 RKP 签发 [Issuing on device]..."
         run_logged "$TF" --config "$CONFIG" --rkp-issue

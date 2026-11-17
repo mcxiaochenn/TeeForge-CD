@@ -1,11 +1,13 @@
-## TeeForge-CD v0.8.1
+## TeeForge-CD v0.8.2
 
 ### 构建信息 Build Info
-- Version: `v0.8.1`
-- Version Code: `182`
-- Commit: `2d5e85e94c4ea71fefc33cd07480b564e4f34d0d`
+- Version: `v0.8.2`
+- Version Code: `187`
+- Commit: `d4a70da8bbc3083e01eb98a4ed65bb2d6c265b25`
 
 ### 更新内容 Changes
-- 2d5e85e fix(webui): 修正 runtime 布局下的二进制路径
-- 26aa4ff docs: 重构 README，精简重复内容并修正事实错误
-- 0f7f5e3 keybox: sync status 2026-11-01 [auto]
+- d4a70da release: v0.8.2（Action Keybox 来源顺序）
+- b181356 fix(action): Keybox 来源改为远程公共密钥池优先
+- 1abf524 keybox: sync status 2026-11-16 [auto]
+- d8dba6d keybox: sync status 2026-11-13 [auto]
+- 1e85716 keybox: sync status 2026-11-06 [auto]

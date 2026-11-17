@@ -1,11 +1,16 @@
-## TeeForge-CD Dev v0.8.0-2d5e85e
+## TeeForge-CD Dev v0.8.1-d4a70da
 
 ### 构建信息 Build Info
-- Version: `v0.8.0-2d5e85e`
-- Version Code: `182`
-- Commit: `2d5e85e`
+- Version: `v0.8.1-d4a70da`
+- Version Code: `187`
+- Commit: `d4a70da`
 
 ### 最近提交 Recent Commits
+- d4a70da release: v0.8.2（Action Keybox 来源顺序）
+- b181356 fix(action): Keybox 来源改为远程公共密钥池优先
+- 1abf524 keybox: sync status 2026-11-16 [auto]
+- d8dba6d keybox: sync status 2026-11-13 [auto]
+- 1e85716 keybox: sync status 2026-11-06 [auto]
 - 2d5e85e fix(webui): 修正 runtime 布局下的二进制路径
 - 26aa4ff docs: 重构 README，精简重复内容并修正事实错误
 - 0f7f5e3 keybox: sync status 2026-11-01 [auto]
@@ -21,8 +26,3 @@
 - 4311f6b docs(release): 修正正式发布的真机验收记录与约定
 - fc04341 keybox: sync status 2026-10-30 [auto]
 - 2185c0a chore(release): 准备 v0.7.0 正式版
-- be2998c keybox: sync status 2026-10-21 [auto]
-- c210c22 feat(webui): 支持远程槽位选择与强制替换
-- 0f1cb2e keybox: sync status 2026-10-18 [auto]
-- aeb1dc8 feat(keybox): 添加三槽位同步与事务校验
-- 304e786 fix(ci): 合并上游同步入口修复

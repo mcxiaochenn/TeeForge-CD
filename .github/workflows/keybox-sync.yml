@@ -39,8 +39,10 @@ jobs:
             curl -fsSL "${UPSTREAM_URL}${SUFFIX}" -o "/tmp/megatron_raw_${SLOT}" --retry 3 --connect-timeout 15 --max-time 120 --max-filesize 2097152
             test -s "/tmp/megatron_raw_${SLOT}"
           done
-          curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3 --connect-timeout 15 --max-time 120 --max-filesize 2097152
-          test -s /tmp/key-status
+          if ! curl -fsSL "$STATUS_URL" -o /tmp/key-status --retry 3 --connect-timeout 15 --max-time 120 --max-filesize 2097152; then
+            echo "::warning::上游 key-status 不可用，跳过状态文件同步 / upstream key-status unavailable, skipping status file sync"
+            rm -f /tmp/key-status
+          fi
 
           CURRENT_HASH=$(sha256sum /tmp/megatron_raw_1 /tmp/megatron_raw_2 /tmp/megatron_raw_3 | sha256sum | awk '{print $1}')
           echo "hash=$CURRENT_HASH" >> $GITHUB_OUTPUT
@@ -82,7 +84,7 @@ jobs:
           # 状态文件放独立目录，避免混入 CDN 的 files/keybox/
           # Status files go to a separate dir, keep them out of CDN files/keybox/
           mkdir -p /tmp/status
-          cp /tmp/key-status /tmp/status/
+          [ -s /tmp/key-status ] && cp /tmp/key-status /tmp/status/ || true
           echo "${{ steps.fetch.outputs.hash }}" > /tmp/status/upstream_hash
           echo "$(date +%Y-%m)" > /tmp/status/month
 
@@ -118,7 +120,7 @@ jobs:
         run: |
           git checkout master
           mkdir -p keybox
-          cp /tmp/status/key-status keybox/
+          [ -s /tmp/status/key-status ] && cp /tmp/status/key-status keybox/ || true
           cp /tmp/status/upstream_hash keybox/
           cp /tmp/status/month keybox/
           git config user.name "github-actions[bot]"

@@ -1,5 +1,15 @@
 # 可复用踩坑记录
 
+## 2026-11-21：上游删除可选状态文件，Keybox Sync 确定性 404
+
+- 范围：`.github/workflows/keybox-sync.yml` 的 Keybox Sync 定时任务。
+- 现象：Keybox Sync 连续 10 次失败；`Fetch upstream keybox` 步骤在下载 `key-status` 时 `curl` 退出码 22（HTTP 404），job 直接中断，三槽位 keybox 一条都没有发布。
+- 根因：上游 MeowDump/Integrity-Box 在提交 `34f0805b` 中删除了 `keybox/key-status`，工作流 `STATUS_URL` 仍指向该路径，且下载后用 `test -s` 做严格校验，404 直接让整个步骤失败。
+- 正确处理：`key-status` 只是可选状态元数据，`keybox_sync.py` 不消费它。下载失败改为 `echo "::warning::"` 并 `rm -f /tmp/key-status` 后继续；下游两处复制改成 `[ -s 文件 ] && cp ... || true`。三槽位下载与 `test -s` 严格校验保持不变，仓库已有的 `keybox/key-status` 不删除。
+- 验证方式：`python -c "import yaml; yaml.safe_load(...)"` 解析通过；提取改动的两个 `run` 块用 Git bash `bash -n` 检查语法；`git diff` 复核只动这两处。
+- 防止复发：外部仓库里的可选元数据不能和必需产物用同一套严格失败策略；引用上游路径前先确认"缺了这个文件，发布是否仍然成立"。
+- 状态：已修复（本地工作区改动，未提交）。
+
 ## 2026-11-05：布局迁移只改了脚本，WebUI 仍调用旧二进制路径
 
 - 范围：`module/customize.sh` 的 `runtime/` 布局与 `webroot/src/lib/ksu.ts`。

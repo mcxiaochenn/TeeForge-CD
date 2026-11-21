@@ -1,11 +1,12 @@
-## TeeForge-CD Dev v0.8.1-d4a70da
+## TeeForge-CD Dev v0.8.2-e8a3c48
 
 ### 构建信息 Build Info
-- Version: `v0.8.1-d4a70da`
-- Version Code: `187`
-- Commit: `d4a70da`
+- Version: `v0.8.2-e8a3c48`
+- Version Code: `188`
+- Commit: `e8a3c48`
 
 ### 最近提交 Recent Commits
+- e8a3c48 ci: key-status 降级为可选，修复上游删除导致的 Keybox Sync 404
 - d4a70da release: v0.8.2（Action Keybox 来源顺序）
 - b181356 fix(action): Keybox 来源改为远程公共密钥池优先
 - 1abf524 keybox: sync status 2026-11-16 [auto]
@@ -25,4 +26,3 @@
 - 76adff8 fix(keybox): 月初回退到最近已发布的月份
 - 4311f6b docs(release): 修正正式发布的真机验收记录与约定
 - fc04341 keybox: sync status 2026-10-30 [auto]
-- 2185c0a chore(release): 准备 v0.7.0 正式版
